@@ -8,6 +8,17 @@ It operates a zero-exposure **dual-layer architecture**:
 
 ---
 
+## ⚡ How It Works (Under the Hood)
+
+1. **Pre-Flight Interception (<5ms)**: Outbound text is captured before submission—either from the browser DOM (ChatGPT/Claude) or raw OS socket (`curl`/Python).
+2. **Confidential TEE Inspection**: The prompt is processed through high-speed deterministic regex and entropy engines within a simulated Trusted Execution Environment.
+3. **Dual Enforcement Actions**:
+   - ⛔ **Hard Block**: If live infrastructure credentials (AWS, OpenAI, Private Keys) are detected, transmission is halted immediately with a security alert.
+   - 🔒 **Silent Redaction**: If PII, database URIs, or internal IP addresses are detected, Vantix substitutes them with irreversible synthetic tokens (`<REDACTED_API_KEY_1>`), protecting secrets while preserving developer productivity.
+4. **Real-Time SOC Telemetry**: Violations are cryptographically signed (HMAC-SHA256) for audit trails and broadcast via WebSockets to the centralized Admin SOC Dashboard.
+
+---
+
 ## 🌐 Live Hosted Deployment
 
 - **Live Dashboard**: [https://vantix-beta.vercel.app](https://vantix-beta.vercel.app)
