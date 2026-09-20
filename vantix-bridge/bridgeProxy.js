@@ -268,6 +268,24 @@ function processInterceptedAiRequest(rawBuffer, hostname, port, clientTlsSocket)
             interceptSource: "network-layer-bridge",
             timestamp: new Date().toISOString(),
           });
+
+          // Dual-sync to Cloud Render so cloud Vercel dashboard updates in real-time
+          fetch("https://vantix-backend-7gcw.onrender.com/api/vantix/chat", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Vantix-User": identity.user,
+              "X-Vantix-Host": identity.host,
+              "X-Vantix-Source": "network-layer-bridge",
+            },
+            body: JSON.stringify({
+              prompt: promptText,
+              userId: identity.user,
+              user: identity.user,
+              host: identity.host,
+              sessionId,
+            }),
+          }).catch(() => {});
         } catch (wsErr) {
           // Non-blocking
         }

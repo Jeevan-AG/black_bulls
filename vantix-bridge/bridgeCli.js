@@ -99,69 +99,86 @@ switch (command) {
       sessionId: `live-${Date.now()}`,
     });
 
-    const req = http.request(
-      "http://127.0.0.1:5000/api/vantix/chat",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Vantix-User": identity.user,
-          "X-Vantix-Host": identity.host,
+    const LOCAL_URL = "http://127.0.0.1:5000/api/vantix/chat";
+    const CLOUD_URL = "https://vantix-backend-7gcw.onrender.com/api/vantix/chat";
+
+    function executeInspection(targetUrl, isCloudFallback = false) {
+      const isHttps = targetUrl.startsWith("https");
+      const client = isHttps ? https : http;
+      
+      const req = client.request(
+        targetUrl,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Vantix-User": identity.user,
+            "X-Vantix-Host": identity.host,
+            "X-Vantix-Source": "cli-bridge",
+          },
         },
-      },
-      (res) => {
-        let data = "";
-        res.on("data", (chunk) => { data += chunk; });
-        res.on("end", () => {
-          try {
-            const json = JSON.parse(data);
-            const isBlocked = json.blocked || json.meta?.action === "hard_block";
-            const action = isBlocked ? "hard_block" : (json.meta?.action || "silent_redact");
-            const risk = json.meta?.riskScore !== undefined ? json.meta.riskScore : (json.riskScore || 0);
-            const count = json.meta?.detectionsCount !== undefined ? json.meta.detectionsCount : (isBlocked ? 1 : 0);
-            const categories = json.meta?.categoriesRedacted || [];
+        (res) => {
+          let data = "";
+          res.on("data", (chunk) => { data += chunk; });
+          res.on("end", () => {
+            try {
+              const json = JSON.parse(data);
+              const isBlocked = json.blocked || json.meta?.action === "hard_block";
+              const action = isBlocked ? "hard_block" : (json.meta?.action || "silent_redact");
+              const risk = json.meta?.riskScore !== undefined ? json.meta.riskScore : (json.riskScore || 0);
+              const count = json.meta?.detectionsCount !== undefined ? json.meta.detectionsCount : (isBlocked ? 1 : 0);
+              const categories = json.meta?.categoriesRedacted || [];
 
-            console.log("\n🛡  VANTIX INTERCEPTION & INSPECTION RESULT:");
-            if (isBlocked) {
-              console.log("  ╔═════════════════════════════════════════════════════════════╗");
-              console.log("  ║ ⛔ SECURITY ENFORCEMENT: HARD BLOCK                         ║");
-              console.log("  ║    AI request terminated before leaving this device         ║");
-              console.log("  ╚═════════════════════════════════════════════════════════════╝");
-            } else {
-              console.log("  ╔═════════════════════════════════════════════════════════════╗");
-              console.log("  ║ ⚡ TEE SILENT REDACTION: ACTIVE                             ║");
-              console.log("  ║    Sensitive data sanitized, sent to AI, restored live      ║");
-              console.log("  ╚═════════════════════════════════════════════════════════════╝");
+              console.log("\n🛡  VANTIX INTERCEPTION & INSPECTION RESULT:");
+              if (isBlocked) {
+                console.log("  ╔═════════════════════════════════════════════════════════════╗");
+                console.log("  ║ ⛔ SECURITY ENFORCEMENT: HARD BLOCK                         ║");
+                console.log("  ║    AI request terminated before leaving this device         ║");
+                console.log("  ╚═════════════════════════════════════════════════════════════╝");
+              } else {
+                console.log("  ╔═════════════════════════════════════════════════════════════╗");
+                console.log("  ║ ⚡ TEE SILENT REDACTION: ACTIVE                             ║");
+                console.log("  ║    Sensitive data sanitized, sent to AI, restored live      ║");
+                console.log("  ╚═════════════════════════════════════════════════════════════╝");
+              }
+              console.log(`  Identified User:     ${identity.user} on ${identity.host}`);
+              console.log(`  Security Action:     ${action.toUpperCase()}`);
+              console.log(`  Risk Score:          ${risk}/100`);
+              console.log(`  Detections Count:    ${count}`);
+              console.log(`  Categories Detected: ${categories.join(", ") || (isBlocked ? "CREDENTIAL" : "None")}`);
+              console.log(`  Inspection Gateway:  ${isCloudFallback ? "Cloud Gateway (Render)" : "Local Engine (:5000)"}`);
+              console.log(`  Processing Latency:  ${json.processingTime || 0}ms`);
+
+              if (isBlocked) {
+                console.log("\n🚫 Block Reason:");
+                console.log(`  ${json.message || "Live credentials detected by enterprise firewall policy."}`);
+              } else {
+                console.log("\n🤖 Restored AI Response (Transparent to user):");
+                console.log(`  ${json.response || "No response"}`);
+              }
+              console.log("\n✓ Broadcasted in real-time to Admin Dashboard (https://vantix-beta.vercel.app)!");
+              console.log("═════════════════════════════════════════════════════════════\n");
+            } catch (e) {
+              console.error("Failed to parse response:", data);
             }
-            console.log(`  Identified User:     ${identity.user} on ${identity.host}`);
-            console.log(`  Security Action:     ${action.toUpperCase()}`);
-            console.log(`  Risk Score:          ${risk}/100`);
-            console.log(`  Detections Count:    ${count}`);
-            console.log(`  Categories Detected: ${categories.join(", ") || (isBlocked ? "CREDENTIAL" : "None")}`);
-            console.log(`  Processing Latency:  ${json.processingTime || 0}ms`);
+          });
+        }
+      );
 
-            if (isBlocked) {
-              console.log("\n🚫 Block Reason:");
-              console.log(`  ${json.message || "Live credentials detected by enterprise firewall policy."}`);
-            } else {
-              console.log("\n🤖 Restored AI Response (Transparent to user):");
-              console.log(`  ${json.response || "No response"}`);
-            }
-            console.log("\n✓ Broadcasted in real-time to Admin Dashboard (http://localhost:5173)!");
-            console.log("═════════════════════════════════════════════════════════════\n");
-          } catch (e) {
-            console.error("Failed to parse response:", data);
-          }
-        });
-      }
-    );
+      req.on("error", (err) => {
+        if (!isCloudFallback) {
+          console.log("[Vantix] Local engine (:5000) offline. Routing through Cloud Gateway...");
+          executeInspection(CLOUD_URL, true);
+        } else {
+          console.error("Failed to reach Vantix backend. Error:", err.message);
+        }
+      });
 
-    req.on("error", (err) => {
-      console.error("Failed to reach Vantix backend on port 5000. Error:", err.message);
-    });
+      req.write(payload);
+      req.end();
+    }
 
-    req.write(payload);
-    req.end();
+    executeInspection(process.env.VANTIX_BACKEND_URL || LOCAL_URL);
     break;
   }
 

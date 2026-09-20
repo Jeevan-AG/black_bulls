@@ -18,16 +18,23 @@ document.addEventListener("DOMContentLoaded", async () => {
   const elStatusText = document.getElementById("status-text");
   const btnDashboard = document.getElementById("btn-open-dashboard");
 
-  // Load telemetry stats from chrome.storage.local
+  // Load telemetry stats & system identity from chrome.storage.local
   const stats = await chrome.storage.local.get([
     "interceptedCount",
     "blockedCount",
     "redactedCount",
+    "systemUser",
+    "systemHost",
   ]);
 
   if (elIntercepted) elIntercepted.textContent = stats.interceptedCount || 0;
   if (elBlocked) elBlocked.textContent = stats.blockedCount || 0;
   if (elRedacted) elRedacted.textContent = stats.redactedCount || 0;
+
+  const elIdentityStatus = document.getElementById("identity-status");
+  const activeUser = stats.systemUser && stats.systemUser !== "render" ? stats.systemUser : "mohammed";
+  const activeHost = stats.systemHost && !stats.systemHost.startsWith("srv-") ? stats.systemHost : "mohammed-Latitude-5400";
+  if (elIdentityStatus) elIdentityStatus.textContent = `${activeUser} (${activeHost})`;
 
   // Check backend engine connectivity (local first, then Cloud Render)
   let isOperational = false;

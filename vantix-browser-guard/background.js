@@ -110,8 +110,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     (async () => {
       try {
         const stored = await chrome.storage.local.get(["systemUser", "systemHost"]);
-        const user = message.user || stored.systemUser || currentSystemUser || "mohammed";
-        const host = stored.systemHost || currentSystemHost || "mohammed-Latitude-5400";
+        let user = message.user || stored.systemUser || currentSystemUser || "mohammed";
+        let host = stored.systemHost || currentSystemHost || "mohammed-Latitude-5400";
+        if (user === "render" || user === "unknown-user" || user === "root") user = "mohammed";
+        if (!host || host.startsWith("srv-") || host === "unknown-host") host = "mohammed-Latitude-5400";
 
         const payload = {
           prompt: message.prompt,

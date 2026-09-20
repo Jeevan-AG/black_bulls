@@ -74,7 +74,7 @@ function recordAndBroadcast({
     userName: userNameFormatted,
     department: "Engineering & Cloud",
     endpointHost: rawHost,
-    endpointIp: endpointIp || (req && (req.headers["x-forwarded-for"] || req.ip || req.connection?.remoteAddress)) || "127.0.0.1",
+    endpointIp: (typeof endpointIp === "string" && endpointIp ? endpointIp.split(",")[0].trim() : null) || (req && (req.headers["x-forwarded-for"]?.split(",")[0]?.trim() || req.ip || req.connection?.remoteAddress)) || "127.0.0.1",
     originalPrompt: prompt,
     sanitizedPrompt: sanitizedPrompt || "[SANITIZED]",
     restoredResponse: restoredResponse || "",
@@ -185,17 +185,23 @@ router.get("/health", (req, res) => {
 
 router.get("/system-identity", (req, res) => {
   const os = require("os");
+  const SERVER_IDENTITIES = ["render", "root", "nobody", "www-data", "node", "ubuntu", "ec2-user"];
   let user = "mohammed";
   let host = "mohammed-Latitude-5400";
   try {
-    user = process.env.USER || process.env.USERNAME || (os.userInfo && os.userInfo().username) || "mohammed";
-    host = os.hostname() || "mohammed-Latitude-5400";
+    const osUser = process.env.USER || process.env.USERNAME || (os.userInfo && os.userInfo().username) || "";
+    const osHost = os.hostname() || "";
+    if (osUser && !SERVER_IDENTITIES.includes(osUser.toLowerCase())) user = osUser;
+    if (osHost && !osHost.startsWith("srv-")) host = osHost;
   } catch (e) {}
+
+  const clientIp = req.headers["x-forwarded-for"]?.split(",")[0]?.trim() || req.ip || req.connection?.remoteAddress || "127.0.0.1";
 
   res.json({
     success: true,
     user,
     host,
+    clientIp,
     displayName: `${user} (${host})`,
     platform: os.platform(),
   });
@@ -205,18 +211,24 @@ router.get("/system-identity", (req, res) => {
 
 router.post("/chat", async (req, res) => {
   const startTime = Date.now();
-  const os = require("os");
+  const SERVER_IDENTITIES = ["render", "root", "nobody", "www-data", "node", "ubuntu", "ec2-user"];
   let fallbackUser = "mohammed";
   let fallbackHost = "mohammed-Latitude-5400";
   try {
-    fallbackUser = process.env.USER || process.env.USERNAME || (os.userInfo && os.userInfo().username) || "mohammed";
-    fallbackHost = os.hostname() || "mohammed-Latitude-5400";
+    const osUser = process.env.USER || process.env.USERNAME || (os.userInfo && os.userInfo().username) || "";
+    const osHost = os.hostname() || "";
+    if (osUser && !SERVER_IDENTITIES.includes(osUser.toLowerCase())) fallbackUser = osUser;
+    if (osHost && !osHost.startsWith("srv-")) fallbackHost = osHost;
   } catch (e) {}
 
-  const resolvedUser = req.headers["x-vantix-user"] || req.body.userId || req.body.user || fallbackUser;
-  const resolvedHost = (req.headers["x-vantix-host"] && req.headers["x-vantix-host"] !== "browser-endpoint") 
-    ? req.headers["x-vantix-host"] 
-    : (req.body.host || fallbackHost);
+  let resolvedUser = req.headers["x-vantix-user"] || req.body.userId || req.body.user;
+  if (!resolvedUser || SERVER_IDENTITIES.includes(resolvedUser.toLowerCase())) {
+    resolvedUser = fallbackUser;
+  }
+  let resolvedHost = req.headers["x-vantix-host"] || req.body.host;
+  if (!resolvedHost || resolvedHost === "browser-endpoint" || resolvedHost.startsWith("srv-")) {
+    resolvedHost = fallbackHost;
+  }
   const { prompt, sessionId = `session-${resolvedUser}-${Date.now()}`, userId = resolvedUser, userEmail = `${resolvedUser}@acme.com` } = req.body;
 
   if (!prompt || typeof prompt !== "string") {
@@ -626,7 +638,12 @@ router.post("/reset", (req, res) => {
 router.get("/flagged-employees", (req, res) => {
   const userMap = new Map();
 
+  const SERVER_IDENTITIES = ["render", "root", "nobody", "www-data", "node", "ubuntu", "ec2-user"];
   for (const log of _inMemoryAuditLogs) {
+    if (SERVER_IDENTITIES.includes((log.userId || "").toLowerCase()) || (log.endpointHost || "").startsWith("srv-")) {
+      continue;
+    }
+
     // Only track and flag employees with genuine data exfiltration attempts!
     // Clean, normal, or sanitized prompts (riskScore < 35 and actionTaken !== 'hard_block') MUST NOT flag employees!
     const isActualLeak = (log.riskScore >= 35) || (log.actionTaken === "hard_block");
