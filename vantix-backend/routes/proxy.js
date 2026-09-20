@@ -166,7 +166,17 @@ function decideAction(overallRisk, detections) {
 }
 
 
-// ─── GET /api/vantix/system-identity — Auto-Detect Client Machine & User ──────
+// ─── GET /api/vantix/health — Engine Health Check ────────────────────────────
+router.get("/health", (req, res) => {
+  res.json({
+    status: "operational",
+    engine: "vantix-ai-firewall",
+    version: "2.0.0",
+    timestamp: new Date().toISOString(),
+  });
+});
+
+
 router.get("/system-identity", (req, res) => {
   const os = require("os");
   let user = "mohammed";
