@@ -30,186 +30,7 @@ const AuditLog = require("../models/AuditLog");
 const mongoose = require("mongoose");
 
 // Fast in-memory audit ring buffer (survives offline DB during live demos)
-const _inMemoryAuditLogs = [];
-
-// ─── Seed Realistic Corporate Incidents ───────────────────────────────────────
-function seedCorporateIncidents() {
-  if (_inMemoryAuditLogs.length > 0) return;
-
-  const now = Date.now();
-  const sampleIncidents = [
-    {
-      id: "inc-sc-01",
-      orgId: "acme-corp",
-      userId: "sarah.chen",
-      userName: "Sarah Chen",
-      userEmail: "sarah.chen@acme.corp",
-      department: "Cloud Infrastructure & DevOps",
-      endpointHost: "sarah-macbook-pro.corp.internal",
-      endpointIp: "10.0.12.44",
-      aiPlatform: "chatgpt.com",
-      actionTaken: "hard_block",
-      riskScore: 96,
-      categoriesRedacted: ["AWS_CREDENTIAL", "SECRET_KEY"],
-      detections: [
-        { category: "CREDENTIAL", matchedText: "AKIAIOSFODNN7EXAMPLE", isolationRisk: 95, description: "Live AWS Access Key ID" },
-        { category: "CREDENTIAL", matchedText: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY", isolationRisk: 96, description: "AWS Secret Access Key" }
-      ],
-      originalPrompt: "Here is our Terraform IAM policy for production S3 access: provider \"aws\" { access_key = \"AKIAIOSFODNN7EXAMPLE\", secret_key = \"wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY\", region = \"us-east-1\" }. How do I restrict bucket acl?",
-      sanitizedPrompt: "[BLOCKED — Prompt contained live AWS production credentials]",
-      restoredResponse: "🚫 BLOCKED BY ENTERPRISE POLICY: Live AWS credentials detected in prompt.",
-      timestamp: new Date(now - 12 * 60 * 1000).toISOString(),
-    },
-    {
-      id: "inc-sc-02",
-      orgId: "acme-corp",
-      userId: "sarah.chen",
-      userName: "Sarah Chen",
-      userEmail: "sarah.chen@acme.corp",
-      department: "Cloud Infrastructure & DevOps",
-      endpointHost: "sarah-macbook-pro.corp.internal",
-      endpointIp: "10.0.12.44",
-      aiPlatform: "claude.ai",
-      actionTaken: "hard_block",
-      riskScore: 88,
-      categoriesRedacted: ["DATABASE_CREDENTIAL", "INTERNAL_HOST"],
-      detections: [
-        { category: "CREDENTIAL", matchedText: "postgres://admin_root:SuperSecr3t2026!@prod-rds.internal", isolationRisk: 90, description: "Postgres Master DB Connection String" }
-      ],
-      originalPrompt: "Troubleshooting database migration timeout for postgres://admin_root:SuperSecr3t2026!@prod-rds.internal:5432/core_users. What connection pool settings prevent connection exhaustion?",
-      sanitizedPrompt: "[BLOCKED — Database master connection URI detected]",
-      restoredResponse: "🚫 BLOCKED BY ENTERPRISE POLICY: Production database credentials cannot be shared with external AI.",
-      timestamp: new Date(now - 45 * 60 * 1000).toISOString(),
-    },
-    {
-      id: "inc-at-01",
-      orgId: "acme-corp",
-      userId: "alex.turner",
-      userName: "Alex Turner",
-      userEmail: "alex.turner@acme.corp",
-      department: "SCADA & Industrial Automation",
-      endpointHost: "alex-industrial-ws01",
-      endpointIp: "192.168.1.105",
-      aiPlatform: "chatgpt.com",
-      actionTaken: "silent_redact",
-      riskScore: 78,
-      categoriesRedacted: ["SCADA_REGISTER", "INTERNAL_IP", "GRID_FREQUENCY"],
-      detections: [
-        { category: "SCADA_OT", matchedText: "0x4001", isolationRisk: 80, description: "Turbine Mark VIe governor register" },
-        { category: "INTERNAL_NETWORK", matchedText: "192.168.1.50", isolationRisk: 65, description: "Substation internal IP" }
-      ],
-      originalPrompt: "Investigating turbine Mark VIe register 0x4001 at internal substation 192.168.1.50 with nominal grid frequency 60.2 Hz. What triggers sudden emergency trip?",
-      sanitizedPrompt: "Investigating turbine [SCADA_REG_01] at internal substation [INTERNAL_IP_01] with nominal grid frequency [FREQUENCY_01]. What triggers sudden emergency trip?",
-      restoredResponse: "When register 0x4001 (governor speed reference) exceeds trip threshold at 192.168.1.50 with 60.2 Hz frequency, the primary interlock triggers an overspeed trip signal.",
-      timestamp: new Date(now - 25 * 60 * 1000).toISOString(),
-    },
-    {
-      id: "inc-at-02",
-      orgId: "acme-corp",
-      userId: "alex.turner",
-      userName: "Alex Turner",
-      userEmail: "alex.turner@acme.corp",
-      department: "SCADA & Industrial Automation",
-      endpointHost: "alex-industrial-ws01",
-      endpointIp: "192.168.1.105",
-      aiPlatform: "claude.ai",
-      actionTaken: "silent_redact",
-      riskScore: 68,
-      categoriesRedacted: ["PLC_ADDRESS", "MODBUS_TAG"],
-      detections: [
-        { category: "SCADA_OT", matchedText: "PLC-MODBUS-TAG-8821", isolationRisk: 70, description: "Modbus Holding Register Tag" }
-      ],
-      originalPrompt: "Explain PLC-MODBUS-TAG-8821 holding register rollover behavior under continuous Modbus TCP polling from SCADA master node.",
-      sanitizedPrompt: "Explain [MODBUS_TAG_01] holding register rollover behavior under continuous Modbus TCP polling from SCADA master node.",
-      restoredResponse: "For PLC-MODBUS-TAG-8821 holding registers, 16-bit registers roll over from 65535 to 0 unless configured as 32-bit unsigned double words.",
-      timestamp: new Date(now - 80 * 60 * 1000).toISOString(),
-    },
-    {
-      id: "inc-mv-01",
-      orgId: "acme-corp",
-      userId: "marcus.vance",
-      userName: "Marcus Vance",
-      userEmail: "marcus.vance@acme.corp",
-      department: "Clinical & Health Informatics",
-      endpointHost: "marcus-dell-latitude",
-      endpointIp: "10.0.18.22",
-      aiPlatform: "chatgpt.com",
-      actionTaken: "hard_block",
-      riskScore: 92,
-      categoriesRedacted: ["HIPAA_PII", "SSN", "PATIENT_RECORD"],
-      detections: [
-        { category: "PII", matchedText: "123-45-6789", isolationRisk: 95, description: "Social Security Number (SSN)" },
-        { category: "PII", matchedText: "Johnathan Doe MRN #98421", isolationRisk: 88, description: "Medical Record Number & Patient Identity" }
-      ],
-      originalPrompt: "Draft clinical discharge summary for patient Johnathan Doe, SSN: 123-45-6789, MRN #98421. Admitted with acute hypertensive crisis, prescribed Lisinopril 20mg daily.",
-      sanitizedPrompt: "[BLOCKED — Protected Health Information (PHI) / SSN detected]",
-      restoredResponse: "🚫 BLOCKED BY ENTERPRISE POLICY: HIPAA violation risk. Social Security Number and patient identifiable records cannot be processed by public AI.",
-      timestamp: new Date(now - 35 * 60 * 1000).toISOString(),
-    },
-    {
-      id: "inc-er-01",
-      orgId: "acme-corp",
-      userId: "elena.rostova",
-      userName: "Elena Rostova",
-      userEmail: "elena.rostova@acme.corp",
-      department: "Fintech & Payment Gateway",
-      endpointHost: "elena-fintech-node",
-      endpointIp: "10.0.8.19",
-      aiPlatform: "api.openai.com",
-      actionTaken: "hard_block",
-      riskScore: 89,
-      categoriesRedacted: ["PCI_CARD_NUMBER", "FINANCIAL_DATA"],
-      detections: [
-        { category: "FINANCIAL", matchedText: "4532-8812-9901-4321", isolationRisk: 92, description: "PCI-DSS Visa Primary Account Number" }
-      ],
-      originalPrompt: "Validate webhook JSON payload parser for failed Stripe charge: { card: \"4532-8812-9901-4321\", cvv: \"882\", exp: \"08/28\", holder: \"Robert Sterling\" }",
-      sanitizedPrompt: "[BLOCKED — Unencrypted payment card data detected]",
-      restoredResponse: "🚫 BLOCKED BY ENTERPRISE POLICY: PCI-DSS compliance enforcement. Credit card account numbers are strictly barred from AI transmission.",
-      timestamp: new Date(now - 55 * 60 * 1000).toISOString(),
-    },
-    {
-      id: "inc-dk-01",
-      orgId: "acme-corp",
-      userId: "david.kim",
-      userName: "David Kim",
-      userEmail: "david.kim@acme.corp",
-      department: "Core Backend Platform",
-      endpointHost: "david-thinkpad-x1",
-      endpointIp: "10.0.14.77",
-      aiPlatform: "gemini.google.com",
-      actionTaken: "silent_redact",
-      riskScore: 74,
-      categoriesRedacted: ["API_SECRET_KEY", "JWT_SECRET"],
-      detections: [
-        { category: "CREDENTIAL", matchedText: "jwt_secret_signing_key_prod_9942a", isolationRisk: 78, description: "Production JWT Signing Key" }
-      ],
-      originalPrompt: "How do I implement RS256 token rotation in Node.js when migrating from HMAC secret \"jwt_secret_signing_key_prod_9942a\" without dropping active user sessions?",
-      sanitizedPrompt: "How do I implement RS256 token rotation in Node.js when migrating from HMAC secret \"[JWT_SECRET_01]\" without dropping active user sessions?",
-      restoredResponse: "To rotate from jwt_secret_signing_key_prod_9942a to RS256 smoothly, support verification using both keys during a transition grace period.",
-      timestamp: new Date(now - 110 * 60 * 1000).toISOString(),
-    }
-  ];
-
-  for (const inc of sampleIncidents) {
-    const auditEntry = {
-      timestamp: inc.timestamp,
-      userId: inc.userId,
-      orgId: inc.orgId,
-      riskScore: inc.riskScore,
-      actionTaken: inc.actionTaken,
-      categoriesRedacted: inc.categoriesRedacted,
-      aiPlatform: inc.aiPlatform,
-    };
-    inc.cryptoSignature = tee.signAuditEntry(auditEntry);
-    inc.promptSnippet = inc.originalPrompt.slice(0, 200);
-    inc.detectionCount = inc.detections.length;
-    inc.combinationCount = 0;
-    _inMemoryAuditLogs.push(inc);
-  }
-}
-
-// Seed on startup
-seedCorporateIncidents();
+let _inMemoryAuditLogs = [];
 
 // ─── Centralized Record & Telemetry Broadcaster ──────────────────────────────
 function recordAndBroadcast({
@@ -227,29 +48,27 @@ function recordAndBroadcast({
   aiPlatform,
   req,
 }) {
-  const usernameClean = (resolvedUser || "mohammed").trim();
-  const userNameFormatted = usernameClean.includes(".") 
-    ? usernameClean.split(".").map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(" ")
-    : usernameClean.charAt(0).toUpperCase() + usernameClean.slice(1);
+  const os = require("os");
+  let fallbackUser = "mohammed";
+  let fallbackHost = "mohammed-Latitude-5400";
+  try {
+    fallbackUser = process.env.USER || process.env.USERNAME || (os.userInfo && os.userInfo().username) || "mohammed";
+    fallbackHost = os.hostname() || "mohammed-Latitude-5400";
+  } catch (e) {}
 
-  const inferredDept = usernameClean.includes("chen") ? "Cloud Infrastructure & DevOps"
-    : usernameClean.includes("turner") ? "SCADA & Industrial Automation"
-    : usernameClean.includes("vance") ? "Clinical & Health Informatics"
-    : usernameClean.includes("rostova") ? "Fintech & Payments"
-    : usernameClean.includes("kim") ? "Core Backend Platform"
-    : usernameClean.includes("eng") ? "Engineering & Architecture"
-    : usernameClean.includes("sec") ? "Security Operations"
-    : "Systems & Infrastructure";
+  const rawUser = (resolvedUser && resolvedUser !== "employee" ? resolvedUser : fallbackUser).trim();
+  const rawHost = (resolvedHost && resolvedHost !== "browser-endpoint" ? resolvedHost : fallbackHost).trim();
+  const userNameFormatted = `${rawUser} (${rawHost})`;
 
   const logRecord = {
     id: `audit-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
     orgId: req?.orgId || "acme-corp",
-    userId: usernameClean,
-    userEmail: userEmail || `${usernameClean}@acme.corp`,
+    userId: rawUser,
+    userEmail: userEmail || `${rawUser}@${rawHost.toLowerCase().replace(/[^a-z0-9]/g, "")}.corp`,
     userName: userNameFormatted,
-    department: inferredDept,
-    endpointHost: resolvedHost || `${usernameClean}-workstation`,
-    endpointIp: endpointIp || (req && (req.headers["x-forwarded-for"] || req.ip || req.connection?.remoteAddress)) || "10.0.14.88",
+    department: "Engineering & Cloud",
+    endpointHost: rawHost,
+    endpointIp: endpointIp || (req && (req.headers["x-forwarded-for"] || req.ip || req.connection?.remoteAddress)) || "127.0.0.1",
     originalPrompt: prompt,
     sanitizedPrompt: sanitizedPrompt || "[SANITIZED]",
     restoredResponse: restoredResponse || "",
@@ -272,7 +91,7 @@ function recordAndBroadcast({
     AuditLog.create(logRecord).catch(() => {});
   }
 
-  const sessionResult = sessionGraph.updateSessionGraph(usernameClean, logRecord.userEmail, detection);
+  const sessionResult = sessionGraph.updateSessionGraph(rawUser, logRecord.userEmail, detection);
 
   ws.broadcastDetection({
     id: logRecord.id,
@@ -290,7 +109,7 @@ function recordAndBroadcast({
     anomalyTriggered: sessionResult.anomalyTriggered,
     anomalyReport: sessionResult.anomalyReport,
     signature,
-    user: usernameClean,
+    user: rawUser,
     userName: logRecord.userName,
     userEmail: logRecord.userEmail,
     department: logRecord.department,
@@ -347,12 +166,41 @@ function decideAction(overallRisk, detections) {
 }
 
 
+// ─── GET /api/vantix/system-identity — Auto-Detect Client Machine & User ──────
+router.get("/system-identity", (req, res) => {
+  const os = require("os");
+  let user = "mohammed";
+  let host = "mohammed-Latitude-5400";
+  try {
+    user = process.env.USER || process.env.USERNAME || (os.userInfo && os.userInfo().username) || "mohammed";
+    host = os.hostname() || "mohammed-Latitude-5400";
+  } catch (e) {}
+
+  res.json({
+    success: true,
+    user,
+    host,
+    displayName: `${user} (${host})`,
+    platform: os.platform(),
+  });
+});
+
 // ─── POST /api/vantix/chat — The 7-Step Pipeline ────────────────────────────
 
 router.post("/chat", async (req, res) => {
   const startTime = Date.now();
-  const resolvedUser = req.headers["x-vantix-user"] || req.body.userId || process.env.USER || require("os").userInfo().username || "mohammed";
-  const resolvedHost = req.headers["x-vantix-host"] || req.body.host || require("os").hostname() || "mohammed-Latitude-5400";
+  const os = require("os");
+  let fallbackUser = "mohammed";
+  let fallbackHost = "mohammed-Latitude-5400";
+  try {
+    fallbackUser = process.env.USER || process.env.USERNAME || (os.userInfo && os.userInfo().username) || "mohammed";
+    fallbackHost = os.hostname() || "mohammed-Latitude-5400";
+  } catch (e) {}
+
+  const resolvedUser = req.headers["x-vantix-user"] || req.body.userId || req.body.user || fallbackUser;
+  const resolvedHost = (req.headers["x-vantix-host"] && req.headers["x-vantix-host"] !== "browser-endpoint") 
+    ? req.headers["x-vantix-host"] 
+    : (req.body.host || fallbackHost);
   const { prompt, sessionId = `session-${resolvedUser}-${Date.now()}`, userId = resolvedUser, userEmail = `${resolvedUser}@acme.com` } = req.body;
 
   if (!prompt || typeof prompt !== "string") {
@@ -760,7 +608,6 @@ router.post("/reset", (req, res) => {
 
 // ─── GET /api/vantix/flagged-employees — Dynamic Flagged Directory ──────────
 router.get("/flagged-employees", (req, res) => {
-  seedCorporateIncidents();
   const userMap = new Map();
 
   for (const log of _inMemoryAuditLogs) {
@@ -853,7 +700,6 @@ router.get("/flagged-employees", (req, res) => {
 
 // ─── GET /api/vantix/employee/:userId — Full Dossier & Incident Timeline ─────
 router.get("/employee/:userId", (req, res) => {
-  seedCorporateIncidents();
   const targetId = req.params.userId.toLowerCase();
 
   const employeeLogs = _inMemoryAuditLogs.filter(
@@ -978,84 +824,31 @@ router.get("/employee/:userId", (req, res) => {
 });
 
 
-// ─── POST /api/vantix/simulate-leak — Live Demo Trigger for Any Employee ─────
+// ─── POST /api/vantix/simulate-leak — Live Demo Trigger (Fully Dynamic) ──────
 router.post("/simulate-leak", async (req, res) => {
-  const { employeeId = "sarah.chen", leakType = "aws_keys" } = req.body;
+  const { employeeId = "demo-user", leakType = "aws_keys" } = req.body;
+  const os = require("os");
 
-  let prompt = "";
-  let userEmail = "";
-  let userName = "";
-  let department = "";
-  let endpointHost = "";
-  let aiPlatform = req.body.aiPlatform || "chatgpt.com";
+  // Dynamically resolve identity — no hardcoded dummy employees
+  const userName = employeeId.charAt(0).toUpperCase() + employeeId.slice(1).replace(/[._]/g, " ");
+  const userEmail = req.body.userEmail || `${employeeId}@acme.corp`;
+  const department = req.body.department || "Enterprise Operations";
+  let endpointHost = req.body.endpointHost || os.hostname() || `${employeeId}-workstation`;
+  const aiPlatform = req.body.aiPlatform || "chatgpt.com";
 
-  if (employeeId === "sarah.chen") {
-    userName = "Sarah Chen";
-    userEmail = "sarah.chen@acme.corp";
-    department = "Cloud Infrastructure & DevOps";
-    endpointHost = "sarah-macbook-pro.corp.internal";
-    prompt =
-      req.body.prompt ||
-      "Review this AWS policy snippet: access_key_id = AKIAIOSFODNN7EXAMPLE and secret_key = wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY for S3 backup.";
-  } else if (employeeId === "alex.turner") {
-    userName = "Alex Turner";
-    userEmail = "alex.turner@acme.corp";
-    department = "SCADA & Industrial Automation";
-    endpointHost = "alex-industrial-ws01";
-    prompt =
-      req.body.prompt ||
-      "Investigating turbine Mark VIe register 0x4001 at internal substation 192.168.1.50 with nominal grid frequency 60.2 Hz. What triggers sudden emergency trip?";
-  } else if (employeeId === "marcus.vance") {
-    userName = "Marcus Vance";
-    userEmail = "marcus.vance@acme.corp";
-    department = "Clinical & Health Informatics";
-    endpointHost = "marcus-dell-latitude";
-    prompt =
-      req.body.prompt ||
-      "Summarize clinical status for patient Johnathan Doe, SSN: 123-45-6789, MRN #98421 diagnosed with Stage 2 Hypertension.";
-  } else if (employeeId === "elena.rostova") {
-    userName = "Elena Rostova";
-    userEmail = "elena.rostova@acme.corp";
-    department = "Fintech & Payment Gateway";
-    endpointHost = "elena-fintech-node";
-    prompt =
-      req.body.prompt ||
-      "Validate payment webhook: { card_number: \"4532-8812-9901-4321\", cvv: \"882\", exp: \"08/28\" } for failed checkout event.";
-  } else if (employeeId === "david.kim") {
-    userName = "David Kim";
-    userEmail = "david.kim@acme.corp";
-    department = "Core Backend Platform";
-    endpointHost = "david-thinkpad-x1";
-    prompt =
-      req.body.prompt ||
-      "How do I rotate our master JWT secret: jwt_secret_signing_key_prod_9942a across our Kubernetes microservices?";
-  } else if (employeeId === "mohammed") {
-    userName = "Mohammed";
-    userEmail = "mohammed@acme.corp";
-    department = "Core Systems Engineering";
-    endpointHost = require("os").hostname() || "mohammed-workstation";
-    prompt =
-      req.body.prompt ||
-      (leakType === "benign_prompt"
-        ? "Explain how combined cycle gas turbines achieve high thermodynamic efficiency."
-        : leakType === "sanitized_prompt"
-        ? "Investigating turbine [SCADA_REG_01] at internal substation [INTERNAL_IP_01] with nominal grid frequency [FREQUENCY_01]."
-        : "Investigating turbine Mark VIe register 0x4001 at internal substation 192.168.1.50 with AWS key AKIAIOSFODNN7EXAMPLE.");
-  } else {
-    userName = employeeId.charAt(0).toUpperCase() + employeeId.slice(1);
-    userEmail = `${employeeId}@acme.corp`;
-    department = "Enterprise Operations";
-    endpointHost = `${employeeId}-workstation`;
-    prompt = req.body.prompt || (leakType === "benign_prompt" ? "What is the syntax for React useEffect cleanup functions?" : "Found AWS key AKIAIOSFODNN7EXAMPLE in debug logs.");
-  }
-
-  // Override prompt if leakType is benign_prompt or sanitized_prompt and no custom prompt was provided
-  if (!req.body.prompt) {
-    if (leakType === "benign_prompt") {
-      prompt = "Explain how combined cycle gas turbines achieve high thermodynamic efficiency.";
-    } else if (leakType === "sanitized_prompt") {
-      prompt = "Investigating turbine [SCADA_REG_01] at internal substation [INTERNAL_IP_01] with nominal grid frequency [FREQUENCY_01]. What triggers sudden emergency trip?";
-    }
+  // Resolve prompt from custom input or leak type templates
+  let prompt = req.body.prompt || "";
+  if (!prompt) {
+    const LEAK_TEMPLATES = {
+      aws_keys: 'Review this AWS policy snippet: access_key_id = "AKIAIOSFODNN7EXAMPLE" and secret_key = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY" for production S3 replication.',
+      scada_reg: "Analyzing turbine Mark VIe register 0x4001 at internal substation 192.168.1.50 with nominal grid frequency 60.2 Hz. What triggers sudden emergency trip?",
+      patient_ssn: "Summarize clinical status for patient Johnathan Doe, SSN: 123-45-6789, MRN #98421 diagnosed with Stage 2 Hypertension.",
+      credit_card: 'Validate payment webhook: { card_number: "4532-8812-9901-4321", cvv: "882", exp: "08/28" } for failed checkout event.',
+      jwt_secret: 'How do I rotate our master JWT secret: jwt_secret_signing_key_prod_9942a across our Kubernetes microservices?',
+      benign_prompt: "Explain how combined cycle gas turbines achieve high thermodynamic efficiency.",
+      sanitized_prompt: "Investigating turbine [SCADA_REG_01] at internal substation [INTERNAL_IP_01] with nominal grid frequency [FREQUENCY_01]. What triggers sudden emergency trip?",
+    };
+    prompt = LEAK_TEMPLATES[leakType] || LEAK_TEMPLATES.aws_keys;
   }
 
   const interceptedAt = new Date().toISOString();
@@ -1064,13 +857,9 @@ router.post("/simulate-leak", async (req, res) => {
   let sanitizedPrompt = prompt;
 
   if (action === "hard_block") {
-    sanitizedPrompt =
-      "[BLOCKED — Prompt contained live credentials / confidential parameters]";
+    sanitizedPrompt = "[BLOCKED — Prompt contained live credentials / confidential parameters]";
   } else if (action === "silent_redact") {
-    const tokenMap = tee.createTokenTable(
-      `sim-${Date.now()}`,
-      detection.detections
-    );
+    const tokenMap = tee.createTokenTable(`sim-${Date.now()}`, detection.detections);
     sanitizedPrompt = tee.sanitizePrompt(prompt, tokenMap);
   }
 
@@ -1089,7 +878,7 @@ router.post("/simulate-leak", async (req, res) => {
     resolvedUser: employeeId,
     userEmail,
     resolvedHost: endpointHost,
-    endpointIp: "10.0.14.88",
+    endpointIp: req.headers["x-forwarded-for"] || req.ip || "10.0.14.88",
     prompt,
     sanitizedPrompt,
     restoredResponse:
