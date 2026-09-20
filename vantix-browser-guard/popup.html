@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vantix Enterprise AI Guard</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="popup-container">
+    <!-- Header -->
+    <header class="header">
+      <div class="logo-row">
+        <div class="shield-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#22d3ee" stroke-width="2.2">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            <path d="m9 12 2 2 4-4"/>
+          </svg>
+        </div>
+        <div>
+          <h1 class="title">VANTIX GUARD</h1>
+          <p class="subtitle">Enterprise AI Data Firewall</p>
+        </div>
+      </div>
+      <div id="status-pill" class="status-pill active">
+        <span class="pulse-dot"></span>
+        <span id="status-text">ACTIVE</span>
+      </div>
+    </header>
+
+    <!-- Policy Banner -->
+    <div class="policy-card">
+      <div class="policy-header">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2">
+          <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+          <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+        </svg>
+        <span>MANAGED BY ENTERPRISE POLICY</span>
+      </div>
+      <p class="policy-desc">Installed by system administrator. Tamper protection locked.</p>
+    </div>
+
+    <!-- Telemetry Metrics Grid -->
+    <div class="metrics-grid">
+      <div class="metric-card">
+        <span class="metric-val" id="count-intercepted">0</span>
+        <span class="metric-lbl">Intercepted</span>
+      </div>
+      <div class="metric-card danger">
+        <span class="metric-val" id="count-blocked">0</span>
+        <span class="metric-lbl">Hard Blocks</span>
+      </div>
+      <div class="metric-card success">
+        <span class="metric-val" id="count-redacted">0</span>
+        <span class="metric-lbl">TEE Redacted</span>
+      </div>
+    </div>
+
+    <!-- Engine Connectivity Card -->
+    <div class="engine-card">
+      <div class="engine-row">
+        <span class="engine-label">Detection Engine:</span>
+        <span id="engine-status" class="engine-val ok">Checking...</span>
+      </div>
+      <div class="engine-row">
+        <span class="engine-label">Active Enclave:</span>
+        <span class="engine-val">TEE AES-256-GCM ✓</span>
+      </div>
+      <div class="engine-row">
+        <span class="engine-label">Monitored Platforms:</span>
+        <span class="engine-val">ChatGPT, Claude, Gemini</span>
+      </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="action-buttons">
+      <button id="btn-open-dashboard" class="primary-btn">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="3" width="18" height="18" rx="2"/>
+          <path d="M3 9h18M9 21V9"/>
+        </svg>
+        Open Admin Dashboard
+      </button>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+      <span>Vantix Zero-Trust AI Security</span>
+      <span>v1.0.0</span>
+    </footer>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
