@@ -102,7 +102,7 @@ function showBlockBanner(message, riskScore, categories) {
     </div>
     <div class="vantix-banner-meta">
       <span>Violation Categories: <strong>${categoryList}</strong></span>
-      <span>Logged to Security Admin (http://localhost:5173)</span>
+      <span>Logged to Vantix Security Admin</span>
     </div>
   `;
 
@@ -176,7 +176,6 @@ async function handlePromptSubmission(e) {
       {
         type: "INSPECT_PROMPT",
         prompt: rawPrompt,
-        user: "mohammed",
       },
       (response) => {
         isProcessing = false;

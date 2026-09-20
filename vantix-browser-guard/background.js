@@ -8,6 +8,32 @@ const CLOUD_BACKEND_URL = "https://vantix-backend-7gcw.onrender.com";
 const LOCAL_BACKEND_URL = "http://localhost:5000";
 
 let effectiveBackendUrl = LOCAL_BACKEND_URL;
+let currentSystemUser = "mohammed";
+let currentSystemHost = "mohammed-Latitude-5400";
+
+// Fetch dynamic system identity from engine
+async function fetchSystemIdentity() {
+  try {
+    const res = await fetch(`${LOCAL_BACKEND_URL}/api/vantix/system-identity`);
+    const data = await res.json();
+    if (data && data.user) {
+      currentSystemUser = data.user;
+      currentSystemHost = data.host;
+      await chrome.storage.local.set({ systemUser: data.user, systemHost: data.host });
+      return;
+    }
+  } catch (e) {}
+
+  try {
+    const res = await fetch(`${CLOUD_BACKEND_URL}/api/vantix/system-identity`);
+    const data = await res.json();
+    if (data && data.user) {
+      currentSystemUser = data.user;
+      currentSystemHost = data.host;
+      await chrome.storage.local.set({ systemUser: data.user, systemHost: data.host });
+    }
+  } catch (e) {}
+}
 
 // Initialize extension state
 chrome.runtime.onInstalled.addListener(async () => {
@@ -19,15 +45,20 @@ chrome.runtime.onInstalled.addListener(async () => {
     lastViolation: null,
     backendOnline: false,
     activeGateway: "Detecting...",
+    systemUser: currentSystemUser,
+    systemHost: currentSystemHost,
   });
 
   chrome.action.setBadgeText({ text: "ON" });
   chrome.action.setBadgeBackgroundColor({ color: "#22d3ee" });
   console.log("[Vantix Guard] Background service worker initialized.");
+  fetchSystemIdentity();
 });
 
 // Periodic heartbeat to verify Vantix engine (Local first, then Cloud Render)
 async function checkEngineHealth() {
+  await fetchSystemIdentity();
+
   try {
     const res = await fetch(`${LOCAL_BACKEND_URL}/api/vantix/health`, { method: "GET" });
     const json = await res.json();
@@ -68,22 +99,46 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === "INSPECT_PROMPT") {
     (async () => {
       try {
+        const stored = await chrome.storage.local.get(["systemUser", "systemHost"]);
+        const user = message.user || stored.systemUser || currentSystemUser || "mohammed";
+        const host = stored.systemHost || currentSystemHost || "mohammed-Latitude-5400";
+
+        const payload = {
+          prompt: message.prompt,
+          userId: user,
+          user: user,
+          host: host,
+          sessionId: `browser-${user}-${Date.now()}`,
+        };
+
+        // 1. Primary inspection for low-latency (<5ms)
         const res = await fetch(`${effectiveBackendUrl}/api/vantix/chat`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "X-Vantix-User": message.user || "employee",
-            "X-Vantix-Host": "browser-endpoint",
+            "X-Vantix-User": user,
+            "X-Vantix-Host": host,
             "X-Vantix-Source": "browser-guard",
           },
-          body: JSON.stringify({
-            prompt: message.prompt,
-            userId: message.user || "employee",
-            sessionId: `browser-${Date.now()}`,
-          }),
+          body: JSON.stringify(payload),
         });
 
         const json = await res.json();
+
+        // 2. Dual-Sync: If local engine was used, sync to Cloud Render in background
+        // so live Vercel dashboard updates in real-time
+        if (effectiveBackendUrl !== CLOUD_BACKEND_URL) {
+          fetch(`${CLOUD_BACKEND_URL}/api/vantix/chat`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Vantix-User": user,
+              "X-Vantix-Host": host,
+              "X-Vantix-Source": "browser-guard",
+            },
+            body: JSON.stringify(payload),
+          }).catch(() => {});
+        }
 
         // Update local statistics
         const stats = await chrome.storage.local.get([
