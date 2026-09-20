@@ -205,14 +205,111 @@ const Settings = () => {
         </div>
       </section>
 
-      {/* Extension Support */}
+      {/* Browser Guard & Endpoint Distribution */}
       <section className="card">
-        <div className="card__head">
-          <p className="card__title">Extension Support</p>
+        <div className="card__head" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <p className="card__title">Browser Guard & Remote Distribution</p>
+          <a
+            href="/downloads/vantix-browser-guard.zip"
+            download="vantix-browser-guard.zip"
+            className="btn btn--primary"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 8,
+              padding: "7px 16px",
+              fontSize: 13,
+              fontWeight: 600,
+              textDecoration: "none",
+              borderRadius: 8,
+            }}
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
+            Download Extension (.zip)
+          </a>
         </div>
         <div className="card__body">
-          <p style={{ color: "var(--muted-text)", fontSize: 13, lineHeight: 1.7, margin: "0 0 14px 0" }}>
-            Vantix currently monitors the following AI platforms:
+          <p style={{ color: "var(--text-secondary)", fontSize: 13, lineHeight: 1.6, margin: "0 0 18px 0" }}>
+            The Vantix Browser Guard inspects employee prompts in real time on web AI applications and communicates directly with your live cloud detection engine on Render.
+          </p>
+
+          <div style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+            gap: 16,
+            marginBottom: 20
+          }}>
+            <div style={{
+              background: "var(--card-bg, rgba(255, 255, 255, 0.03))",
+              border: "1px solid var(--border-color)",
+              borderRadius: 8,
+              padding: 16
+            }}>
+              <h4 style={{ margin: "0 0 10px 0", fontSize: 14, fontWeight: 600, color: "var(--brand)" }}>
+                Option A: Manual Installation (Any Machine)
+              </h4>
+              <ol style={{ margin: 0, paddingLeft: 20, fontSize: 12, lineHeight: 1.8, color: "var(--text-secondary)" }}>
+                <li>Click <strong>Download Extension (.zip)</strong> above.</li>
+                <li>Extract the downloaded archive anywhere on your system.</li>
+                <li>In Chrome or Brave, navigate to <code>chrome://extensions</code>.</li>
+                <li>Enable <strong>Developer mode</strong> (toggle in top-right corner).</li>
+                <li>Click <strong>Load unpacked</strong> and select the extracted folder.</li>
+              </ol>
+            </div>
+
+            <div style={{
+              background: "var(--card-bg, rgba(255, 255, 255, 0.03))",
+              border: "1px solid var(--border-color)",
+              borderRadius: 8,
+              padding: 16
+            }}>
+              <h4 style={{ margin: "0 0 10px 0", fontSize: 14, fontWeight: 600, color: "var(--brand)" }}>
+                Option B: Transparent OS Protection (Automated)
+              </h4>
+              <p style={{ margin: "0 0 10px 0", fontSize: 12, lineHeight: 1.6, color: "var(--text-secondary)" }}>
+                For company-managed machines, run one terminal command to automatically start the transparent proxy (port 8443), setup iptables interception, and force-deploy Chrome enterprise policies:
+              </p>
+              <div style={{
+                background: "var(--panel)",
+                border: "1px solid var(--border-color)",
+                padding: "8px 12px",
+                borderRadius: 6,
+                fontFamily: "var(--mono)",
+                fontSize: 12,
+                color: "var(--brand)"
+              }}>
+                sudo ./vantix-protect.sh start
+              </div>
+            </div>
+          </div>
+
+          <div style={{ marginBottom: 16 }}>
+            <p style={{ color: "var(--text-secondary)", fontSize: 12, fontWeight: 600, marginBottom: 8 }}>
+              Active Cloud Gateway Target:
+            </p>
+            <div style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 8,
+              background: "rgba(16, 185, 129, 0.1)",
+              border: "1px solid rgba(16, 185, 129, 0.3)",
+              color: "#10b981",
+              padding: "6px 12px",
+              borderRadius: 6,
+              fontSize: 12,
+              fontFamily: "var(--mono)"
+            }}>
+              <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#10b981" }}></div>
+              https://vantix-backend-7gcw.onrender.com
+            </div>
+          </div>
+
+          <p style={{ color: "var(--text-secondary)", fontSize: 12, fontWeight: 600, margin: "16px 0 8px 0" }}>
+            Monitored Platforms:
           </p>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             {platforms.map((p) => (
@@ -221,9 +318,6 @@ const Settings = () => {
               </span>
             ))}
           </div>
-          <p style={{ color: "var(--muted-text)", fontSize: 12, lineHeight: 1.6, marginTop: 14, marginBottom: 0 }}>
-            The extension automatically detects sensitive data typed into these platforms and enforces your organization's rules.
-          </p>
         </div>
       </section>
 
