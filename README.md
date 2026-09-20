@@ -1,95 +1,84 @@
 # 🛡️ Vantix — Enterprise AI Data Loss Prevention Firewall
 
-**Vantix** is an enterprise-grade AI security firewall that stops sensitive corporate credentials, customer PII, and industrial secrets from leaking into public and private LLMs (OpenAI, Claude, Gemini, DeepSeek, and custom AI APIs).
+**Vantix** stops sensitive corporate credentials, customer PII, and proprietary code from leaking into public and private AI models (ChatGPT, Claude, Gemini, DeepSeek, and AI SDKs). 
+
+It operates a zero-exposure **dual-layer architecture**:
+1. **Layer 1 (OS & Network)**: Transparent proxy (`iptables`) intercepting terminal commands, Python scripts, and SDKs.
+2. **Layer 2 (Browser Guard)**: Chrome extension intercepting keystrokes and DOM submissions on web AI interfaces with real-time redaction or blocking.
 
 ---
 
-## ⚡ Core Architecture
+## 🌐 Live Hosted Deployment
 
-Vantix operates a zero-exposure **Dual-Layer Endpoint Security Engine**:
-
-1. **OS Network Daemon (`vantix-protect.sh` / iptables)**:
-   - Transparently intercepts all outbound AI API traffic system-wide (`0.0.0.0:8443`).
-   - Covers VS Code, Cursor, terminal CLIs, Python scripts, Node.js, and cURL requests without application plugins.
-2. **Browser Guard (Manifest V3 Extension)**:
-   - Pre-flight DOM interception across ChatGPT (`chatgpt.com`), Claude (`claude.ai`), and Gemini (`gemini.google.com`).
-   - Automatically halts prompts with hard credentials (`HARD BLOCK`) and substitutes sensitive infrastructure values with non-reconstructable semantic tokens (`SILENT REDACT`).
-3. **SOC Security Operations Center**:
-   - Centralized web dashboard tracking employee exfiltration attempts, targeted AI sites, cryptographic HMAC-SHA256 audit signatures, and risk progression.
+- **Live Dashboard**: [https://vantix-beta.vercel.app](https://vantix-beta.vercel.app)
+- **Live Cloud API**: [https://vantix-backend-7gcw.onrender.com](https://vantix-backend-7gcw.onrender.com)
+- **Default Admin Login**: `admin@vantix.corp` / `Admin@123456` *(or click One-Click Demo Access)*
 
 ---
 
-## 🚀 Quick Start (Local Activation)
+## 🚀 Quick Setup (Using Hosted Cloud)
 
-### 1. Activate System-Wide OS Protection
-Run the single command below to enable transparent kernel routing and start the MITM inspection daemon:
-```bash
-sudo ./vantix-protect.sh start
-```
+No local backend needed. Connect your machine to the live cloud backend:
 
-### 2. Verify / Run Demo Exfiltration
-Simulate live exfiltration scenarios (credentials, database URIs, SCADA parameters):
+### 🐧 Linux (Full OS + Browser Protection)
+Run this single command in your terminal to deploy the transparent proxy, trust the CA, and configure Chrome policies:
 ```bash
-./vantix-protect.sh demo
+curl -fsSL https://vantix-beta.vercel.app/quickstart.sh | sudo bash
 ```
-
-### 3. Deactivate Protection
-Restore default networking and flush firewall routing:
-```bash
-sudo ./vantix-protect.sh stop
-```
+> **To stop monitoring**: `sudo /opt/vantix/vantix-protect.sh stop`
 
 ---
 
-## 💻 Local Development
+### 🍏 macOS (Browser Protection)
+Run in Terminal to download and unpack the extension:
+```bash
+curl -fsSL https://vantix-beta.vercel.app/downloads/vantix-browser-guard.zip -o ~/vantix-guard.zip && unzip -qo ~/vantix-guard.zip -d ~/vantix-guard
+```
+1. Open Google Chrome and go to `chrome://extensions`.
+2. Toggle **Developer mode** (top right).
+3. Click **Load unpacked** and select the `~/vantix-guard` folder.
 
-### Backend (`vantix-backend`)
+---
+
+### 🪟 Windows (Browser Protection)
+Run in PowerShell to download and unpack the extension:
+```powershell
+iwr https://vantix-beta.vercel.app/downloads/vantix-browser-guard.zip -OutFile "$HOME\vantix-guard.zip"; Expand-Archive "$HOME\vantix-guard.zip" -DestinationPath "$HOME\vantix-guard" -Force
+```
+1. Open Google Chrome and go to `chrome://extensions`.
+2. Toggle **Developer mode** (top right).
+3. Click **Load unpacked** and select the `vantix-guard` folder in your user directory.
+
+---
+
+## 💻 Running Locally
+
+To run the entire stack on your local machine:
+
+### 1. Start the Backend
 ```bash
 cd vantix-backend
 npm install
 npm start
-# Runs on http://localhost:5000 (WebSocket: ws://localhost:5000/ws/vantix)
+# Server runs on http://localhost:5000 (WebSocket: ws://localhost:5000/ws/vantix)
 ```
 
-### Admin Dashboard (`vantix-admin`)
+### 2. Start the Admin Dashboard
 ```bash
 cd vantix-admin
 npm install
 npm run dev
-# Runs on http://localhost:5173
+# Dashboard runs on http://localhost:5173
+```
+
+### 3. (Optional - Linux Only) Start Local OS Network Interception
+```bash
+sudo ./vantix-protect.sh start
+# Intercepts all local AI traffic on port 8443 via iptables
 ```
 
 ---
 
-## 🌐 Production Cloud Deployment
-
-### 1. Frontend Deployment (Vercel)
-- **Root Directory**: `vantix-admin`
-- **Framework Preset**: `Vite`
-- **Build Command**: `npm run build`
-- **Output Directory**: `dist`
-- **Environment Variables**:
-  ```env
-  VITE_API_URL=https://your-vantix-backend.onrender.com
-  VITE_WS_URL=wss://your-vantix-backend.onrender.com/ws/vantix
-  ```
-
-### 2. Backend Deployment (Render)
-- **Root Directory**: `vantix-backend`
-- **Environment**: `Node`
-- **Build Command**: `npm install`
-- **Start Command**: `node index.js`
-- **Environment Variables**:
-  ```env
-  PORT=5000
-  NODE_ENV=production
-  JWT_SECRET=your_production_secret_key_2026
-  FRONTEND_URL=https://your-vantix-admin.vercel.app
-  ```
-
----
-
-## 🔐 Administrator Access
-- **Portal**: `/login`
-- **Default Admin ID**: `admin@vantix.corp`
-- **Master Key**: `Admin@123456` (or click *⚡ One-Click Demo Access*)
+## 🎯 Supported Platforms
+- **Web AI**: ChatGPT, Claude, Google Gemini, Copilot, Perplexity, DeepSeek, Grok, Meta AI.
+- **Code & Terminal**: Python (`openai`, `anthropic`), cURL, Node.js, and IDE plugins.
