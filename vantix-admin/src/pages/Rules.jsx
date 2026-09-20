@@ -63,20 +63,7 @@ const Rules = () => {
   const handleRemoveApiKey  = wrap((id)      => api.delete(`/rules/apikey/${id}`));
   const handleRemoveNumber  = wrap((id)      => api.delete(`/rules/number/${id}`));
 
-  const handleAddApp = wrap(async (e) => {
-    e.preventDefault();
-    if (!newApp.trim()) return;
-    const updated = [...(rules.monitoredApps || []), newApp.trim()];
-    await api.put("/rules", { monitoredApps: updated });
-    setNewApp("");
-  });
-
-  const handleRemoveApp = wrap(async (appToRemove) => {
-    const updated = (rules.monitoredApps || []).filter(a => a !== appToRemove);
-    await api.put("/rules", { monitoredApps: updated });
-  });
-
-  const totalRules = rules.domains.length + rules.keywords.length + rules.apiKeys.length + rules.sensitiveNumbers.length + rules.monitoredApps.length;
+  const totalRules = rules.domains.length + rules.keywords.length + rules.apiKeys.length + rules.sensitiveNumbers.length;
   const autoDetectedCount = rules.apiKeys.filter(k => k.auto_detected).length;
 
   /* ── shared row style used by all 4 forms ── */
@@ -221,62 +208,42 @@ const Rules = () => {
           </div>
         </section>
 
-        {/* ── Desktop Watchlist ── */}
-        <section className="card" style={{ gridColumn: "1 / -1" }}>
+        {/* ── Autonomous System-Wide AI Coverage (Always Enforced) ── */}
+        <section className="card" style={{ gridColumn: "1 / -1", border: "1px solid rgba(99, 102, 241, 0.3)", background: "rgba(99, 102, 241, 0.04)" }}>
           <div className="card__head" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div>
-              <p className="card__title">Desktop Agent Watchlist</p>
+              <p className="card__title" style={{ color: "#a5b4fc", display: "flex", alignItems: "center", gap: 8 }}>
+                <span>🛡️ Autonomous System-Wide AI Coverage</span>
+                <span className="badge badge--admin" style={{ background: "rgba(16, 185, 129, 0.2)", color: "#34d399", border: "1px solid rgba(16, 185, 129, 0.3)" }}>
+                  ALWAYS ACTIVE
+                </span>
+              </p>
               <p style={{ margin: "4px 0 0", fontSize: 12, color: "var(--text-secondary)" }}>
-                Specify desktop applications (e.g. ChatGPT, Slack) for the agent to monitor keystrokes on.
+                Zero-config enforcement: Vantix intercepts 100% of AI interaction surfaces across the operating system without manual platform toggles.
               </p>
             </div>
-            <span className="badge badge--admin">{(rules.monitoredApps || []).length} apps</span>
+            <span style={{ fontSize: 11, fontWeight: 700, color: "#818cf8", letterSpacing: 0.8, textTransform: "uppercase" }}>Dual-Layer Defense</span>
           </div>
           <div className="card__body">
-            <form onSubmit={handleAddApp}>
-              <div style={formRow}>
-                <div style={fieldGrow}>
-                  <div className="label">Application Name (Window Title)</div>
-                  <input className="input" type="text" value={newApp}
-                    onChange={(e) => setNewApp(e.target.value)}
-                    placeholder="ChatGPT" required style={{ borderRadius: 8 }} />
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 14 }}>
+              <div style={{ background: "rgba(15, 23, 42, 0.6)", border: "1px solid rgba(255, 255, 255, 0.08)", borderRadius: 10, padding: 14 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "#38bdf8", marginBottom: 4, display: "flex", alignItems: "center", gap: 6 }}>
+                  <span>⚡ Layer 1: OS Network MITM Proxy</span>
                 </div>
-                <div style={btnWrap}>
-                  <button className="btn btn--primary" type="submit"
-                    disabled={busy} style={{ ...btnFull, width: 120 }}>
-                    Add App
-                  </button>
+                <div style={{ fontSize: 12, color: "#94a3b8", lineHeight: 1.5 }}>
+                  Transparently intercepts all outbound AI requests from <strong>IDEs, CLI, Python, Node.js, and cURL</strong> targeting OpenAI, Anthropic, Gemini, Groq, Mistral, and Perplexity APIs.
                 </div>
+                <div style={{ marginTop: 8, fontSize: 11, color: "#10b981", fontWeight: 600 }}>● Active on 0.0.0.0:8443 (iptables redirect)</div>
               </div>
-            </form>
 
-            <div style={{ marginTop: 18 }}>
-              <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                {(rules.monitoredApps || []).map((app, i) => (
-                  <div key={i} className="badge" style={{
-                    padding: "6px 14px",
-                    borderRadius: 12,
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 10,
-                    background: "var(--panel)",
-                    borderColor: "var(--border-color)",
-                    fontSize: 13,
-                    color: "var(--text-primary)",
-                    fontWeight: 500,
-                  }}>
-                    <span>{app}</span>
-                    <button type="button" onClick={() => handleRemoveApp(app)} disabled={busy}
-                      style={{ background: "transparent", border: "none", color: "var(--danger)", cursor: "pointer", padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                      title={`Remove ${app}`}
-                    >
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                    </button>
-                  </div>
-                ))}
-                {(!rules.monitoredApps || rules.monitoredApps.length === 0) && (
-                  <span style={{ color: "var(--empty-state-text)", fontSize: 13 }}>No desktop apps monitored</span>
-                )}
+              <div style={{ background: "rgba(15, 23, 42, 0.6)", border: "1px solid rgba(255, 255, 255, 0.08)", borderRadius: 10, padding: 14 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "#a78bfa", marginBottom: 4, display: "flex", alignItems: "center", gap: 6 }}>
+                  <span>🌐 Layer 2: Consumer AI Browser Guard</span>
+                </div>
+                <div style={{ fontSize: 12, color: "#94a3b8", lineHeight: 1.5 }}>
+                  Performs pre-flight prompt inspection in <strong>ChatGPT, Claude, and Gemini</strong>. Blocks or redacts sensitive tokens before network transmission.
+                </div>
+                <div style={{ marginTop: 8, fontSize: 11, color: "#10b981", fontWeight: 600 }}>● Enforced via Chrome Enterprise Managed Policy</div>
               </div>
             </div>
           </div>
