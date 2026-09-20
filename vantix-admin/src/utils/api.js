@@ -1,7 +1,18 @@
 import axios from 'axios';
 
+const CLOUD_API_URL = "https://vantix-backend-7gcw.onrender.com";
+const LOCAL_API_URL = "http://localhost:5000";
+
+const getBaseUrl = () => {
+  if (import.meta.env.VITE_API_URL) return import.meta.env.VITE_API_URL;
+  if (typeof window !== "undefined" && window.location.port === "5173") {
+    return LOCAL_API_URL;
+  }
+  return CLOUD_API_URL;
+};
+
 const api = axios.create({
-  baseURL: (import.meta.env.VITE_API_URL || '') + '/api',
+  baseURL: `${getBaseUrl()}/api`,
 });
 
 // Auto-inject token into headers
