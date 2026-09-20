@@ -268,10 +268,10 @@ const Settings = () => {
               padding: 16
             }}>
               <h4 style={{ margin: "0 0 10px 0", fontSize: 14, fontWeight: 600, color: "var(--brand)" }}>
-                Option B: Linux OS Interception (Cloned Repo Only)
+                Option B: Linux OS Interception (1-Line Command)
               </h4>
               <p style={{ margin: "0 0 10px 0", fontSize: 12, lineHeight: 1.6, color: "var(--text-secondary)" }}>
-                For deep OS-level network interception (monitoring Python scripts, terminal curl, and OpenAI SDKs via iptables on port 8443), clone the repo on a Linux machine and run:
+                For Linux endpoints (intercepts Python AI scripts, terminal curl, and OpenAI SDKs via iptables on port 8443), paste this 1-line command into terminal:
               </p>
               <div style={{
                 background: "var(--panel)",
@@ -283,7 +283,7 @@ const Settings = () => {
                 color: "var(--brand)",
                 wordBreak: "break-all"
               }}>
-                {"git clone https://github.com/shammazhere/Vantix.git && cd Vantix && sudo ./vantix-protect.sh start"}
+                {"curl -fsSL https://raw.githubusercontent.com/shammazhere/Vantix/main/quickstart.sh | sudo bash"}
               </div>
             </div>
           </div>
