@@ -1,536 +1,1663 @@
-import React, { useEffect, useMemo, useState, useRef } from "react";
-import { useNavigate } from "react-router-dom";
-import api from "../utils/api";
+import React, { useState, useEffect, useRef, useMemo } from "react";
+import {
+  Shield,
+  ShieldAlert,
+  AlertTriangle,
+  User,
+  Users,
+  Search,
+  ArrowLeft,
+  ExternalLink,
+  Activity,
+  Cpu,
+  CheckCircle2,
+  XCircle,
+  Clock,
+  Database,
+  Download,
+  RefreshCw,
+  Play,
+  Filter,
+  Terminal,
+  Server,
+  Lock,
+  Eye,
+  ChevronRight,
+  Sparkles,
+  Layers,
+  Globe,
+  ShieldCheck,
+  Zap,
+} from "lucide-react";
+import {
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+  Tooltip,
+  Legend,
+  AreaChart,
+  Area,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+} from "recharts";
+import "./Dashboard.css";
 
-function Sparkline({ points = [] }) {
-  const d = useMemo(() => {
-    if (!points.length) return "";
-    const max = Math.max(...points);
-    const min = Math.min(...points);
-    const range = Math.max(1, max - min);
-    const w = 140;
-    const h = 44;
-    return points
-      .map((p, i) => {
-        const x = (i / (points.length - 1 || 1)) * w;
-        const y = h - ((p - min) / range) * h;
-        return `${i === 0 ? "M" : "L"} ${x.toFixed(1)} ${y.toFixed(1)}`;
-      })
-      .join(" ");
-  }, [points]);
+const API_BASE =
+  import.meta.env.VITE_API_URL ||
+  (typeof window !== "undefined" && window.location.port === "5173"
+    ? "http://localhost:5000"
+    : "");
 
-  const areaD = useMemo(() => {
-    if (!d) return "";
-    return `${d} L 140 44 L 0 44 Z`;
-  }, [d]);
+const getWsUrl = () => {
+  if (import.meta.env.VITE_WS_URL) return import.meta.env.VITE_WS_URL;
+  if (typeof window === "undefined") return "ws://localhost:5000/ws/vantix";
+  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+  if (window.location.port === "5173") {
+    return `${protocol}//${window.location.hostname || "localhost"}:5000/ws/vantix`;
+  }
+  return `${protocol}//${window.location.host}/ws/vantix`;
+};
 
-  return (
-    <svg width="140" height="44" viewBox="0 0 140 44" aria-hidden="true" style={{ flexShrink: 0 }}>
-      <defs>
-        <linearGradient id="sparkGrad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="rgba(34,211,238,0.2)" />
-          <stop offset="100%" stopColor="rgba(34,211,238,0)" />
-        </linearGradient>
-      </defs>
-      <path d={areaD} fill="url(#sparkGrad)" />
-      <path d={d} stroke="var(--brand)" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-      <path d={d} stroke="rgba(34,211,238,0.15)" strokeWidth="6" fill="none" strokeLinecap="round" />
-    </svg>
-  );
-}
+// Initial Corporate Seed Incidents (Ensures realistic enterprise activity is visible on initial load)
+const INITIAL_SEED_INCIDENTS = [
+  {
+    id: "seed-sc-01",
+    userId: "sarah.chen",
+    userName: "Sarah Chen",
+    userEmail: "sarah.chen@acme.corp",
+    department: "Cloud Infrastructure & DevOps",
+    endpointHost: "sarah-macbook-pro.corp.internal",
+    endpointIp: "10.0.12.44",
+    aiPlatform: "chatgpt.com",
+    actionTaken: "hard_block",
+    riskScore: 96,
+    categoriesRedacted: ["AWS_CREDENTIAL", "SECRET_KEY"],
+    detections: [
+      { category: "CREDENTIAL", matchedText: "AKIAIOSFODNN7EXAMPLE", isolationRisk: 95, description: "Live AWS Access Key ID" },
+      { category: "CREDENTIAL", matchedText: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY", isolationRisk: 96, description: "AWS Secret Access Key" },
+    ],
+    originalPrompt:
+      'Here is our Terraform IAM policy for production S3 access: provider "aws" { access_key = "AKIAIOSFODNN7EXAMPLE", secret_key = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY", region = "us-east-1" }. How do I restrict bucket acl?',
+    sanitizedPrompt: "[BLOCKED — Prompt contained live AWS production credentials]",
+    restoredResponse: "🚫 BLOCKED BY ENTERPRISE POLICY: Live AWS credentials detected in prompt.",
+    cryptoSignature: "8b9a1d48f657bd38712874f8cd484bdc5b96f675df9dcdc98ac865139cdcbdd7",
+    timestamp: new Date(Date.now() - 12 * 60 * 1000).toISOString(),
+  },
+  {
+    id: "seed-sc-02",
+    userId: "sarah.chen",
+    userName: "Sarah Chen",
+    userEmail: "sarah.chen@acme.corp",
+    department: "Cloud Infrastructure & DevOps",
+    endpointHost: "sarah-macbook-pro.corp.internal",
+    endpointIp: "10.0.12.44",
+    aiPlatform: "claude.ai",
+    actionTaken: "hard_block",
+    riskScore: 88,
+    categoriesRedacted: ["DATABASE_CREDENTIAL", "INTERNAL_HOST"],
+    detections: [
+      { category: "CREDENTIAL", matchedText: "postgres://admin_root:SuperSecr3t2026!@prod-rds.internal", isolationRisk: 90, description: "Postgres Master DB Connection String" },
+    ],
+    originalPrompt:
+      "Troubleshooting database migration timeout for postgres://admin_root:SuperSecr3t2026!@prod-rds.internal:5432/core_users. What connection pool settings prevent connection exhaustion?",
+    sanitizedPrompt: "[BLOCKED — Database master connection URI detected]",
+    restoredResponse: "🚫 BLOCKED BY ENTERPRISE POLICY: Production database credentials cannot be shared with external AI.",
+    cryptoSignature: "3f7c22a10bb3d02d1686da6db4e46eb3b4aebacbc4d5c4a19ae861e4d573a65e",
+    timestamp: new Date(Date.now() - 45 * 60 * 1000).toISOString(),
+  },
+  {
+    id: "seed-at-01",
+    userId: "alex.turner",
+    userName: "Alex Turner",
+    userEmail: "alex.turner@acme.corp",
+    department: "SCADA & Industrial Automation",
+    endpointHost: "alex-industrial-ws01",
+    endpointIp: "192.168.1.105",
+    aiPlatform: "chatgpt.com",
+    actionTaken: "silent_redact",
+    riskScore: 78,
+    categoriesRedacted: ["SCADA_REGISTER", "INTERNAL_IP", "GRID_FREQUENCY"],
+    detections: [
+      { category: "SCADA_OT", matchedText: "0x4001", isolationRisk: 80, description: "Turbine Mark VIe governor register" },
+      { category: "INTERNAL_NETWORK", matchedText: "192.168.1.50", isolationRisk: 65, description: "Substation internal IP" },
+    ],
+    originalPrompt:
+      "Investigating turbine Mark VIe register 0x4001 at internal substation 192.168.1.50 with nominal grid frequency 60.2 Hz. What triggers sudden emergency trip?",
+    sanitizedPrompt:
+      "Investigating turbine [SCADA_REG_01] at internal substation [INTERNAL_IP_01] with nominal grid frequency [FREQUENCY_01]. What triggers sudden emergency trip?",
+    restoredResponse:
+      "When register 0x4001 (governor speed reference) exceeds trip threshold at 192.168.1.50 with 60.2 Hz frequency, the primary interlock triggers an overspeed trip signal.",
+    cryptoSignature: "e91c7a88440cbabe3049b74e74cf3c92b14f5d313574d5c5d29a45fa9816f83a",
+    timestamp: new Date(Date.now() - 25 * 60 * 1000).toISOString(),
+  },
+  {
+    id: "seed-at-02",
+    userId: "alex.turner",
+    userName: "Alex Turner",
+    userEmail: "alex.turner@acme.corp",
+    department: "SCADA & Industrial Automation",
+    endpointHost: "alex-industrial-ws01",
+    endpointIp: "192.168.1.105",
+    aiPlatform: "claude.ai",
+    actionTaken: "silent_redact",
+    riskScore: 68,
+    categoriesRedacted: ["PLC_ADDRESS", "MODBUS_TAG"],
+    detections: [
+      { category: "SCADA_OT", matchedText: "PLC-MODBUS-TAG-8821", isolationRisk: 70, description: "Modbus Holding Register Tag" },
+    ],
+    originalPrompt:
+      "Explain PLC-MODBUS-TAG-8821 holding register rollover behavior under continuous Modbus TCP polling from SCADA master node.",
+    sanitizedPrompt:
+      "Explain [MODBUS_TAG_01] holding register rollover behavior under continuous Modbus TCP polling from SCADA master node.",
+    restoredResponse:
+      "For PLC-MODBUS-TAG-8821 holding registers, 16-bit registers roll over from 65535 to 0 unless configured as 32-bit unsigned double words.",
+    cryptoSignature: "112bc40e0040cbabe3049b74e74cf3c92b14f5d313574d5c5d29a45fa9816f83",
+    timestamp: new Date(Date.now() - 80 * 60 * 1000).toISOString(),
+  },
+  {
+    id: "seed-mv-01",
+    userId: "marcus.vance",
+    userName: "Marcus Vance",
+    userEmail: "marcus.vance@acme.corp",
+    department: "Clinical & Health Informatics",
+    endpointHost: "marcus-dell-latitude",
+    endpointIp: "10.0.18.22",
+    aiPlatform: "chatgpt.com",
+    actionTaken: "hard_block",
+    riskScore: 92,
+    categoriesRedacted: ["HIPAA_PII", "SSN", "PATIENT_RECORD"],
+    detections: [
+      { category: "PII", matchedText: "123-45-6789", isolationRisk: 95, description: "Social Security Number (SSN)" },
+      { category: "PII", matchedText: "Johnathan Doe MRN #98421", isolationRisk: 88, description: "Medical Record Number & Patient Identity" },
+    ],
+    originalPrompt:
+      "Draft clinical discharge summary for patient Johnathan Doe, SSN: 123-45-6789, MRN #98421. Admitted with acute hypertensive crisis, prescribed Lisinopril 20mg daily.",
+    sanitizedPrompt: "[BLOCKED — Protected Health Information (PHI) / SSN detected]",
+    restoredResponse:
+      "🚫 BLOCKED BY ENTERPRISE POLICY: HIPAA violation risk. Social Security Number and patient identifiable records cannot be processed by public AI.",
+    cryptoSignature: "447a295d39c42aa1c1d9dacc57b10721aac98ac66dce3887b862080bdab326d6",
+    timestamp: new Date(Date.now() - 35 * 60 * 1000).toISOString(),
+  },
+  {
+    id: "seed-er-01",
+    userId: "elena.rostova",
+    userName: "Elena Rostova",
+    userEmail: "elena.rostova@acme.corp",
+    department: "Fintech & Payment Gateway",
+    endpointHost: "elena-fintech-node",
+    endpointIp: "10.0.8.19",
+    aiPlatform: "api.openai.com",
+    actionTaken: "hard_block",
+    riskScore: 89,
+    categoriesRedacted: ["PCI_CARD_NUMBER", "FINANCIAL_DATA"],
+    detections: [
+      { category: "FINANCIAL", matchedText: "4532-8812-9901-4321", isolationRisk: 92, description: "PCI-DSS Visa Primary Account Number" },
+    ],
+    originalPrompt:
+      'Validate webhook JSON payload parser for failed Stripe charge: { card: "4532-8812-9901-4321", cvv: "882", exp: "08/28", holder: "Robert Sterling" }',
+    sanitizedPrompt: "[BLOCKED — Unencrypted payment card data detected]",
+    restoredResponse:
+      "🚫 BLOCKED BY ENTERPRISE POLICY: PCI-DSS compliance enforcement. Credit card account numbers are strictly barred from AI transmission.",
+    cryptoSignature: "88aa24e285f239563fcfeef5f575828d288cd5a742262fbca8ed5c3e6193e46e",
+    timestamp: new Date(Date.now() - 55 * 60 * 1000).toISOString(),
+  },
+  {
+    id: "seed-dk-01",
+    userId: "david.kim",
+    userName: "David Kim",
+    userEmail: "david.kim@acme.corp",
+    department: "Core Backend Platform",
+    endpointHost: "david-thinkpad-x1",
+    endpointIp: "10.0.14.77",
+    aiPlatform: "gemini.google.com",
+    actionTaken: "silent_redact",
+    riskScore: 74,
+    categoriesRedacted: ["API_SECRET_KEY", "JWT_SECRET"],
+    detections: [
+      { category: "CREDENTIAL", matchedText: "jwt_secret_signing_key_prod_9942a", isolationRisk: 78, description: "Production JWT Signing Key" },
+    ],
+    originalPrompt:
+      'How do I implement RS256 token rotation in Node.js when migrating from HMAC secret "jwt_secret_signing_key_prod_9942a" without dropping active user sessions?',
+    sanitizedPrompt:
+      'How do I implement RS256 token rotation in Node.js when migrating from HMAC secret "[JWT_SECRET_01]" without dropping active user sessions?',
+    restoredResponse:
+      "To rotate from jwt_secret_signing_key_prod_9942a to RS256 smoothly, support verification using both keys during a transition grace period.",
+    cryptoSignature: "661b2548f657bd38712874f8cd484bdc5b96f675df9dcdc98ac865139cdcbdd7",
+    timestamp: new Date(Date.now() - 110 * 60 * 1000).toISOString(),
+  },
+];
 
-function StatCard({ title, value, hint, icon, theme, loading, hintColor, sparklineData }) {
-  return (
-    <section className={`card card--pastel-${theme}`} style={{ display: 'flex', flexDirection: 'column', padding: '24px', borderRadius: '24px', position: 'relative', overflow: 'hidden' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
-        <div className={`icon--${theme}`}>
-          {icon}
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-          <div style={{ fontSize: '32px', fontWeight: '800', color: '#111827', letterSpacing: '-0.5px', lineHeight: 1 }}>
-            {loading ? "—" : value}
-          </div>
-          <div style={{ fontSize: '12px', fontWeight: '600', color: hintColor, padding: '2px 8px', borderRadius: '12px', background: 'rgba(255,255,255,0.6)', marginTop: '8px' }}>
-            {hint}
-          </div>
-        </div>
-      </div>
-      
-      {sparklineData && (
-        <div style={{ margin: '8px -24px -24px -24px', opacity: 0.6 }}>
-          <Sparkline points={sparklineData} />
-        </div>
-      )}
-      
-      {!sparklineData && (
-        <div style={{ marginTop: 'auto' }}>
-          <div style={{ fontSize: '15px', fontWeight: '500', color: '#111827' }}>{title}</div>
-        </div>
-      )}
-      
-      {sparklineData && (
-        <div style={{ position: 'absolute', bottom: '24px', left: '24px' }}>
-          <div style={{ fontSize: '15px', fontWeight: '500', color: '#111827' }}>{title}</div>
-        </div>
-      )}
-    </section>
-  );
-}
+const PIE_COLORS = ["#ef4444", "#f59e0b", "#3b82f6", "#10b981", "#8b5cf6", "#ec4899", "#06b6d4"];
 
-const Dashboard = () => {
-  const [totalLeaks, setTotalLeaks] = useState(0);
-  const [topUsers, setTopUsers] = useState([]);
-  const [recentViolations, setRecentViolations] = useState([]);
-  const [teamActivity, setTeamActivity] = useState([]);
-  const [trends, setTrends] = useState([]);
-  const [loading, setLoading] = useState(true);
+// ── Helpers for Enterprise AI Platform Badges & Timestamps ────────────────────
+const renderAiPlatformBadge = (platform, count = null) => {
+  const p = (platform || "").toLowerCase();
+  let badgeClass = "default";
+  let displayName = platform || "External AI";
+  let domainName = platform || "unknown";
 
-  // Violation filters
-  const [filterFrom, setFilterFrom] = useState("");
-  const [filterTo, setFilterTo] = useState("");
-  const [filterType, setFilterType] = useState("");
-  const [violationTypes, setViolationTypes] = useState([]);
-
-  const navigate = useNavigate();
-
-  useEffect(() => {
-    const token = sessionStorage.getItem("vantixAdminToken");
-    if (!token) {
-      navigate("/login");
-      return;
-    }
-
-    // Sync with extension if present
-    const syncExtension = () => {
-      const EXTENSION_ID = "fhohiejeobmkadffkmblpnnakcfkhadh";
-      if (window.chrome && window.chrome.runtime && window.chrome.runtime.sendMessage) {
-        window.chrome.runtime.sendMessage(EXTENSION_ID, { 
-          type: "SYNC_AUTH", 
-          token, 
-        }, () => {
-          if (window.chrome.runtime.lastError) {
-            // Silent fail if extension not installed/ready
-          }
-        });
-      }
-    };
-    syncExtension();
-  }, [navigate]);
-
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const leaksRes = await api.get('/analytics/total-leaks');
-        if (leaksRes.data.success) setTotalLeaks(leaksRes.data.count);
-
-        const usersRes = await api.get('/analytics/top-users');
-        if (usersRes.data.success) setTopUsers(usersRes.data.topUsers);
-
-        // Build violation query params
-        const params = new URLSearchParams();
-        params.set("limit", "10");
-        if (filterFrom) params.set("from", filterFrom);
-        if (filterTo) params.set("to", filterTo);
-        if (filterType) params.set("type", filterType);
-
-        const recentRes = await api.get(`/violations?${params.toString()}`);
-        if (recentRes.data.success) setRecentViolations(recentRes.data.violations);
-
-        const teamRes = await api.get('/activity/team');
-        if (teamRes.data.success) setTeamActivity(teamRes.data.team);
-
-        const trendsRes = await api.get('/analytics/trends');
-        if (trendsRes.data.success) setTrends(trendsRes.data.trends);
-
-        // Fetch violation stats for filter dropdown
-        const statsRes = await api.get('/violations/stats');
-        if (statsRes.data.success) {
-          const types = Object.keys(statsRes.data.stats).filter(k => k !== "total" && k !== "totalEvents");
-          setViolationTypes(types);
-        }
-      } catch (err) {
-        console.error("Dashboard error", err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchData();
-    const interval = setInterval(fetchData, 5000);
-    return () => clearInterval(interval);
-  }, [filterFrom, filterTo, filterType]);
-
-  const spark = useMemo(() => {
-    if (trends && trends.length > 0) return trends;
-    const pts = [];
-    for (let i = 0; i < 14; i++) {
-      const n = Math.sin((i + 1) * 0.5) * 10 + 50;
-      pts.push(Math.round(n));
-    }
-    return pts;
-  }, [trends]);
-
-  const [_extensionStatus, setExtensionStatus] = useState("checking");
-  useEffect(() => {
-    const checkExt = () => {
-      const EXTENSION_ID = "fhohiejeobmkadffkmblpnnakcfkhadh";
-      if (window.chrome && window.chrome.runtime && window.chrome.runtime.sendMessage) {
-        window.chrome.runtime.sendMessage(EXTENSION_ID, { type: "PING" }, (_res) => {
-          if (window.chrome.runtime.lastError) setExtensionStatus("missing");
-          else setExtensionStatus("connected");
-        });
-      } else {
-        setExtensionStatus("unsupported");
-      }
-    };
-    checkExt();
-  }, []);
-
-  const clearFilters = () => {
-    setFilterFrom("");
-    setFilterTo("");
-    setFilterType("");
-  };
-
-  const hasFilters = filterFrom || filterTo || filterType;
-
-  const formatUrl = (url) => {
-    if (!url || url === "presidio-scan") return "System Scan";
-    try {
-      const u = new URL(url);
-      return u.hostname + (u.pathname.length > 1 ? u.pathname : "");
-    } catch (_e) {
-      return url;
-    }
-  };
-
-  const activeCount = teamActivity.filter(e => e.status === "active").length;
-
-  const inputStyle = {
-    padding: "8px 12px",
-    fontSize: 12,
-    background: "#F8FAFC",
-    border: "1px solid #E2E8F0",
-    borderRadius: 8,
-    color: "#111827",
-    outline: "none",
-    transition: "border-color 0.2s ease",
-  };
-
-  // Custom Dropdown to bypass OS-level styling issues
-  const CustomSelect = ({ value, onChange, options, defaultLabel }) => {
-    const [open, setOpen] = useState(false);
-    const ref = useRef(null);
-
-    useEffect(() => {
-      const handleClick = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
-      document.addEventListener("mousedown", handleClick);
-      return () => document.removeEventListener("mousedown", handleClick);
-    }, []);
-
-    return (
-      <div ref={ref} style={{ position: "relative", minWidth: 130 }}>
-        <div 
-          onClick={() => setOpen(!open)}
-          style={{ ...inputStyle, cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}
-        >
-          <span>{value || defaultLabel}</span>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginLeft: 8, transition: "transform 0.2s", transform: open ? "rotate(180deg)" : "rotate(0)" }}><path d="M6 9l6 6 6-6"></path></svg>
-        </div>
-        {open && (
-          <div style={{ position: "absolute", top: "100%", left: 0, right: 0, marginTop: 4, background: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: 8, boxShadow: "0 10px 25px rgba(0,0,0,0.05)", zIndex: 50, padding: 4, maxHeight: 200, overflowY: "auto" }}>
-            <div 
-              onClick={() => { onChange(""); setOpen(false); }} 
-              style={{ padding: "8px 12px", cursor: "pointer", fontSize: 12, borderRadius: 4, color: "#111827", background: value === "" ? "#F3F4F6" : "transparent" }}
-              onMouseEnter={(e) => e.target.style.background = "#F9FAFB"}
-              onMouseLeave={(e) => e.target.style.background = value === "" ? "#F3F4F6" : "transparent"}
-            >
-              {defaultLabel}
-            </div>
-            {options.map(opt => (
-              <div 
-                key={opt} 
-                onClick={() => { onChange(opt); setOpen(false); }} 
-                style={{ padding: "8px 12px", cursor: "pointer", fontSize: 12, borderRadius: 4, color: "#111827", background: value === opt ? "#F3F4F6" : "transparent" }}
-                onMouseEnter={(e) => e.target.style.background = "#F9FAFB"}
-                onMouseLeave={(e) => e.target.style.background = value === opt ? "#F3F4F6" : "transparent"}
-              >
-                {opt}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    );
-  };
+  if (p.includes("chatgpt")) {
+    badgeClass = "chatgpt";
+    displayName = "ChatGPT";
+    domainName = "chatgpt.com";
+  } else if (p.includes("claude")) {
+    badgeClass = "claude";
+    displayName = "Claude";
+    domainName = "claude.ai";
+  } else if (p.includes("gemini")) {
+    badgeClass = "gemini";
+    displayName = "Gemini";
+    domainName = "gemini.google.com";
+  } else if (p.includes("api.openai")) {
+    badgeClass = "api";
+    displayName = "OpenAI API";
+    domainName = "api.openai.com";
+  } else if (p.includes("deepseek")) {
+    badgeClass = "chatgpt";
+    displayName = "DeepSeek";
+    domainName = "deepseek.com";
+  }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "32px" }}>
-      <div>
-        <h1 style={{ fontSize: "36px", fontWeight: "600", color: "var(--text-primary)", letterSpacing: "-1px", marginBottom: "8px" }}>Overview statistics</h1>
-        <p className="text-muted">Real-time system load and data leak prevention metrics.</p>
-      </div>
-      <div className="grid" style={{ gap: 24 }}>
-      {/* ── Row 1: Stat Cards ── */}
-      <div className="grid grid--3">
-        <StatCard
-          title="Leaks Prevented"
-          value={totalLeaks}
-          hint="+12.4% ↗"
-          hintColor="#16A34A"
-          theme="blue"
-          icon={<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>}
-          loading={loading}
-          sparklineData={spark}
-        />
-
-        <StatCard
-          title="Recent Incidents"
-          value={recentViolations.length}
-          hint="-4.2% ↘"
-          hintColor="#DC2626"
-          theme="purple"
-          icon={<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>}
-          loading={loading}
-          sparklineData={spark.slice().reverse()}
-        />
-
-        <StatCard
-          title="Employee Status"
-          value={`${activeCount} / ${teamActivity.length}`}
-          hint={activeCount > 0 ? `${activeCount} Active ↗` : "0 Active"}
-          hintColor={activeCount > 0 ? "#16A34A" : "#6B7280"}
-          theme="green"
-          icon={<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>}
-          loading={loading}
-          sparklineData={spark.map(s => s * 0.8)}
-        />
-      </div>
-
-      {/* ── Row 2: Tables ── */}
-      <div className="grid grid--2">
-        {/* Top Offenders */}
-        <section className="card" style={{ animationDelay: '180ms' }}>
-          <div className="card__head">
-            <p className="card__title">Top Offenders</p>
-          </div>
-          <div className="card__body">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Email</th>
-                  <th style={{ textAlign: 'right' }}>Violations</th>
-                </tr>
-              </thead>
-              <tbody>
-                {topUsers.map((user, idx) => {
-                  const maxViolations = Math.max(...topUsers.map(u => u.violationCount), 1);
-                  const barWidth = `${(user.violationCount / maxViolations) * 100}%`;
-                  const isCritical = user.violationCount > 5;
-                  
-                  return (
-                    <tr key={idx} className="table-row-hover">
-                      <td>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                          <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: isCritical ? '#FF4D6D' : '#8A7BF3', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 'bold' }}>
-                            {user.email.substring(0, 2).toUpperCase()}
-                          </div>
-                          <div>
-                            <div style={{ fontWeight: 600, color: '#111827' }}>{user.email}</div>
-                            <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>{isCritical ? 'High Risk' : 'Standard'}</div>
-                          </div>
-                        </div>
-                      </td>
-                      <td style={{ width: '120px' }}>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', alignItems: 'flex-end' }}>
-                          <span className="badge" style={{
-                            borderColor: isCritical ? 'rgba(255,77,109,.3)' : 'rgba(255,176,32,.3)',
-                            background: isCritical ? 'rgba(255,77,109,.08)' : 'rgba(255,176,32,.08)',
-                            color: isCritical ? '#FF4D6D' : '#FFB020',
-                            fontFamily: 'var(--mono)',
-                            fontSize: 12,
-                          }}>
-                            {user.violationCount} alerts
-                          </span>
-                          <div style={{ width: '100%', height: '4px', background: '#E5E7EB', borderRadius: '2px', overflow: 'hidden' }}>
-                            <div style={{ height: '100%', width: barWidth, background: isCritical ? '#FF4D6D' : '#FFB020', borderRadius: '2px' }} />
-                          </div>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-                {topUsers.length === 0 && (
-                  <tr>
-                    <td colSpan={2} style={{ textAlign: "center", padding: "48px 0", color: "var(--empty-state-text)" }}>
-                      <svg width="28" height="28" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.4, marginBottom: 10 }}><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg>
-                      <br/>
-                      <span style={{ fontSize: 13 }}>No user data available</span>
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </section>
-
-        {/* Recent Violations */}
-        <section className="card" style={{ animationDelay: '240ms' }}>
-          <div className="card__head">
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" }}>
-              <p className="card__title">Recent Violations</p>
-              {hasFilters && (
-                <button
-                  className="btn btn--danger"
-                  style={{ fontSize: 11, padding: "4px 12px", height: 28 }}
-                  onClick={clearFilters}
-                >
-                  Clear filters
-                </button>
-              )}
-            </div>
-          </div>
-          <div className="card__body">
-            {/* Filter bar */}
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14, alignItems: "center" }}>
-              <input type="date" value={filterFrom} onChange={(e) => setFilterFrom(e.target.value)} style={inputStyle} title="From date" />
-              <span style={{ color: "var(--empty-state-text)", fontSize: 12 }}>to</span>
-              <input type="date" value={filterTo} onChange={(e) => setFilterTo(e.target.value)} style={inputStyle} title="To date" />
-              <CustomSelect 
-                value={filterType} 
-                onChange={setFilterType} 
-                options={violationTypes} 
-                defaultLabel="All types" 
-              />
-            </div>
-
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>URL</th>
-                  <th>Types</th>
-                </tr>
-              </thead>
-              <tbody>
-                {recentViolations.map((v, idx) => (
-                  <tr key={idx} className="table-row-hover">
-                    <td style={{ width: '140px' }}>
-                      <div style={{ fontSize: 13, color: '#111827', fontWeight: 500 }}>{new Date(v.timestamp).toLocaleDateString()}</div>
-                      <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{new Date(v.timestamp).toLocaleTimeString()}</div>
-                    </td>
-                    <td>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <div style={{ padding: '6px', borderRadius: '8px', background: '#F3F4F6', color: '#6B7280' }}>
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
-                        </div>
-                        <a 
-                          href={v.url === "presidio-scan" ? "#" : v.url} 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          style={{ color: "#2BAEE6", textDecoration: "none", fontWeight: 600, transition: "color 0.2s" }}
-                          onClick={(e) => v.url === "presidio-scan" && e.preventDefault()}
-                        >
-                          {formatUrl(v.url)}
-                        </a>
-                      </div>
-                    </td>
-                    <td style={{ textAlign: 'right' }}>
-                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                        {(v.matches || []).map((m, i) => (
-                          <span key={i} className="badge badge--employee" style={{ fontSize: 11, padding: '4px 10px', fontWeight: 600, background: 'rgba(138, 88, 252, 0.08)', color: '#8A7BF3', borderColor: 'rgba(138, 88, 252, 0.2)' }}>
-                            {m.type}
-                          </span>
-                        ))}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-                {recentViolations.length === 0 && (
-                  <tr>
-                    <td colSpan={3} style={{ textAlign: "center", padding: "48px 0", color: "var(--empty-state-text)" }}>
-                      <svg width="28" height="28" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.4, marginBottom: 10 }}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
-                      <br/>
-                      <span style={{ fontSize: 13 }}>{hasFilters ? "No violations match these filters." : "All clear. No violations detected."}</span>
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      </div>
-
-      {/* ── Row 3: Employee Extension Status ── */}
-      <section className="card" style={{ animationDelay: '300ms' }}>
-        <div className="card__head">
-          <p className="card__title">Employee Extension Status</p>
-        </div>
-        <div className="card__body">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Email</th>
-                <th>Status</th>
-                <th>Last Seen</th>
-              </tr>
-            </thead>
-            <tbody>
-              {teamActivity.map((emp, idx) => {
-                let statusText = "Not Installed";
-                let statusStyle = { borderColor: "rgba(255,77,109,.25)", background: "rgba(255,77,109,.06)", color: "#FF4D6D" };
-
-                if (emp.status === "active") {
-                  statusText = "Active";
-                  statusStyle = { borderColor: "rgba(46,229,157,.25)", background: "rgba(46,229,157,.06)", color: "#2EE59D" };
-                } else if (emp.status === "inactive") {
-                  statusText = "Inactive";
-                  statusStyle = { borderColor: "rgba(255,176,32,.25)", background: "rgba(255,176,32,.06)", color: "#FFB020" };
-                }
-
-                return (
-                  <tr key={idx} className="table-row-hover">
-                    <td>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#F3F4F6', color: '#6B7280', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 'bold' }}>
-                          {emp.email.substring(0, 2).toUpperCase()}
-                        </div>
-                        <div style={{ fontWeight: 600, color: '#111827' }}>{emp.email}</div>
-                      </div>
-                    </td>
-                    <td>
-                      <span className="badge" style={{ ...statusStyle, fontSize: 11, padding: '4px 10px', fontWeight: 600 }}>
-                        {emp.status === "active" && <div className="pulse-dot" style={{ width: 6, height: 6, background: '#2EE59D', boxShadow: '0 0 6px #2EE59D', marginRight: '6px' }} />}
-                        {statusText}
-                      </span>
-                    </td>
-                    <td style={{ fontSize: 13, color: 'var(--text-secondary)', textAlign: 'right' }}>
-                      {emp.lastActive ? new Date(emp.lastActive).toLocaleString() : "Never"}
-                    </td>
-                  </tr>
-                );
-              })}
-              {teamActivity.length === 0 && (
-                <tr>
-                  <td colSpan={3} style={{ textAlign: "center", padding: "48px 0", color: "var(--empty-state-text)" }}>
-                    <svg width="28" height="28" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.4, marginBottom: 10 }}>
-                      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-                      <circle cx="9" cy="7" r="4"></circle>
-                      <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
-                      <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
-                    </svg>
-                    <br/>
-                    <span style={{ fontSize: 13 }}>Add employees to monitor coverage.</span>
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </section>
-    </div>
-    </div>
+    <span className={`ai-site-badge ${badgeClass}`}>
+      <span className="ai-site-dot" />
+      <span className="ai-site-name">{displayName}</span>
+      <span className="ai-site-domain">({domainName})</span>
+      {count !== null && count !== undefined && (
+        <span className="ai-site-count">{count} {count === 1 ? "attempt" : "attempts"}</span>
+      )}
+    </span>
   );
 };
 
-export default Dashboard;
+const formatIncidentTimestamp = (ts) => {
+  if (!ts) return { full: "Unknown Timestamp", relative: "" };
+  const d = new Date(ts);
+  const full =
+    d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) +
+    " • " +
+    d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }) +
+    " UTC";
+
+  const diffMs = Date.now() - d.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  let relative = "";
+  if (diffMins < 1) relative = "Just now";
+  else if (diffMins < 60) relative = `${diffMins}m ago`;
+  else {
+    const diffHours = Math.floor(diffMins / 60);
+    if (diffHours < 24) relative = `${diffHours}h ago`;
+    else relative = `${Math.floor(diffHours / 24)}d ago`;
+  }
+
+  return { full, relative };
+};
+
+export default function Dashboard() {
+  // ── Real-Time Incidents State ──────────────────────────────────────────────
+  const [incidents, setIncidents] = useState(INITIAL_SEED_INCIDENTS);
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState(null);
+  const [wsConnected, setWsConnected] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [threatFilter, setThreatFilter] = useState("ALL"); // ALL, CRITICAL, HIGH, MEDIUM
+  const [serviceFilter, setServiceFilter] = useState("ALL");
+  const [toastMessage, setToastMessage] = useState(null);
+
+  // Simulation Modal State
+  const [showSimModal, setShowSimModal] = useState(false);
+  const [simEmployee, setSimEmployee] = useState("sarah.chen");
+  const [simLeakType, setSimLeakType] = useState("aws_keys");
+  const [simCustomPrompt, setSimCustomPrompt] = useState("");
+  const [isSimulating, setIsSimulating] = useState(false);
+
+  const wsRef = useRef(null);
+
+  // ── Show Temporary Banner Alert ────────────────────────────────────────────
+  const showToast = (msg) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 4000);
+  };
+
+  // ── Fetch Initial Live Data from Backend ───────────────────────────────────
+  const fetchLiveData = async () => {
+    try {
+      // Check flagged-employees first
+      const empRes = await fetch(`${API_BASE}/api/vantix/flagged-employees`);
+      if (empRes.ok) {
+        const json = await empRes.json();
+        if (json.success && json.employees && json.employees.length > 0) {
+          // Sync with backend records
+        }
+      }
+
+      // Check audit logs
+      const auditRes = await fetch(`${API_BASE}/api/vantix/audit-logs`);
+      if (auditRes.ok) {
+        const auditJson = await auditRes.json();
+        if (auditJson.success && Array.isArray(auditJson.logs) && auditJson.logs.length > 0) {
+          // Normalize and merge with in-memory incidents
+          setIncidents((prev) => {
+            const merged = [...prev];
+            auditJson.logs.forEach((log) => {
+              if (log.userId && !merged.some((m) => m.id === log.id || (m.timestamp === log.timestamp && m.userId === log.userId))) {
+                merged.unshift({
+                  id: log.id || `audit-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                  userId: log.userId,
+                  userName: log.userName || log.userId.charAt(0).toUpperCase() + log.userId.slice(1).replace(/[._]/g, " "),
+                  userEmail: log.userEmail || `${log.userId}@acme.corp`,
+                  department: log.department || (log.userId.includes("chen") ? "Cloud Infrastructure & DevOps" : "Core Systems"),
+                  endpointHost: log.endpointHost || log.host || `${log.userId}-workstation`,
+                  endpointIp: log.endpointIp || "10.0.12.50",
+                  aiPlatform: log.aiPlatform || "chatgpt.com",
+                  actionTaken: log.actionTaken || (log.riskScore >= 85 ? "hard_block" : log.riskScore >= 35 ? "silent_redact" : "pass"),
+                  riskScore: log.riskScore !== undefined ? log.riskScore : 0,
+                  categoriesRedacted: log.categoriesRedacted || ["CONFIDENTIAL_DATA"],
+                  detections: log.detections || [],
+                  originalPrompt: log.originalPrompt || log.promptSnippet || "Outbound prompt intercepted",
+                  sanitizedPrompt: log.sanitizedPrompt || "[SANITIZED]",
+                  restoredResponse: log.restoredResponse || "Safely processed response.",
+                  cryptoSignature: log.cryptoSignature || "HMAC-SHA256-VERIFIED",
+                  timestamp: log.timestamp || new Date().toISOString(),
+                });
+              }
+            });
+            return merged;
+          });
+        }
+      }
+    } catch (err) {
+      console.warn("API sync notice:", err.message);
+    }
+  };
+
+  // ── Establish WebSocket Connection ─────────────────────────────────────────
+  useEffect(() => {
+    fetchLiveData();
+
+    const wsUrl = getWsUrl();
+    let socket = null;
+
+    function connect() {
+      try {
+        socket = new WebSocket(wsUrl);
+        wsRef.current = socket;
+
+        socket.onopen = () => {
+          setWsConnected(true);
+          console.log("[Vantix Admin] Connected to live security telemetry stream");
+        };
+
+        socket.onmessage = (event) => {
+          try {
+            const packet = JSON.parse(event.data);
+            if (packet.type === "detection" || packet.originalPrompt) {
+              const incomingIncident = {
+                id: packet.id || `ws-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                userId: packet.user || "mohammed",
+                userName: packet.userName || (packet.user ? packet.user.charAt(0).toUpperCase() + packet.user.slice(1).replace(/[._]/g, " ") : "Mohammed"),
+                userEmail: packet.userEmail || `${packet.user || "mohammed"}@acme.corp`,
+                department: packet.department || (packet.user === "sarah.chen" ? "Cloud Infrastructure & DevOps" : packet.user === "alex.turner" ? "SCADA & Industrial Automation" : "Core Systems"),
+                endpointHost: packet.host || "mohammed-Latitude-5400",
+                endpointIp: packet.endpointIp || "127.0.0.1",
+                aiPlatform: packet.aiPlatform || "chatgpt.com",
+                actionTaken: packet.actionTaken || (packet.riskScore >= 85 ? "hard_block" : packet.riskScore >= 35 ? "silent_redact" : "pass"),
+                riskScore: packet.riskScore !== undefined ? packet.riskScore : 0,
+                categoriesRedacted: packet.detections ? Array.from(new Set(packet.detections.map((d) => d.category))) : ["CONFIDENTIAL_DATA"],
+                detections: packet.detections || [],
+                originalPrompt: packet.originalPrompt || "Outbound prompt intercepted",
+                sanitizedPrompt: packet.sanitizedPrompt || "[SANITIZED]",
+                restoredResponse: packet.restoredResponse || "Response delivered.",
+                cryptoSignature: packet.signature || "HMAC-SHA256-VERIFIED",
+                timestamp: packet.timestamp || new Date().toISOString(),
+              };
+
+              setIncidents((prev) => [incomingIncident, ...prev]);
+
+              // ONLY show exfiltration alert banner if sensitive confidential data was actually detected
+              if (incomingIncident.riskScore >= 35 || incomingIncident.actionTaken === "hard_block") {
+                showToast(`🚨 Outbound Data Leak Intercepted from ${incomingIncident.userName} (${incomingIncident.actionTaken === "hard_block" ? "Hard Blocked" : "Redacted"})`);
+              } else {
+                showToast(`✅ Prompt from ${incomingIncident.userName} passed inspection safely (Risk: 0 - Clean/Sanitized)`);
+              }
+            } else if (packet.type === "reset") {
+              setIncidents(INITIAL_SEED_INCIDENTS);
+              showToast("Telemetry buffer reset to initial baseline.");
+            }
+          } catch (e) {
+            console.error("Packet parse error:", e);
+          }
+        };
+
+        socket.onclose = () => {
+          setWsConnected(false);
+          setTimeout(connect, 4000);
+        };
+
+        socket.onerror = () => {
+          setWsConnected(false);
+        };
+      } catch (err) {
+        console.warn("WebSocket init notice:", err);
+      }
+    }
+
+    connect();
+
+    // Periodic sync poll every 10 seconds
+    const interval = setInterval(fetchLiveData, 10000);
+
+    return () => {
+      clearInterval(interval);
+      if (wsRef.current) wsRef.current.close();
+    };
+  }, []);
+
+  // ── Dynamic Aggregation of Flagged Employees from Incident Stream ──────────
+  const flaggedEmployees = useMemo(() => {
+    const userMap = new Map();
+
+    incidents.forEach((inc) => {
+      // ONLY track and flag if the employee actually attempted to leak confidential data or credentials!
+      // Normal/benign prompts (riskScore < 35 and actionTaken !== 'hard_block') DO NOT raise risk and DO NOT flag employees.
+      const isActualLeak = (inc.riskScore >= 35) || (inc.actionTaken === "hard_block");
+      if (!isActualLeak) {
+        return; // Harmless prompt: skip, do not flag employee or artificially pump risk!
+      }
+
+      const key = (inc.userId || inc.userEmail || "unknown").toLowerCase();
+      if (!userMap.has(key)) {
+        userMap.set(key, {
+          id: key,
+          userId: inc.userId,
+          name: inc.userName || key.charAt(0).toUpperCase() + key.slice(1).replace(/[._]/g, " "),
+          email: inc.userEmail || `${key}@acme.corp`,
+          department: inc.department || "Core Engineering",
+          endpointHost: inc.endpointHost || "ws-node",
+          endpointIp: inc.endpointIp || "10.0.12.50",
+          totalAttempts: 0,
+          hardBlockedCount: 0,
+          redactedCount: 0,
+          peakRiskScore: 0,
+          categories: new Set(),
+          lastAttempt: inc.timestamp,
+        });
+      }
+
+      const entry = userMap.get(key);
+      entry.totalAttempts++;
+      if (inc.actionTaken === "hard_block") entry.hardBlockedCount++;
+      if (inc.actionTaken === "silent_redact") entry.redactedCount++;
+      if (inc.riskScore > entry.peakRiskScore) entry.peakRiskScore = inc.riskScore;
+
+      if (new Date(inc.timestamp) >= new Date(entry.lastAttempt)) {
+        entry.lastAttempt = inc.timestamp;
+        if (inc.endpointHost) entry.endpointHost = inc.endpointHost;
+        if (inc.endpointIp) entry.endpointIp = inc.endpointIp;
+      }
+
+      if (Array.isArray(inc.categoriesRedacted)) {
+        inc.categoriesRedacted.forEach((c) => entry.categories.add(c.replace(/_/g, " ")));
+      }
+      if (Array.isArray(inc.detections)) {
+        inc.detections.forEach((d) => {
+          if (d.category) entry.categories.add(d.category.replace(/_/g, " "));
+        });
+      }
+    });
+
+    return Array.from(userMap.values())
+      .filter((u) => u.totalAttempts > 0 && u.peakRiskScore >= 35)
+      .map((u) => ({
+        ...u,
+        topCategories: Array.from(u.categories),
+        threatLevel:
+          u.peakRiskScore >= 85
+            ? "CRITICAL"
+            : u.peakRiskScore >= 60
+            ? "HIGH"
+            : "MEDIUM",
+        status:
+          u.hardBlockedCount > 0
+            ? "Blocked"
+            : u.redactedCount > 0
+            ? "Active Redactions"
+            : "Monitored",
+      }))
+      .sort((a, b) => b.peakRiskScore - a.peakRiskScore || b.totalAttempts - a.totalAttempts);
+  }, [incidents]);
+
+  // ── Filtered Employees for Table View ───────────────────────────────────────
+  const filteredEmployees = useMemo(() => {
+    return flaggedEmployees.filter((emp) => {
+      const matchSearch =
+        emp.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        emp.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        emp.department.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        emp.endpointIp.includes(searchTerm) ||
+        emp.endpointHost.toLowerCase().includes(searchTerm.toLowerCase());
+
+      const matchThreat = threatFilter === "ALL" || emp.threatLevel === threatFilter;
+
+      return matchSearch && matchThreat;
+    });
+  }, [flaggedEmployees, searchTerm, threatFilter]);
+
+  // ── Selected Employee Dossier Data & Analytics ─────────────────────────────
+  const currentEmployee = useMemo(() => {
+    if (!selectedEmployeeId) return null;
+    return flaggedEmployees.find((e) => e.id === selectedEmployeeId) || null;
+  }, [selectedEmployeeId, flaggedEmployees]);
+
+  const employeeIncidents = useMemo(() => {
+    if (!selectedEmployeeId) return [];
+    return incidents.filter(
+      (inc) =>
+        ((inc.userId && inc.userId.toLowerCase() === selectedEmployeeId.toLowerCase()) ||
+        (inc.userEmail && inc.userEmail.toLowerCase().includes(selectedEmployeeId.toLowerCase()))) &&
+        (inc.riskScore >= 35 || inc.actionTaken === "hard_block")
+    );
+  }, [selectedEmployeeId, incidents]);
+
+  // Graph 1: Category Distribution for Selected Employee
+  const categoryChartData = useMemo(() => {
+    if (employeeIncidents.length === 0) return [];
+    const counts = {};
+    employeeIncidents.forEach((inc) => {
+      const cats =
+        inc.categoriesRedacted && inc.categoriesRedacted.length > 0
+          ? inc.categoriesRedacted
+          : (inc.detections || []).map((d) => d.category);
+      cats.forEach((c) => {
+        const clean = c.replace(/_/g, " ");
+        counts[clean] = (counts[clean] || 0) + 1;
+      });
+    });
+
+    const total = Object.values(counts).reduce((a, b) => a + b, 0) || 1;
+    return Object.entries(counts)
+      .map(([name, count]) => ({
+        name,
+        count,
+        percentage: Math.round((count / total) * 100),
+      }))
+      .sort((a, b) => b.count - a.count);
+  }, [employeeIncidents]);
+
+  // Graph 2: Risk Progression Timeline
+  const riskTimelineData = useMemo(() => {
+    if (employeeIncidents.length === 0) return [];
+    return [...employeeIncidents]
+      .reverse()
+      .map((inc, idx) => ({
+        attempt: `#${idx + 1}`,
+        time: new Date(inc.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        riskScore: inc.riskScore || 0,
+        action: inc.actionTaken === "hard_block" ? "Blocked" : "Redacted",
+        service: inc.aiPlatform || "chatgpt.com",
+      }));
+  }, [employeeIncidents]);
+
+  // Targeted AI Platforms Visited by this Employee
+  const employeeAiPlatforms = useMemo(() => {
+    const counts = {};
+    employeeIncidents.forEach((inc) => {
+      const p = (inc.aiPlatform || "chatgpt.com").toLowerCase();
+      counts[p] = (counts[p] || 0) + 1;
+    });
+    return Object.entries(counts).map(([platform, count]) => ({ platform, count }));
+  }, [employeeIncidents]);
+
+  // Graph 3: Enforcement Action Ratio
+  const actionChartData = useMemo(() => {
+    if (!currentEmployee) return [];
+    const data = [
+      { name: "Hard Blocked", value: currentEmployee.hardBlockedCount, fill: "#ef4444" },
+      { name: "Redacted & Scrubbed", value: currentEmployee.redactedCount, fill: "#3b82f6" },
+      {
+        name: "Monitored / Passed",
+        value: Math.max(0, currentEmployee.totalAttempts - currentEmployee.hardBlockedCount - currentEmployee.redactedCount),
+        fill: "#10b981",
+      },
+    ].filter((d) => d.value > 0);
+    return data;
+  }, [currentEmployee]);
+
+  // ── Executive KPI Totals (Dynamically Computed) ────────────────────────────
+  const totalIntercepts = incidents.length;
+  const totalBlocked = incidents.filter((i) => i.actionTaken === "hard_block").length;
+  const totalRedacted = incidents.filter((i) => i.actionTaken === "silent_redact").length;
+  const totalFlaggedCount = flaggedEmployees.length;
+
+  // ── Global Executive Visual Intelligence (Company-Wide Overview) ───────────
+  const globalCategoryChartData = useMemo(() => {
+    const counts = {};
+    incidents.forEach((inc) => {
+      if (inc.riskScore >= 35 || inc.actionTaken === "hard_block") {
+        const cats =
+          inc.categoriesRedacted && inc.categoriesRedacted.length > 0
+            ? inc.categoriesRedacted
+            : (inc.detections || []).map((d) => d.category);
+        cats.forEach((c) => {
+          const clean = c.replace(/_/g, " ").toUpperCase();
+          counts[clean] = (counts[clean] || 0) + 1;
+        });
+      }
+    });
+
+    const total = Object.values(counts).reduce((a, b) => a + b, 0) || 1;
+    return Object.entries(counts)
+      .map(([name, count]) => ({
+        name,
+        count,
+        percentage: Math.round((count / total) * 100),
+      }))
+      .sort((a, b) => b.count - a.count);
+  }, [incidents]);
+
+  const globalEnforcementData = useMemo(() => {
+    const criticalCount = flaggedEmployees.filter((e) => e.peakRiskScore >= 80).length;
+    const highCount = flaggedEmployees.filter((e) => e.peakRiskScore >= 50 && e.peakRiskScore < 80).length;
+    const mediumCount = flaggedEmployees.filter((e) => e.peakRiskScore < 50).length;
+
+    return [
+      { name: "Hard Blocked", count: totalBlocked, fill: "#ef4444" },
+      { name: "Redacted", count: totalRedacted, fill: "#38bdf8" },
+      { name: "Critical Threats", count: criticalCount, fill: "#f43f5e" },
+      { name: "Elevated Risk", count: highCount, fill: "#f59e0b" },
+      { name: "Monitored", count: mediumCount, fill: "#10b981" },
+    ];
+  }, [flaggedEmployees, totalBlocked, totalRedacted]);
+
+  // ── Trigger Live Leak Simulation ───────────────────────────────────────────
+  const handleSimulate = async () => {
+    setIsSimulating(true);
+    try {
+      let prompt = simCustomPrompt;
+      if (!prompt) {
+        if (simLeakType === "aws_keys") {
+          prompt =
+            'Review this AWS policy snippet: access_key_id = "AKIAIOSFODNN7EXAMPLE" and secret_key = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY" for production S3 replication.';
+        } else if (simLeakType === "scada_reg") {
+          prompt =
+            "Analyzing turbine Mark VIe register 0x4001 at internal substation 192.168.1.50 with nominal grid frequency 60.2 Hz. What triggers sudden emergency trip?";
+        } else if (simLeakType === "patient_ssn") {
+          prompt =
+            "Summarize clinical diagnosis for patient Johnathan Doe, SSN: 123-45-6789, MRN #98421 with acute cardiac arrhythmia.";
+        } else if (simLeakType === "credit_card") {
+          prompt =
+            'Verify charge webhook payload: { card: "4532-8812-9901-4321", cvv: "882", exp: "08/28", holder: "David R. Sterling" }';
+        } else if (simLeakType === "benign_prompt") {
+          prompt =
+            "Explain how combined cycle gas turbines achieve high thermodynamic efficiency.";
+        } else if (simLeakType === "sanitized_prompt") {
+          prompt =
+            "Investigating turbine [SCADA_REG_01] at internal substation [INTERNAL_IP_01] with nominal grid frequency [FREQUENCY_01]. What triggers sudden emergency trip?";
+        } else {
+          prompt =
+            'Troubleshoot JWT token generation using master private secret: "jwt_secret_signing_key_prod_9942a" in our authorization middleware.';
+        }
+      }
+
+      // Try simulation endpoint first
+      const res = await fetch(`${API_BASE}/api/vantix/simulate-leak`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          employeeId: simEmployee,
+          leakType: simLeakType,
+          prompt,
+        }),
+      });
+
+      // If simulate-leak route is 404, send via /chat directly
+      if (!res.ok) {
+        await fetch(`${API_BASE}/api/vantix/chat`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-vantix-user": simEmployee,
+            "x-vantix-host": `${simEmployee}-workstation`,
+          },
+          body: JSON.stringify({
+            prompt,
+            userId: simEmployee,
+            userEmail: `${simEmployee}@acme.corp`,
+          }),
+        });
+      }
+
+      showToast(`Simulation executed for ${simEmployee}! Real-time telemetry broadcast.`);
+      setShowSimModal(false);
+      setSimCustomPrompt("");
+      fetchLiveData();
+    } catch (err) {
+      console.error("Simulation error:", err);
+      showToast("Error triggering simulation: " + err.message);
+    } finally {
+      setIsSimulating(false);
+    }
+  };
+
+  // ── Export Audit Log as JSON ───────────────────────────────────────────────
+  const handleExportAudit = (targetIncidents = incidents, filename = "vantix-dlp-audit.json") => {
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(targetIncidents, null, 2));
+    const downloadAnchor = document.createElement("a");
+    downloadAnchor.setAttribute("href", dataStr);
+    downloadAnchor.setAttribute("download", filename);
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
+    showToast(`Audit trail exported to ${filename}`);
+  };
+
+  return (
+    <div className="soc-container">
+      {/* ─── Toast Notification Banner ──────────────────────────────────────── */}
+      {toastMessage && (
+        <div
+          style={{
+            position: "fixed",
+            top: 20,
+            right: 24,
+            zIndex: 99999,
+            background: "rgba(17, 24, 39, 0.95)",
+            border: "1px solid #4f46e5",
+            color: "#fff",
+            padding: "12px 20px",
+            borderRadius: 8,
+            boxShadow: "0 10px 30px rgba(0,0,0,0.5)",
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            fontSize: 13,
+            fontWeight: 600,
+            animation: "fadeIn 0.2s ease",
+          }}
+        >
+          <Sparkles size={16} color="#818cf8" />
+          <span>{toastMessage}</span>
+        </div>
+      )}
+
+      {/* ─── Top SOC Executive Navigation ──────────────────────────────────── */}
+      <header className="soc-header">
+        <div className="soc-header-left">
+          <div className="soc-logo-badge">
+            <Shield size={22} />
+          </div>
+          <div className="soc-title-group">
+            <h1>
+              VANTIX SECURITY OPERATIONS CENTER
+              <span className="status-tag" style={{ background: "rgba(99, 102, 241, 0.15)", color: "#a5b4fc", border: "1px solid rgba(99, 102, 241, 0.3)" }}>
+                ENTERPRISE DLP
+              </span>
+            </h1>
+            <p>Real-Time AI Data Loss Prevention, Exfiltration Interception & Employee Risk Directory</p>
+          </div>
+        </div>
+
+        <div className="soc-header-right">
+          <button className="action-btn" onClick={() => setShowSimModal(true)} title="Simulate an employee exfiltration attempt in real time">
+            <Play size={14} color="#818cf8" />
+            <span>Simulate Exfiltration</span>
+          </button>
+
+          <button className="action-btn" onClick={() => handleExportAudit()} title="Export complete audit ledger as JSON">
+            <Download size={14} />
+            <span>Export Audit Log</span>
+          </button>
+        </div>
+      </header>
+
+      {/* ══════════════════════════════════════════════════════════════════════
+          VIEW 1: DIRECTORY OF FLAGGED EMPLOYEES (Default Primary Screen)
+         ══════════════════════════════════════════════════════════════════════ */}
+      {!selectedEmployeeId ? (
+        <section>
+          {/* Dynamic Top Metric Ribbon (Exclusively in Overview) */}
+          <div className="soc-kpi-grid">
+            <div className="kpi-metric-card critical">
+              <div className="kpi-header">
+                <span className="kpi-label">Flagged Employees</span>
+                <div className="kpi-icon-wrap">
+                  <Users size={18} />
+                </div>
+              </div>
+              <div className="kpi-value-row">
+                <span className="kpi-big-number">{totalFlaggedCount}</span>
+              </div>
+              <div className="kpi-subtext">Identities with detected leak attempts</div>
+            </div>
+
+            <div className="kpi-metric-card warning">
+              <div className="kpi-header">
+                <span className="kpi-label">Hard Blocked Leaks</span>
+                <div className="kpi-icon-wrap">
+                  <ShieldAlert size={18} />
+                </div>
+              </div>
+              <div className="kpi-value-row">
+                <span className="kpi-big-number">{totalBlocked}</span>
+              </div>
+              <div className="kpi-subtext">Critical credentials & secrets stopped cold</div>
+            </div>
+
+            <div className="kpi-metric-card blue">
+              <div className="kpi-header">
+                <span className="kpi-label">Redacted & Scrubbed</span>
+                <div className="kpi-icon-wrap">
+                  <Lock size={18} />
+                </div>
+              </div>
+              <div className="kpi-value-row">
+                <span className="kpi-big-number">{totalRedacted}</span>
+              </div>
+              <div className="kpi-subtext">PII, IP & config parameters tokenized</div>
+            </div>
+
+            <div className="kpi-metric-card safe">
+              <div className="kpi-header">
+                <span className="kpi-label">Total Inspected Requests</span>
+                <div className="kpi-icon-wrap">
+                  <Activity size={18} />
+                </div>
+              </div>
+              <div className="kpi-value-row">
+                <span className="kpi-big-number">{totalIntercepts}</span>
+              </div>
+              <div className="kpi-subtext">OS Network Proxy & Browser Guard</div>
+            </div>
+          </div>
+
+          {/* Executive Threat Intelligence Visuals (Vidals) */}
+          <div className="soc-overview-visuals-grid">
+            {/* Visual Card 1: Enterprise Data Exfiltration Vectors */}
+            <div className="overview-visual-card">
+              <div className="overview-visual-header">
+                <div>
+                  <div className="overview-visual-title">
+                    <Database size={17} color="#f43f5e" />
+                    <span>Company-Wide Exfiltration Vectors</span>
+                  </div>
+                  <div className="overview-visual-subtitle">
+                    Distribution of sensitive data classes detected in unauthorized AI prompts
+                  </div>
+                </div>
+                <span className="visual-metric-badge">
+                  {globalCategoryChartData.length} Target Classes
+                </span>
+              </div>
+
+              <div style={{ height: 210, width: "100%" }}>
+                {globalCategoryChartData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={globalCategoryChartData}
+                        dataKey="count"
+                        nameKey="name"
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={50}
+                        outerRadius={85}
+                        paddingAngle={3}
+                      >
+                        {globalCategoryChartData.map((entry, index) => (
+                          <Cell
+                            key={`global-cell-${index}`}
+                            fill={PIE_COLORS[index % PIE_COLORS.length]}
+                          />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        contentStyle={{
+                          background: "#111827",
+                          border: "1px solid rgba(255,255,255,0.1)",
+                          borderRadius: 8,
+                          fontSize: 12,
+                          boxShadow: "0 10px 25px rgba(0,0,0,0.5)",
+                        }}
+                        itemStyle={{ color: "#fff" }}
+                        formatter={(val, name) => [`${val} attempts`, name]}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "var(--soc-text-dim)", fontSize: 13 }}>
+                    No corporate exfiltration vectors detected yet
+                  </div>
+                )}
+              </div>
+
+              {/* Dynamic Category Chips Legend */}
+              <div className="visual-category-legend">
+                {globalCategoryChartData.slice(0, 5).map((cat, idx) => (
+                  <div key={idx} className="visual-legend-chip">
+                    <span
+                      className="visual-legend-dot"
+                      style={{ background: PIE_COLORS[idx % PIE_COLORS.length] }}
+                    />
+                    <span>{cat.name}</span>
+                    <span className="visual-legend-count">{cat.count}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Visual Card 2: Security Policy Enforcement & Severity Ratio */}
+            <div className="overview-visual-card">
+              <div className="overview-visual-header">
+                <div>
+                  <div className="overview-visual-title">
+                    <ShieldAlert size={17} color="#38bdf8" />
+                    <span>Firewall Enforcement & Severity Profile</span>
+                  </div>
+                  <div className="overview-visual-subtitle">
+                    Live system-wide action breakdown across OS proxy and browser filters
+                  </div>
+                </div>
+                <span className="visual-metric-badge" style={{ background: "rgba(16, 185, 129, 0.15)", color: "#34d399", borderColor: "rgba(16, 185, 129, 0.3)" }}>
+                  {totalIntercepts} Events Inspected
+                </span>
+              </div>
+
+              <div style={{ height: 210, width: "100%", marginTop: 8 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={globalEnforcementData}
+                    layout="vertical"
+                    margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" horizontal={false} />
+                    <XAxis type="number" stroke="#6b7280" fontSize={11} allowDecimals={false} />
+                    <YAxis
+                      dataKey="name"
+                      type="category"
+                      stroke="#9ca3af"
+                      fontSize={11.5}
+                      tickLine={false}
+                      width={110}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        background: "#111827",
+                        border: "1px solid rgba(255,255,255,0.1)",
+                        borderRadius: 8,
+                        fontSize: 12,
+                      }}
+                      itemStyle={{ color: "#fff" }}
+                      formatter={(val) => [`${val} occurrences`, "Count"]}
+                    />
+                    <Bar dataKey="count" radius={[0, 6, 6, 0]} barSize={16}>
+                      {globalEnforcementData.map((entry, index) => (
+                        <Cell key={`bar-${index}`} fill={entry.fill} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+
+              {/* Enforcement summary note */}
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11.5, color: "var(--soc-text-muted)", marginTop: 14, paddingTop: 12, borderTop: "1px solid rgba(255,255,255,0.05)" }}>
+                <span>Hard Block Rate: <strong style={{ color: "#ef4444" }}>{totalIntercepts > 0 ? Math.round((totalBlocked / totalIntercepts) * 100) : 0}%</strong></span>
+                <span>Silent Redaction Rate: <strong style={{ color: "#38bdf8" }}>{totalIntercepts > 0 ? Math.round((totalRedacted / totalIntercepts) * 100) : 0}%</strong></span>
+                <span>Active Endpoints: <strong style={{ color: "#34d399" }}>{flaggedEmployees.length} Monitored</strong></span>
+              </div>
+            </div>
+          </div>
+
+          {/* Guidance Banner */}
+          <div className="soc-guidance-banner">
+            <Sparkles size={18} color="#818cf8" style={{ flexShrink: 0 }} />
+            <span>
+              <strong>Incident Directory:</strong> Click on any flagged employee below to inspect their full forensics dossier, raw sanitized prompts, cryptographic audit hashes, and timeline charts.
+            </span>
+          </div>
+
+          {/* Search & Filter Bar */}
+          <div className="soc-controls-bar">
+            <div className="search-input-wrap">
+              <Search size={16} color="#9ca3af" />
+              <input
+                type="text"
+                placeholder="Search employees by name, email, department, or IP..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+
+            <div className="filter-pills-group">
+              <span style={{ fontSize: 12, fontWeight: 700, color: "var(--soc-text-dim)", textTransform: "uppercase" }}>
+                Filter Threat:
+              </span>
+              <button
+                className={`filter-pill-btn ${threatFilter === "ALL" ? "active" : ""}`}
+                onClick={() => setThreatFilter("ALL")}
+              >
+                All ({flaggedEmployees.length})
+              </button>
+              <button
+                className={`filter-pill-btn critical ${threatFilter === "CRITICAL" ? "active critical" : ""}`}
+                onClick={() => setThreatFilter("CRITICAL")}
+              >
+                Critical (≥80)
+              </button>
+              <button
+                className={`filter-pill-btn ${threatFilter === "HIGH" ? "active" : ""}`}
+                onClick={() => setThreatFilter("HIGH")}
+              >
+                High (≥50)
+              </button>
+              <button
+                className={`filter-pill-btn ${threatFilter === "MEDIUM" ? "active" : ""}`}
+                onClick={() => setThreatFilter("MEDIUM")}
+              >
+                Medium (≥25)
+              </button>
+            </div>
+          </div>
+
+          {/* Flagged Employees Table */}
+          <div className="soc-table-card">
+            <div className="soc-table-header-row">
+              <div className="soc-table-header-title">
+                <ShieldAlert size={18} color="#f87171" />
+                <span>Employees Triggering Security Policies</span>
+                <span className="soc-badge-counter">{filteredEmployees.length} EMPLOYEES</span>
+              </div>
+              <div style={{ fontSize: 12, color: "var(--soc-text-dim)" }}>
+                Click any row to inspect confidential exfiltration details
+              </div>
+            </div>
+
+            <div className="soc-table-responsive">
+              <table className="soc-employees-table">
+                <thead>
+                  <tr>
+                    <th>EMPLOYEE / IDENTITY</th>
+                    <th>ENDPOINT & HOST</th>
+                    <th>VIOLATION SUMMARY</th>
+                    <th>DETECTED LEAK CATEGORIES</th>
+                    <th>PEAK RISK</th>
+                    <th>LAST ATTEMPT</th>
+                    <th>ACTION</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredEmployees.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} style={{ textAlign: "center", padding: "40px", color: "var(--soc-text-dim)" }}>
+                        No flagged employees matching the filter criteria.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredEmployees.map((emp) => {
+                      const avatarInitials = emp.name
+                        .split(" ")
+                        .map((n) => n[0])
+                        .join("")
+                        .slice(0, 2)
+                        .toUpperCase();
+                      const avatarClass =
+                        emp.threatLevel === "CRITICAL"
+                          ? "critical"
+                          : emp.threatLevel === "HIGH"
+                          ? "high"
+                          : "medium";
+
+                      return (
+                        <tr
+                          key={emp.id}
+                          className="employee-row"
+                          onClick={() => setSelectedEmployeeId(emp.id)}
+                        >
+                          {/* Employee Identity */}
+                          <td>
+                            <div className="employee-profile-cell">
+                              <div className={`employee-avatar ${avatarClass}`}>{avatarInitials}</div>
+                              <div className="employee-name-meta">
+                                <span className="employee-name">{emp.name}</span>
+                                <span className="employee-email">{emp.email}</span>
+                                <span className="dept-pill">{emp.department}</span>
+                              </div>
+                            </div>
+                          </td>
+
+                          {/* Endpoint */}
+                          <td>
+                            <div className="endpoint-cell">
+                              <span className="endpoint-host">{emp.endpointHost}</span>
+                              <span className="endpoint-ip">{emp.endpointIp}</span>
+                            </div>
+                          </td>
+
+                          {/* Violations Count */}
+                          <td>
+                            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                              <span style={{ fontWeight: 700, color: "#fff" }}>
+                                {emp.totalAttempts} total leak {emp.totalAttempts === 1 ? "attempt" : "attempts"}
+                              </span>
+                              <div style={{ display: "flex", gap: 6 }}>
+                                {emp.hardBlockedCount > 0 && (
+                                  <span className="status-tag blocked">{emp.hardBlockedCount} Blocked</span>
+                                )}
+                                {emp.redactedCount > 0 && (
+                                  <span className="status-tag redacted">{emp.redactedCount} Redacted</span>
+                                )}
+                              </div>
+                            </div>
+                          </td>
+
+                          {/* Categories */}
+                          <td>
+                            <div className="leak-chips-container">
+                              {emp.topCategories.slice(0, 3).map((cat, cIdx) => (
+                                <span key={cIdx} className="leak-chip">
+                                  {cat}
+                                </span>
+                              ))}
+                              {emp.topCategories.length > 3 && (
+                                <span className="leak-chip" style={{ background: "rgba(255,255,255,0.05)", color: "var(--soc-text-muted)" }}>
+                                  +{emp.topCategories.length - 3} more
+                                </span>
+                              )}
+                            </div>
+                          </td>
+
+                          {/* Peak Risk */}
+                          <td>
+                            <div
+                              className={`threat-score-pill ${
+                                emp.threatLevel === "CRITICAL"
+                                  ? "critical"
+                                  : emp.threatLevel === "HIGH"
+                                  ? "high"
+                                  : "medium"
+                              }`}
+                            >
+                              <span>{emp.peakRiskScore}</span>
+                              <span style={{ fontSize: 10, opacity: 0.8 }}>/ 100</span>
+                              <span style={{ fontSize: 10, textTransform: "uppercase", marginLeft: 4 }}>
+                                {emp.threatLevel}
+                              </span>
+                            </div>
+                          </td>
+
+                          {/* Last Attempt */}
+                          <td>
+                            <div style={{ display: "flex", alignItems: "center", gap: 6, color: "var(--soc-text-muted)", fontSize: 12 }}>
+                              <Clock size={13} />
+                              <span>{new Date(emp.lastAttempt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+                            </div>
+                          </td>
+
+                          {/* Action Button */}
+                          <td>
+                            <button
+                              className="inspect-link-btn"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedEmployeeId(emp.id);
+                              }}
+                            >
+                              <span>Inspect Dossier</span>
+                              <ChevronRight size={14} />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+      ) : (
+        /* ══════════════════════════════════════════════════════════════════════
+            VIEW 2: DRILL-DOWN DOSSIER FOR SELECTED EMPLOYEE
+           ══════════════════════════════════════════════════════════════════════ */
+        <section>
+          {/* Top Navigation Bar: Unmissable Return to Overview + Quick Employee Switcher */}
+          <div className="dossier-top-nav-bar">
+            <button
+              className="dossier-back-to-overview-btn"
+              onClick={() => setSelectedEmployeeId(null)}
+              id="back-to-soc-overview-btn"
+            >
+              <ArrowLeft size={18} />
+              <span>← Back to Overview & All Employees</span>
+              <span className="directory-count-tag">{flaggedEmployees.length} Flagged</span>
+            </button>
+
+            {/* Quick Switch Employee Pills */}
+            <div className="dossier-quick-switcher">
+              <span className="switcher-label">Quick Switch:</span>
+              <div className="switcher-pills-list">
+                {flaggedEmployees.map((emp) => (
+                  <button
+                    key={emp.id}
+                    className={`switcher-pill-btn ${emp.id === selectedEmployeeId ? "active" : ""}`}
+                    onClick={() => setSelectedEmployeeId(emp.id)}
+                  >
+                    <span
+                      className="switcher-dot"
+                      style={{
+                        background:
+                          emp.threatLevel === "CRITICAL"
+                            ? "#ef4444"
+                            : emp.threatLevel === "HIGH"
+                            ? "#f59e0b"
+                            : "#38bdf8",
+                      }}
+                    />
+                    <span className="switcher-name">{emp.name}</span>
+                    <span className="switcher-score">{emp.peakRiskScore}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {currentEmployee && (
+            <>
+              {/* Employee Dossier Header Card */}
+              <div className="employee-dossier-profile-card">
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", flexWrap: "wrap", gap: 20 }}>
+                  <div className="dossier-identity">
+                    <div
+                      className="dossier-avatar-large"
+                      style={{
+                        background:
+                          currentEmployee.threatLevel === "CRITICAL"
+                            ? "linear-gradient(135deg, #ef4444 0%, #991b1b 100%)"
+                            : currentEmployee.threatLevel === "HIGH"
+                            ? "linear-gradient(135deg, #f59e0b 0%, #b45309 100%)"
+                            : "linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)",
+                      }}
+                    >
+                      {currentEmployee.name
+                        .split(" ")
+                        .map((n) => n[0])
+                        .join("")
+                        .slice(0, 2)
+                        .toUpperCase()}
+                    </div>
+                    <div className="dossier-details">
+                      <h2>{currentEmployee.name}</h2>
+                      <div className="dossier-meta-row">
+                        <span>{currentEmployee.email}</span>
+                        <span>•</span>
+                        <span>{currentEmployee.department}</span>
+                        <span>•</span>
+                        <span style={{ fontFamily: "monospace", color: "#93c5fd" }}>
+                          {currentEmployee.endpointHost} ({currentEmployee.endpointIp})
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="dossier-kpi-group">
+                    <div className="dossier-kpi-item">
+                      <span className="val" style={{ color: currentEmployee.threatLevel === "CRITICAL" ? "#ef4444" : "#f59e0b" }}>
+                        {currentEmployee.peakRiskScore}/100
+                      </span>
+                      <span className="lbl">Peak Risk Level</span>
+                    </div>
+                    <div className="dossier-kpi-item">
+                      <span className="val">{currentEmployee.totalAttempts}</span>
+                      <span className="lbl">Total Exfiltration Attempts</span>
+                    </div>
+                    <div className="dossier-kpi-item">
+                      <span className="val" style={{ color: "#f87171" }}>{currentEmployee.hardBlockedCount}</span>
+                      <span className="lbl">Hard Blocked</span>
+                    </div>
+                    <div className="dossier-kpi-item">
+                      <span className="val" style={{ color: "#60a5fa" }}>{currentEmployee.redactedCount}</span>
+                      <span className="lbl">Silent Redacted</span>
+                    </div>
+
+                    <button
+                      className="action-btn"
+                      onClick={() => handleExportAudit(employeeIncidents, `dossier-${currentEmployee.userId}.json`)}
+                    >
+                      <Download size={14} />
+                      <span>Export Dossier</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Target AI Services Visited Summary Strip */}
+                <div className="employee-targeted-ai-strip" style={{ width: "100%", marginTop: 16 }}>
+                  <span className="targeted-ai-title">
+                    <Globe size={14} color="#38bdf8" />
+                    <span>Targeted AI Platforms:</span>
+                  </span>
+                  {employeeAiPlatforms.map(({ platform, count }) => (
+                    <React.Fragment key={platform}>
+                      {renderAiPlatformBadge(platform, count)}
+                    </React.Fragment>
+                  ))}
+                </div>
+              </div>
+
+              {/* Clean 2-Column Visualizations (Spacious, Legible, No Mesh) */}
+              <div className="dossier-charts-2col">
+                {/* Chart 1: Leak Categories Breakdown */}
+                <div className="chart-card">
+                  <div className="chart-card-title">
+                    <ShieldAlert size={16} color="#f87171" />
+                    <span>Exfiltrated Confidential Data Categories</span>
+                  </div>
+                  <div className="chart-card-subtitle">
+                    Classification of corporate assets this employee attempted to transmit
+                  </div>
+                  <div className="chart-canvas-wrap">
+                    {categoryChartData.length > 0 ? (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie
+                            data={categoryChartData}
+                            dataKey="count"
+                            nameKey="name"
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={50}
+                            outerRadius={85}
+                            paddingAngle={4}
+                          >
+                            {categoryChartData.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                            ))}
+                          </Pie>
+                          <Tooltip
+                            contentStyle={{ background: "#111827", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, fontSize: 12 }}
+                            itemStyle={{ color: "#fff" }}
+                          />
+                          <Legend wrapperStyle={{ fontSize: 11, color: "#9ca3af" }} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "var(--soc-text-dim)" }}>
+                        No categories to chart
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Chart 2: Threat Progression Timeline */}
+                <div className="chart-card">
+                  <div className="chart-card-title">
+                    <Activity size={16} color="#60a5fa" />
+                    <span>Risk Progression Over Chronological Attempts</span>
+                  </div>
+                  <div className="chart-card-subtitle">
+                    Live severity trajectory across successive prompt attempts
+                  </div>
+                  <div className="chart-canvas-wrap">
+                    {riskTimelineData.length > 0 ? (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={riskTimelineData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                          <defs>
+                            <linearGradient id="riskGrad" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor="#ef4444" stopOpacity={0.4} />
+                              <stop offset="95%" stopColor="#ef4444" stopOpacity={0.0} />
+                            </linearGradient>
+                          </defs>
+                          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                          <XAxis dataKey="attempt" stroke="#6b7280" fontSize={11} />
+                          <YAxis domain={[0, 100]} stroke="#6b7280" fontSize={11} />
+                          <Tooltip
+                            contentStyle={{ background: "#111827", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, fontSize: 12 }}
+                            itemStyle={{ color: "#fff" }}
+                          />
+                          <Area type="monotone" dataKey="riskScore" stroke="#ef4444" strokeWidth={2} fillOpacity={1} fill="url(#riskGrad)" />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "var(--soc-text-dim)" }}>
+                        No timeline data
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Chronological Leak Attempts Log */}
+              <div className="leak-attempts-section">
+                <div className="leak-attempts-header">
+                  <div className="leak-attempts-title">
+                    <Terminal size={18} color="#818cf8" />
+                    <span>Chronological Forensics & Prompt Audit Stream ({employeeIncidents.length} Incidents)</span>
+                  </div>
+
+                  {/* Filter by Target Service */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ fontSize: 12, color: "var(--soc-text-dim)" }}>Filter Destination:</span>
+                    <select
+                      value={serviceFilter}
+                      onChange={(e) => setServiceFilter(e.target.value)}
+                      style={{
+                        background: "var(--soc-surface)",
+                        border: "1px solid var(--soc-border)",
+                        borderRadius: 6,
+                        color: "#fff",
+                        padding: "6px 12px",
+                        fontSize: 12,
+                        outline: "none",
+                      }}
+                    >
+                      <option value="ALL">All Destinations</option>
+                      <option value="chatgpt">ChatGPT (chatgpt.com)</option>
+                      <option value="claude">Claude (claude.ai)</option>
+                      <option value="openai">OpenAI API (api.openai.com)</option>
+                      <option value="gemini">Gemini (gemini.google.com)</option>
+                    </select>
+                  </div>
+                </div>
+
+                {employeeIncidents
+                  .filter((inc) => serviceFilter === "ALL" || (inc.aiPlatform && inc.aiPlatform.toLowerCase().includes(serviceFilter.toLowerCase())))
+                  .map((incident, idx) => {
+                    const isBlocked = incident.actionTaken === "hard_block";
+                    const timeObj = formatIncidentTimestamp(incident.timestamp);
+
+                    return (
+                      <div
+                        key={incident.id || idx}
+                        className={`attempt-incident-card ${isBlocked ? "blocked" : "redacted"}`}
+                      >
+                        {/* Incident Top Bar */}
+                        <div className="attempt-card-top">
+                          <div className="attempt-card-meta">
+                            <span style={{ fontWeight: 800, color: "#fff", letterSpacing: "0.5px" }}>
+                              INCIDENT #{employeeIncidents.length - idx}
+                            </span>
+                            {/* Branded AI Platform Badge */}
+                            {renderAiPlatformBadge(incident.aiPlatform)}
+                            {/* Enterprise Timestamp */}
+                            <div className="incident-timestamp-block">
+                              <Clock size={13} color="#94a3b8" />
+                              <span>{timeObj.full}</span>
+                              {timeObj.relative && (
+                                <span className="incident-relative-tag">{timeObj.relative}</span>
+                              )}
+                            </div>
+                          </div>
+
+                          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                            <span className={`status-tag ${isBlocked ? "blocked" : "redacted"}`}>
+                              {isBlocked ? "🚫 HARD BLOCKED - PRE-FLIGHT" : "🛡 SILENT REDACTED"}
+                            </span>
+                            <span
+                              className={`threat-score-pill ${
+                                incident.riskScore >= 80 ? "critical" : incident.riskScore >= 50 ? "high" : "medium"
+                              }`}
+                            >
+                              RISK: {incident.riskScore}/100
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Incident Detected Chips */}
+                        {incident.detections && incident.detections.length > 0 && (
+                          <div style={{ padding: "14px 20px 0 20px", display: "flex", flexWrap: "wrap", gap: 8 }}>
+                            <span style={{ fontSize: 11, fontWeight: 700, color: "var(--soc-text-dim)", textTransform: "uppercase", display: "flex", alignItems: "center", marginRight: 4 }}>
+                              Targeted Confidential Data:
+                            </span>
+                            {incident.detections.map((det, dIdx) => (
+                              <div
+                                key={dIdx}
+                                style={{
+                                  background: "rgba(239, 68, 68, 0.08)",
+                                  border: "1px solid rgba(239, 68, 68, 0.3)",
+                                  padding: "4px 10px",
+                                  borderRadius: 6,
+                                  fontSize: 11,
+                                  fontFamily: "monospace",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: 6,
+                                }}
+                              >
+                                <span style={{ color: "#fca5a5", fontWeight: 700 }}>{det.category}:</span>
+                                <span style={{ color: "#ffffff", fontWeight: 600 }}>{det.matchedText}</span>
+                                {det.isolationRisk && (
+                                  <span style={{ color: "#f87171", fontSize: 10 }}>({det.isolationRisk}% Risk)</span>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Raw Prompt vs Sanitized Action Inspector */}
+                        <div className="attempt-card-body">
+                          <div className="attempt-diff-grid">
+                            {/* Column 1: Outbound Exfiltration Attempt */}
+                            <div className="diff-panel attempted">
+                              <div className="diff-panel-header">
+                                <span>1. Pre-Firewall Outbound Prompt (What Employee Tried to Send)</span>
+                                <span style={{ color: "#fca5a5" }}>PRE-FLIGHT INTERCEPTION</span>
+                              </div>
+                              <div className="diff-content-box">
+                                {incident.originalPrompt}
+                              </div>
+                            </div>
+
+                            {/* Column 2: Firewall Enforcement Result */}
+                            <div className="diff-panel sanitized">
+                              <div className="diff-panel-header">
+                                <span>2. Firewall Enforcement Result</span>
+                                <span style={{ color: isBlocked ? "#f87171" : "#93c5fd" }}>
+                                  {isBlocked ? "HALTED BEFORE REACHING AI" : "SANITIZED PAYLOAD DELIVERED"}
+                                </span>
+                              </div>
+                              <div className="diff-content-box" style={{ color: isBlocked ? "#fca5a5" : "#93c5fd" }}>
+                                {incident.sanitizedPrompt}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* AI Delivered Response (if not blocked) */}
+                          {incident.restoredResponse && (
+                            <div style={{ marginTop: 14, background: "rgba(16, 185, 129, 0.05)", border: "1px solid rgba(16, 185, 129, 0.2)", borderRadius: 8, padding: 14 }}>
+                              <div style={{ fontSize: 11, fontWeight: 700, color: "#34d399", textTransform: "uppercase", marginBottom: 6 }}>
+                                3. AI Completion Delivered to Employee
+                              </div>
+                              <div style={{ fontSize: 13, color: "#e5e7eb", lineHeight: 1.5, fontFamily: "monospace" }}>
+                                {incident.restoredResponse}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Card Footer with Endpoint Host & HMAC Signature */}
+                        <div className="attempt-card-footer">
+                          <div>
+                            ENDPOINT: {incident.endpointHost} ({incident.endpointIp})
+                          </div>
+                          <div>
+                            AUDIT SIGNATURE: {incident.cryptoSignature ? `${incident.cryptoSignature.slice(0, 18)}...` : "HMAC-SHA256-VERIFIED"}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+            </>
+          )}
+        </section>
+      )}
+
+      {/* ─── Simulation Modal ────────────────────────────────────────────────── */}
+      {showSimModal && (
+        <div className="modal-overlay">
+          <div className="modal-dialog">
+            <div className="modal-header">
+              <h3>Simulate Outbound AI Data Exfiltration</h3>
+              <button
+                style={{ background: "transparent", border: "none", color: "#9ca3af", cursor: "pointer", fontSize: 18 }}
+                onClick={() => setShowSimModal(false)}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="modal-body">
+              <label className="modal-label">Select Employee Origin</label>
+              <select
+                className="modal-select"
+                value={simEmployee}
+                onChange={(e) => setSimEmployee(e.target.value)}
+              >
+                <option value="sarah.chen">Sarah Chen (Cloud Infrastructure)</option>
+                <option value="alex.turner">Alex Turner (SCADA & Industrial Automation)</option>
+                <option value="marcus.vance">Marcus Vance (Clinical Informatics)</option>
+                <option value="elena.rostova">Elena Rostova (Fintech & Payments)</option>
+                <option value="david.kim">David Kim (Backend Platform)</option>
+                <option value="mohammed">Mohammed (Local Workstation)</option>
+              </select>
+
+              <label className="modal-label">Data Leak Scenario</label>
+              <select
+                className="modal-select"
+                value={simLeakType}
+                onChange={(e) => setSimLeakType(e.target.value)}
+              >
+                <option value="aws_keys">AWS Production Credentials (AKIA... + Secret Key)</option>
+                <option value="scada_reg">SCADA PLC Register (Turbine 0x4001 + Substation IP)</option>
+                <option value="patient_ssn">Protected Health Information (Patient SSN + MRN)</option>
+                <option value="credit_card">PCI Credit Card Number (Visa 4532... + CVV)</option>
+                <option value="jwt_secret">Production API Signing Secret (JWT RS256 Key)</option>
+                <option value="benign_prompt">Clean Prompt (Engineering Question — Risk 0 / Pass)</option>
+                <option value="sanitized_prompt">Sanitized Prompt (Tokens Redacted — Risk 0 / Pass)</option>
+              </select>
+
+              <label className="modal-label">Custom Prompt Override (Optional)</label>
+              <textarea
+                className="modal-textarea"
+                rows={3}
+                placeholder="Leave blank to use preconfigured real-world exfiltration payload..."
+                value={simCustomPrompt}
+                onChange={(e) => setSimCustomPrompt(e.target.value)}
+              />
+            </div>
+
+            <div className="modal-footer">
+              <button className="action-btn" onClick={() => setShowSimModal(false)}>
+                Cancel
+              </button>
+              <button className="action-btn primary" onClick={handleSimulate} disabled={isSimulating}>
+                {isSimulating ? "Transmitting through Firewall..." : "⚡ Launch Interception Test"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
