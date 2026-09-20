@@ -43,6 +43,15 @@ async function fetchSystemIdentity() {
     currentSystemHost = `${platformMap[info.os] || info.os}-${info.arch}-workstation`;
     await chrome.storage.local.set({ systemUser: currentSystemUser, systemHost: currentSystemHost });
   } catch (e) {}
+
+  // 4. Discover external/network endpoint IP from gateway
+  try {
+    const res = await fetch(`${CLOUD_BACKEND_URL}/api/vantix/system-identity`);
+    const data = await res.json();
+    if (data && data.clientIp) {
+      await chrome.storage.local.set({ clientIp: data.clientIp });
+    }
+  } catch (e) {}
 }
 
 // Register declarative rule so transparent proxy knows browser extension is active

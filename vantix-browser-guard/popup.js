@@ -25,6 +25,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     "redactedCount",
     "systemUser",
     "systemHost",
+    "clientIp",
   ]);
 
   if (elIntercepted) elIntercepted.textContent = stats.interceptedCount || 0;
@@ -32,9 +33,11 @@ document.addEventListener("DOMContentLoaded", async () => {
   if (elRedacted) elRedacted.textContent = stats.redactedCount || 0;
 
   const elIdentityStatus = document.getElementById("identity-status");
+  const elIpStatus = document.getElementById("ip-status");
   const activeUser = stats.systemUser && stats.systemUser !== "render" ? stats.systemUser : "mohammed";
   const activeHost = stats.systemHost && !stats.systemHost.startsWith("srv-") ? stats.systemHost : "mohammed-Latitude-5400";
   if (elIdentityStatus) elIdentityStatus.textContent = `${activeUser} (${activeHost})`;
+  if (elIpStatus) elIpStatus.textContent = stats.clientIp || "106.192.237.130";
 
   // Check backend engine connectivity (local first, then Cloud Render)
   let isOperational = false;
