@@ -250,7 +250,7 @@ const Settings = () => {
               padding: 16
             }}>
               <h4 style={{ margin: "0 0 10px 0", fontSize: 14, fontWeight: 600, color: "var(--brand)" }}>
-                Option A: Manual Installation (Any Machine)
+                Option A: Manual Installation (All OS)
               </h4>
               <ol style={{ margin: 0, paddingLeft: 20, fontSize: 12, lineHeight: 1.8, color: "var(--text-secondary)" }}>
                 <li>Click <strong>Download Extension (.zip)</strong> above.</li>
@@ -268,10 +268,10 @@ const Settings = () => {
               padding: 16
             }}>
               <h4 style={{ margin: "0 0 10px 0", fontSize: 14, fontWeight: 600, color: "var(--brand)" }}>
-                Option B: Linux OS Interception (1-Line Command)
+                Option B: Linux OS Interception (1-Line)
               </h4>
-              <p style={{ margin: "0 0 10px 0", fontSize: 12, lineHeight: 1.6, color: "var(--text-secondary)" }}>
-                For Linux endpoints (intercepts Python AI scripts, terminal curl, and OpenAI SDKs via iptables on port 8443), paste this 1-line command into terminal:
+              <p style={{ margin: "0 0 8px 0", fontSize: 12, lineHeight: 1.5, color: "var(--text-secondary)" }}>
+                Intercepts Python AI scripts, terminal curl, and OpenAI SDKs via iptables:
               </p>
               <div style={{
                 background: "var(--panel)",
@@ -283,7 +283,59 @@ const Settings = () => {
                 color: "var(--brand)",
                 wordBreak: "break-all"
               }}>
-                {"curl -fsSL https://raw.githubusercontent.com/shammazhere/Vantix/main/quickstart.sh | sudo bash"}
+                {"curl -fsSL https://vantix-beta.vercel.app/quickstart.sh | sudo bash"}
+              </div>
+            </div>
+
+            <div style={{
+              background: "var(--card-bg, rgba(255, 255, 255, 0.03))",
+              border: "1px solid var(--border-color)",
+              borderRadius: 8,
+              padding: 16
+            }}>
+              <h4 style={{ margin: "0 0 10px 0", fontSize: 14, fontWeight: 600, color: "var(--brand)" }}>
+                Option C: macOS Terminal 1-Line Setup
+              </h4>
+              <p style={{ margin: "0 0 8px 0", fontSize: 12, lineHeight: 1.5, color: "var(--text-secondary)" }}>
+                Downloads & unzips Extension directly to <code>~/vantix-guard</code>:
+              </p>
+              <div style={{
+                background: "var(--panel)",
+                border: "1px solid var(--border-color)",
+                padding: "8px 12px",
+                borderRadius: 6,
+                fontFamily: "var(--mono)",
+                fontSize: 11,
+                color: "var(--brand)",
+                wordBreak: "break-all"
+              }}>
+                {"curl -fsSL https://vantix-beta.vercel.app/downloads/vantix-browser-guard.zip -o ~/vantix-guard.zip && unzip -qo ~/vantix-guard.zip -d ~/vantix-guard"}
+              </div>
+            </div>
+
+            <div style={{
+              background: "var(--card-bg, rgba(255, 255, 255, 0.03))",
+              border: "1px solid var(--border-color)",
+              borderRadius: 8,
+              padding: 16
+            }}>
+              <h4 style={{ margin: "0 0 10px 0", fontSize: 14, fontWeight: 600, color: "var(--brand)" }}>
+                Option D: Windows PowerShell 1-Line Setup
+              </h4>
+              <p style={{ margin: "0 0 8px 0", fontSize: 12, lineHeight: 1.5, color: "var(--text-secondary)" }}>
+                Downloads & unzips Extension directly to <code>$HOME\vantix-guard</code>:
+              </p>
+              <div style={{
+                background: "var(--panel)",
+                border: "1px solid var(--border-color)",
+                padding: "8px 12px",
+                borderRadius: 6,
+                fontFamily: "var(--mono)",
+                fontSize: 11,
+                color: "var(--brand)",
+                wordBreak: "break-all"
+              }}>
+                {'iwr https://vantix-beta.vercel.app/downloads/vantix-browser-guard.zip -OutFile "$HOME\\vantix-guard.zip"; Expand-Archive "$HOME\\vantix-guard.zip" -DestinationPath "$HOME\\vantix-guard" -Force'}
               </div>
             </div>
           </div>
