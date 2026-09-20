@@ -268,10 +268,10 @@ const Settings = () => {
               padding: 16
             }}>
               <h4 style={{ margin: "0 0 10px 0", fontSize: 14, fontWeight: 600, color: "var(--brand)" }}>
-                Option B: Transparent OS Protection (Automated)
+                Option B: Linux OS Interception (Cloned Repo Only)
               </h4>
               <p style={{ margin: "0 0 10px 0", fontSize: 12, lineHeight: 1.6, color: "var(--text-secondary)" }}>
-                For company-managed machines, run one terminal command to automatically start the transparent proxy (port 8443), setup iptables interception, and force-deploy Chrome enterprise policies:
+                For deep OS-level network interception (monitoring Python scripts, terminal curl, and OpenAI SDKs via iptables on port 8443), clone the repo on a Linux machine and run:
               </p>
               <div style={{
                 background: "var(--panel)",
@@ -279,10 +279,11 @@ const Settings = () => {
                 padding: "8px 12px",
                 borderRadius: 6,
                 fontFamily: "var(--mono)",
-                fontSize: 12,
-                color: "var(--brand)"
+                fontSize: 11,
+                color: "var(--brand)",
+                wordBreak: "break-all"
               }}>
-                sudo ./vantix-protect.sh start
+                {"git clone https://github.com/shammazhere/Vantix.git && cd Vantix && sudo ./vantix-protect.sh start"}
               </div>
             </div>
           </div>
