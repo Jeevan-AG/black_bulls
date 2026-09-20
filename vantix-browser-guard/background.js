@@ -11,12 +11,14 @@ let effectiveBackendUrl = LOCAL_BACKEND_URL;
 let currentSystemUser = "mohammed";
 let currentSystemHost = "mohammed-Latitude-5400";
 
-// Fetch dynamic system identity from engine
+// Fetch dynamic system identity — ONLY from local engine (which runs on user's machine)
+// Never query cloud Render for identity — it would return the server's OS, not the user's.
 async function fetchSystemIdentity() {
+  // 1. Try local engine (runs on user's machine — returns real OS user/hostname)
   try {
     const res = await fetch(`${LOCAL_BACKEND_URL}/api/vantix/system-identity`);
     const data = await res.json();
-    if (data && data.user) {
+    if (data && data.user && data.user !== "render") {
       currentSystemUser = data.user;
       currentSystemHost = data.host;
       await chrome.storage.local.set({ systemUser: data.user, systemHost: data.host });
@@ -24,14 +26,22 @@ async function fetchSystemIdentity() {
     }
   } catch (e) {}
 
+  // 2. Fallback: use previously stored identity (persists across sessions)
   try {
-    const res = await fetch(`${CLOUD_BACKEND_URL}/api/vantix/system-identity`);
-    const data = await res.json();
-    if (data && data.user) {
-      currentSystemUser = data.user;
-      currentSystemHost = data.host;
-      await chrome.storage.local.set({ systemUser: data.user, systemHost: data.host });
+    const stored = await chrome.storage.local.get(["systemUser", "systemHost"]);
+    if (stored.systemUser && stored.systemUser !== "render") {
+      currentSystemUser = stored.systemUser;
+      currentSystemHost = stored.systemHost || currentSystemHost;
+      return;
     }
+  } catch (e) {}
+
+  // 3. Final fallback: detect platform from Chrome APIs
+  try {
+    const info = await chrome.runtime.getPlatformInfo();
+    const platformMap = { win: "Windows", mac: "macOS", linux: "Linux", cros: "ChromeOS" };
+    currentSystemHost = `${platformMap[info.os] || info.os}-${info.arch}-workstation`;
+    await chrome.storage.local.set({ systemUser: currentSystemUser, systemHost: currentSystemHost });
   } catch (e) {}
 }
 

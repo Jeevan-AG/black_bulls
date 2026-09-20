@@ -49,15 +49,21 @@ function recordAndBroadcast({
   req,
 }) {
   const os = require("os");
-  let fallbackUser = "mohammed";
-  let fallbackHost = "mohammed-Latitude-5400";
+  // Cloud server identities that should never appear as end-user names
+  const SERVER_IDENTITIES = ["render", "root", "nobody", "www-data", "node", "ubuntu", "ec2-user"];
+
+  let fallbackUser = "unknown-user";
+  let fallbackHost = "unknown-host";
   try {
-    fallbackUser = process.env.USER || process.env.USERNAME || (os.userInfo && os.userInfo().username) || "mohammed";
-    fallbackHost = os.hostname() || "mohammed-Latitude-5400";
+    const osUser = process.env.USER || process.env.USERNAME || (os.userInfo && os.userInfo().username) || "";
+    const osHost = os.hostname() || "";
+    // Only use OS identity if it's NOT a cloud server identity
+    if (osUser && !SERVER_IDENTITIES.includes(osUser.toLowerCase())) fallbackUser = osUser;
+    if (osHost && !osHost.startsWith("srv-")) fallbackHost = osHost;
   } catch (e) {}
 
-  const rawUser = (resolvedUser && resolvedUser !== "employee" ? resolvedUser : fallbackUser).trim();
-  const rawHost = (resolvedHost && resolvedHost !== "browser-endpoint" ? resolvedHost : fallbackHost).trim();
+  const rawUser = (resolvedUser && resolvedUser !== "employee" && !SERVER_IDENTITIES.includes(resolvedUser.toLowerCase()) ? resolvedUser : fallbackUser).trim();
+  const rawHost = (resolvedHost && resolvedHost !== "browser-endpoint" && !resolvedHost.startsWith("srv-") ? resolvedHost : fallbackHost).trim();
   const userNameFormatted = `${rawUser} (${rawHost})`;
 
   const logRecord = {
