@@ -34,6 +34,13 @@ const AI_DOMAINS = [
   "api.perplexity.ai",
 ];
 
+const WEB_AI_DOMAINS = [
+  "chatgpt.com",
+  "chat.openai.com",
+  "claude.ai",
+  "gemini.google.com",
+];
+
 const DEFAULT_PORT = 8443;
 const BACKEND_ENDPOINT = process.env.VANTIX_BACKEND_URL || "http://127.0.0.1:5000";
 
@@ -49,7 +56,13 @@ let stats = {
  */
 function isAiDomain(host) {
   const cleanHost = host.split(":")[0].toLowerCase();
-  return AI_DOMAINS.some((domain) => cleanHost === domain || cleanHost.endsWith("." + domain));
+  return AI_DOMAINS.some((domain) => cleanHost === domain || cleanHost.endsWith("." + domain)) ||
+         WEB_AI_DOMAINS.some((domain) => cleanHost === domain || cleanHost.endsWith("." + domain));
+}
+
+function isWebAiDomain(host) {
+  const cleanHost = host.split(":")[0].toLowerCase();
+  return WEB_AI_DOMAINS.some((domain) => cleanHost === domain || cleanHost.endsWith("." + domain));
 }
 
 /**
@@ -176,6 +189,76 @@ function processInterceptedAiRequest(rawBuffer, hostname, port, clientTlsSocket)
     }
   } catch (e) {
     // Non-JSON or streaming chunk, pass forward directly
+  }
+
+  const cleanHost = hostname.split(":")[0].toLowerCase();
+  const isWeb = isWebAiDomain(cleanHost);
+
+  // Enforce Browser Guard for web AI interfaces (ChatGPT, Claude, Gemini)
+  if (isWeb) {
+    const headers = parseHeaders(headerPart);
+    const hasGuardExtension = headers["x-vantix-extension"] === "active" || headers["x-vantix-source"] === "browser-guard";
+
+    if (!hasGuardExtension) {
+      console.log(`\n[Vantix-Bridge] ⛔ UNMANAGED ACCESS BLOCKED: ${hostname} (User: ${identity.user}@${identity.host}) — Missing Browser Guard Extension`);
+      stats.interceptedPrompts++;
+
+      try {
+        ws.broadcastDetection({
+          originalPrompt: `[UNMANAGED ACCESS BLOCKED] User attempted to open ${hostname} without Vantix Browser Guard`,
+          sanitizedPrompt: "[POLICY_VIOLATION_BLOCKED]",
+          restoredResponse: "",
+          riskScore: 90,
+          detections: [{ category: "UNMANAGED_AI_ACCESS", value: hostname, severity: "CRITICAL" }],
+          combinations: [],
+          contextScore: 90,
+          actionTaken: "hard_block",
+          sessionCoverage: {},
+          sessionRiskScore: 90,
+          promptCount: 1,
+          anomalyTriggered: true,
+          anomalyReport: `Direct browser navigation to ${hostname} was blocked at Layer 1. The employee has not activated the Vantix Browser Guard extension.`,
+          user: identity.user,
+          host: identity.host,
+          interceptSource: "network-layer-unmanaged-block",
+          timestamp: new Date().toISOString(),
+        });
+
+        fetch("https://vantix-backend-7gcw.onrender.com/api/vantix/chat", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Vantix-User": identity.user,
+            "X-Vantix-Host": identity.host,
+            "X-Vantix-Source": "network-unmanaged-block",
+          },
+          body: JSON.stringify({
+            prompt: `[UNMANAGED WEB AI ACCESS BLOCKED] Attempted connection to ${hostname} without Vantix Browser Guard.`,
+            userId: identity.user,
+            user: identity.user,
+            host: identity.host,
+            sessionId: `unmanaged-${Date.now()}`,
+          }),
+        }).catch(() => {});
+      } catch (e) {}
+
+      const blockHtml = getUnmanagedBlockHtml(hostname, identity);
+      const resHeaders = [
+        "HTTP/1.1 403 Forbidden",
+        "Content-Type: text/html; charset=utf-8",
+        `Content-Length: ${Buffer.byteLength(blockHtml)}`,
+        "Connection: close",
+        "\r\n",
+      ].join("\r\n");
+
+      clientTlsSocket.write(resHeaders + blockHtml);
+      clientTlsSocket.end();
+      return;
+    }
+
+    // Has extension: forward directly to upstream so extension's DOM protection can monitor prompts
+    forwardRawToUpstream(rawBuffer, hostname, port, clientTlsSocket);
+    return;
   }
 
   if (!promptText) {
@@ -342,6 +425,52 @@ function parseHeaders(headerStr) {
 function handleHttpRequest(req, res) {
   res.writeHead(200, { "Content-Type": "application/json" });
   res.end(JSON.stringify({ status: "Vantix Network Bridge Active", port: DEFAULT_PORT }));
+}
+
+function getUnmanagedBlockHtml(hostname, identity) {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vantix — AI Access Blocked</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #0b0f19; color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 24px; }
+    .card { background: #111827; border: 1px solid #1e293b; border-radius: 18px; max-width: 540px; width: 100%; padding: 44px 36px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.7); text-align: center; }
+    .shield { width: 72px; height: 72px; margin: 0 auto 24px; border-radius: 50%; background: rgba(239, 68, 68, 0.12); border: 2px solid #ef4444; display: flex; align-items: center; justify-content: center; color: #ef4444; }
+    h1 { font-size: 22px; font-weight: 700; color: #f87171; margin-bottom: 12px; letter-spacing: -0.02em; }
+    p { font-size: 14px; line-height: 1.6; color: #94a3b8; margin-bottom: 24px; }
+    .meta-box { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 14px 18px; text-align: left; font-size: 13px; margin-bottom: 28px; }
+    .meta-row { display: flex; justify-content: space-between; margin-bottom: 8px; }
+    .meta-row:last-child { margin-bottom: 0; }
+    .meta-lbl { color: #64748b; }
+    .meta-val { color: #38bdf8; font-weight: 500; font-family: monospace; }
+    .btn { display: inline-block; background: #06b6d4; color: #020617; font-weight: 600; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-size: 14px; transition: all 0.2s; }
+    .btn:hover { background: #22d3ee; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="shield">
+      <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+        <line x1="12" y1="8" x2="12" y2="12"/>
+        <line x1="12" y1="16" x2="12.01" y2="16"/>
+      </svg>
+    </div>
+    <h1>UNMANAGED AI ACCESS BLOCKED</h1>
+    <p>Access to <strong>${hostname}</strong> was intercepted by <strong>Vantix Enterprise AI Firewall</strong>. Corporate security policy strictly requires the <strong>Vantix Browser Guard</strong> extension before interacting with public AI models.</p>
+    <div class="meta-box">
+      <div class="meta-row"><span class="meta-lbl">Target Platform:</span><span class="meta-val">${hostname}</span></div>
+      <div class="meta-row"><span class="meta-lbl">Machine / User:</span><span class="meta-val">${identity.user} on ${identity.host}</span></div>
+      <div class="meta-row"><span class="meta-lbl">Enforcement:</span><span class="meta-val">Layer 1 Network Proxy (8443)</span></div>
+      <div class="meta-row"><span class="meta-lbl">Policy Status:</span><span class="meta-val" style="color: #ef4444;">Extension Not Detected</span></div>
+    </div>
+    <a href="https://vantix-beta.vercel.app/downloads/vantix-browser-guard.zip" class="btn">Download & Install Vantix Browser Guard</a>
+  </div>
+</body>
+</html>`;
 }
 
 

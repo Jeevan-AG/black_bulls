@@ -4,7 +4,8 @@
   "version": "1.0.0",
   "description": "Enterprise AI Traffic Firewall & TEE Enclave Guard for ChatGPT, Claude, and Gemini.",
   "permissions": [
-    "storage"
+    "storage",
+    "declarativeNetRequest"
   ],
   "host_permissions": [
     "https://chatgpt.com/*",

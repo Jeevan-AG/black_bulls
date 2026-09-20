@@ -45,6 +45,41 @@ async function fetchSystemIdentity() {
   } catch (e) {}
 }
 
+// Register declarative rule so transparent proxy knows browser extension is active
+async function setupExtensionHeaders() {
+  try {
+    if (chrome.declarativeNetRequest) {
+      await chrome.declarativeNetRequest.updateDynamicRules({
+        removeRuleIds: [1001],
+        addRules: [
+          {
+            id: 1001,
+            priority: 1,
+            action: {
+              type: "modifyHeaders",
+              requestHeaders: [
+                {
+                  header: "X-Vantix-Extension",
+                  operation: "set",
+                  value: "active",
+                },
+              ],
+            },
+            condition: {
+              urlFilter: "*",
+              resourceTypes: ["main_frame", "sub_frame", "xmlhttprequest", "websocket", "other"],
+              domains: ["chatgpt.com", "openai.com", "claude.ai", "anthropic.com", "google.com"],
+            },
+          },
+        ],
+      });
+      console.log("[Vantix Guard] DeclarativeNetRequest active header rule registered.");
+    }
+  } catch (err) {
+    console.warn("[Vantix Guard] Could not register declarative header rule:", err);
+  }
+}
+
 // Initialize extension state
 chrome.runtime.onInstalled.addListener(async () => {
   await chrome.storage.local.set({
@@ -63,7 +98,10 @@ chrome.runtime.onInstalled.addListener(async () => {
   chrome.action.setBadgeBackgroundColor({ color: "#22d3ee" });
   console.log("[Vantix Guard] Background service worker initialized.");
   fetchSystemIdentity();
+  setupExtensionHeaders();
 });
+
+setupExtensionHeaders();
 
 // Periodic heartbeat to verify Vantix engine (Local first, then Cloud Render)
 async function checkEngineHealth() {
