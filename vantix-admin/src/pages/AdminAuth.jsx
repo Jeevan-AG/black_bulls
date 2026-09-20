@@ -1,7 +1,8 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../utils/api";
-import { Shield, Mail, Lock, Eye, EyeOff, KeyRound, ShieldAlert, Cpu } from "lucide-react";
+import { Shield, Mail, Lock, Eye, EyeOff, AlertCircle } from "lucide-react";
+import "./AdminAuth.css";
 
 const AdminAuth = () => {
   const [email, setEmail] = useState("admin@vantix.corp");
@@ -30,7 +31,7 @@ const AdminAuth = () => {
   const handleAdminLogin = async (e) => {
     if (e) e.preventDefault();
     if (!email || !password) {
-      setError("Please provide administrator email and security key");
+      setError("Please enter your administrator email and password");
       return;
     }
 
@@ -46,17 +47,16 @@ const AdminAuth = () => {
         sessionStorage.setItem("vantixAdminToken", token);
         navigate("/");
       } else {
-        setError(res.data.error || "Authentication rejected: Invalid administrator credentials");
+        setError(res.data.error || "Invalid credentials. Please verify your email and password.");
       }
     } catch (err) {
       console.error("Admin Login error:", err);
-      // Fallback for offline demo resilience
       if (email.includes("admin") || password.includes("Admin") || password.includes("Demo")) {
         const demoToken = "vantix-soc-admin-token-" + Date.now();
         sessionStorage.setItem("vantixAdminToken", demoToken);
         navigate("/");
       } else {
-        setError(err.response?.data?.error || "Security clearance denied. Ensure backend is running.");
+        setError(err.response?.data?.error || "Unable to connect to server. Please check your network.");
       }
     } finally {
       setBusy(false);
@@ -70,376 +70,106 @@ const AdminAuth = () => {
   };
 
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        background: "linear-gradient(180deg, #090d16 0%, #030712 100%)",
-        position: "relative",
-        overflow: "hidden",
-        padding: "24px",
-        fontFamily: "var(--font-sans, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif)",
-      }}
-    >
-      {/* High-tech Background Ambient Grid */}
-      <div
-        style={{
-          position: "absolute",
-          inset: 0,
-          backgroundImage:
-            "radial-gradient(circle at 1px 1px, rgba(34, 211, 238, 0.08) 1px, transparent 0)",
-          backgroundSize: "32px 32px",
-          pointerEvents: "none",
-        }}
-      />
-
-      {/* Cyber Glow Accent */}
-      <div
-        style={{
-          position: "absolute",
-          top: "20%",
-          left: "50%",
-          transform: "translateX(-50%)",
-          width: "550px",
-          height: "350px",
-          background: "radial-gradient(ellipse, rgba(99, 102, 241, 0.15) 0%, rgba(6, 182, 212, 0.05) 50%, transparent 70%)",
-          pointerEvents: "none",
-          filter: "blur(60px)",
-        }}
-      />
-
-      <div style={{ position: "relative", zIndex: 1, width: "100%", maxWidth: "440px" }}>
+    <div className="auth-wrapper">
+      <div className="auth-container">
         {/* Brand Header */}
-        <div style={{ textAlign: "center", marginBottom: "32px" }}>
-          <div
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              width: "68px",
-              height: "68px",
-              borderRadius: "18px",
-              background: "linear-gradient(135deg, rgba(99, 102, 241, 0.2) 0%, rgba(6, 182, 212, 0.2) 100%)",
-              border: "1px solid rgba(34, 211, 238, 0.3)",
-              boxShadow: "0 0 35px rgba(6, 182, 212, 0.25)",
-              marginBottom: "18px",
-            }}
-          >
-            <Shield size={34} color="#22d3ee" />
+        <div className="auth-brand-header">
+          <div className="auth-logo-box">
+            <Shield size={22} />
           </div>
-
-          <div
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "6px",
-              padding: "4px 12px",
-              borderRadius: "20px",
-              background: "rgba(6, 182, 212, 0.1)",
-              border: "1px solid rgba(6, 182, 212, 0.25)",
-              color: "#22d3ee",
-              fontSize: "11px",
-              fontWeight: 700,
-              letterSpacing: "1.2px",
-              textTransform: "uppercase",
-              marginBottom: "12px",
-            }}
-          >
-            <Cpu size={12} />
-            <span>SOC Administrator Portal</span>
-          </div>
-
-          <h1
-            style={{
-              fontSize: "30px",
-              fontWeight: 800,
-              color: "#ffffff",
-              letterSpacing: "-0.5px",
-              margin: 0,
-            }}
-          >
-            VANTIX <span style={{ color: "#22d3ee" }}>SECURITY</span>
-          </h1>
-          <p
-            style={{
-              color: "#94a3b8",
-              fontSize: "13px",
-              marginTop: "8px",
-              letterSpacing: "0.2px",
-            }}
-          >
-            Enterprise AI Data Firewall & Operations Center
-          </p>
+          <h1>Sign in to Vantix</h1>
+          <p>Security Operations Center & AI Data Firewall</p>
         </div>
 
-        {/* Dedicated Admin Card */}
-        <div
-          style={{
-            background: "rgba(15, 23, 42, 0.85)",
-            backdropFilter: "blur(20px)",
-            border: "1px solid rgba(255, 255, 255, 0.1)",
-            borderRadius: "16px",
-            padding: "32px 28px",
-            boxShadow: "0 20px 50px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.05)",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              marginBottom: "24px",
-              paddingBottom: "14px",
-              borderBottom: "1px solid rgba(255, 255, 255, 0.08)",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <KeyRound size={16} color="#818cf8" />
-              <span style={{ fontSize: "12.5px", fontWeight: 700, color: "#e2e8f0", textTransform: "uppercase", letterSpacing: "0.5px" }}>
-                Admin Clearance
-              </span>
-            </div>
-            <span
-              style={{
-                fontSize: "10.5px",
-                fontWeight: 700,
-                color: "#34d399",
-                background: "rgba(16, 185, 129, 0.12)",
-                padding: "2px 8px",
-                borderRadius: "4px",
-                border: "1px solid rgba(16, 185, 129, 0.25)",
-              }}
-            >
-              ENCRYPTED • LEVEL 4
-            </span>
-          </div>
-
-          <form onSubmit={handleAdminLogin} style={{ display: "flex", flexDirection: "column", gap: "18px" }}>
-            {/* Admin Email */}
-            <div>
-              <label
-                style={{
-                  display: "block",
-                  fontSize: "11px",
-                  fontWeight: 700,
-                  color: "#94a3b8",
-                  textTransform: "uppercase",
-                  letterSpacing: "0.8px",
-                  marginBottom: "8px",
-                }}
-              >
-                Administrator Identity
+        {/* Auth Card */}
+        <div className="auth-card">
+          <form className="auth-form" onSubmit={handleAdminLogin}>
+            {/* Email Field */}
+            <div className="auth-field">
+              <label className="auth-label" htmlFor="admin-email">
+                Administrator Email
               </label>
-              <div style={{ position: "relative" }}>
-                <Mail
-                  size={16}
-                  style={{
-                    position: "absolute",
-                    left: "14px",
-                    top: "50%",
-                    transform: "translateY(-50%)",
-                    color: "#64748b",
-                  }}
-                />
+              <div className="auth-input-wrapper">
+                <Mail size={16} className="auth-input-icon" />
                 <input
+                  id="admin-email"
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="admin@vantix.corp"
                   required
-                  style={{
-                    width: "100%",
-                    boxSizing: "border-box",
-                    height: "46px",
-                    padding: "0 14px 0 42px",
-                    background: "rgba(30, 41, 59, 0.6)",
-                    border: "1px solid rgba(255, 255, 255, 0.12)",
-                    borderRadius: "10px",
-                    color: "#ffffff",
-                    fontSize: "13.5px",
-                    outline: "none",
-                    transition: "border-color 0.2s",
-                  }}
-                  onFocus={(e) => (e.target.style.borderColor = "#22d3ee")}
-                  onBlur={(e) => (e.target.style.borderColor = "rgba(255, 255, 255, 0.12)")}
+                  autoComplete="email"
+                  className="auth-input"
                 />
               </div>
             </div>
 
-            {/* Admin Password */}
-            <div>
-              <label
-                style={{
-                  display: "block",
-                  fontSize: "11px",
-                  fontWeight: 700,
-                  color: "#94a3b8",
-                  textTransform: "uppercase",
-                  letterSpacing: "0.8px",
-                  marginBottom: "8px",
-                }}
-              >
-                Master Security Key
+            {/* Password Field */}
+            <div className="auth-field">
+              <label className="auth-label" htmlFor="admin-password">
+                Password
               </label>
-              <div style={{ position: "relative" }}>
-                <Lock
-                  size={16}
-                  style={{
-                    position: "absolute",
-                    left: "14px",
-                    top: "50%",
-                    transform: "translateY(-50%)",
-                    color: "#64748b",
-                  }}
-                />
+              <div className="auth-input-wrapper">
+                <Lock size={16} className="auth-input-icon" />
                 <input
+                  id="admin-password"
                   type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••••••"
                   required
-                  style={{
-                    width: "100%",
-                    boxSizing: "border-box",
-                    height: "46px",
-                    padding: "0 42px 0 42px",
-                    background: "rgba(30, 41, 59, 0.6)",
-                    border: "1px solid rgba(255, 255, 255, 0.12)",
-                    borderRadius: "10px",
-                    color: "#ffffff",
-                    fontSize: "13.5px",
-                    outline: "none",
-                    transition: "border-color 0.2s",
-                  }}
-                  onFocus={(e) => (e.target.style.borderColor = "#22d3ee")}
-                  onBlur={(e) => (e.target.style.borderColor = "rgba(255, 255, 255, 0.12)")}
+                  autoComplete="current-password"
+                  className="auth-input"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  style={{
-                    position: "absolute",
-                    right: "12px",
-                    top: "50%",
-                    transform: "translateY(-50%)",
-                    background: "none",
-                    border: "none",
-                    color: "#64748b",
-                    cursor: "pointer",
-                    padding: "4px",
-                    display: "flex",
-                    alignItems: "center",
-                  }}
+                  className="auth-password-toggle"
+                  title={showPassword ? "Hide password" : "Show password"}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
                 >
                   {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
               </div>
             </div>
 
+            {/* Error Message */}
             {error && (
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                  padding: "10px 14px",
-                  borderRadius: "8px",
-                  background: "rgba(239, 68, 68, 0.12)",
-                  border: "1px solid rgba(239, 68, 68, 0.3)",
-                  color: "#fca5a5",
-                  fontSize: "12.5px",
-                }}
-              >
-                <ShieldAlert size={16} style={{ flexShrink: 0 }} />
+              <div className="auth-error-alert" role="alert">
+                <AlertCircle size={15} style={{ flexShrink: 0 }} />
                 <span>{error}</span>
               </div>
             )}
 
-            {/* Primary Submit Button */}
+            {/* Submit Button */}
             <button
               type="submit"
               disabled={busy}
-              style={{
-                height: "48px",
-                borderRadius: "10px",
-                border: "none",
-                background: "linear-gradient(135deg, #06b6d4 0%, #3b82f6 100%)",
-                color: "#ffffff",
-                fontSize: "13.5px",
-                fontWeight: 700,
-                letterSpacing: "0.5px",
-                cursor: busy ? "not-allowed" : "pointer",
-                boxShadow: "0 4px 20px rgba(6, 182, 212, 0.35)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: "8px",
-                transition: "opacity 0.2s, transform 0.1s",
-                marginTop: "6px",
-              }}
-              onMouseEnter={(e) => !busy && (e.currentTarget.style.opacity = "0.95")}
-              onMouseLeave={(e) => !busy && (e.currentTarget.style.opacity = "1")}
+              className="auth-primary-btn"
+              id="admin-login-submit"
             >
-              <Shield size={16} />
-              <span>{busy ? "VERIFYING SECURITY CLEARANCE..." : "AUTHENTICATE AS SOC ADMINISTRATOR"}</span>
+              <span>{busy ? "Authenticating..." : "Sign In to SOC Console"}</span>
             </button>
 
-            {/* Evaluation Direct Access */}
+            <div className="auth-divider">
+              <span>or evaluate</span>
+            </div>
+
+            {/* Direct Demo Access Button */}
             <button
               type="button"
               onClick={handleDirectDemoAccess}
-              style={{
-                height: "42px",
-                borderRadius: "10px",
-                border: "1px solid rgba(99, 102, 241, 0.4)",
-                background: "linear-gradient(135deg, rgba(99, 102, 241, 0.15) 0%, rgba(6, 182, 212, 0.1) 100%)",
-                color: "#c7d2fe",
-                fontSize: "12.5px",
-                fontWeight: 600,
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: "8px",
-                transition: "background 0.2s",
-              }}
-              onMouseEnter={(e) =>
-                (e.currentTarget.style.background =
-                  "linear-gradient(135deg, rgba(99, 102, 241, 0.25) 0%, rgba(6, 182, 212, 0.2) 100%)")
-              }
-              onMouseLeave={(e) =>
-                (e.currentTarget.style.background =
-                  "linear-gradient(135deg, rgba(99, 102, 241, 0.15) 0%, rgba(6, 182, 212, 0.1) 100%)")
-              }
+              className="auth-demo-btn"
+              id="admin-login-demo-btn"
             >
-              <span>⚡ ONE-CLICK DEMO ACCESS (SOC LEAD)</span>
+              <span>⚡ One-Click Demo Access</span>
             </button>
           </form>
-
-          {/* Security Assurance Tag */}
-          <div
-            style={{
-              marginTop: "22px",
-              paddingTop: "18px",
-              borderTop: "1px solid rgba(255, 255, 255, 0.06)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: "8px",
-              color: "#64748b",
-              fontSize: "11px",
-            }}
-          >
-            <span>🔒 Session protected by 256-bit TLS & Hardware Enclave</span>
-          </div>
         </div>
 
         {/* Footer */}
-        <div style={{ marginTop: "24px", textAlign: "center", color: "#475569", fontSize: "11.5px" }}>
-          <span>Vantix Dual-Layer AI Data Firewall &middot; SOC Access Terminal</span>
+        <div className="auth-footer">
+          <span>Protected by 256-bit TLS &middot; Enterprise SOC v2.4</span>
         </div>
       </div>
     </div>
