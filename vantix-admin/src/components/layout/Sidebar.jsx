@@ -34,6 +34,14 @@ function IconSettings(props) {
   );
 }
 
+function IconDemo(props) {
+  return (
+    <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <polygon points="5 3 19 12 5 21 5 3"/>
+    </svg>
+  );
+}
+
 function NavItem({ to, icon, label }) {
   const { pathname } = useLocation();
   const active = pathname === to;
@@ -52,11 +60,9 @@ export default function Sidebar({ onLogout }) {
       </div>
 
       <nav className="nav" aria-label="Primary">
-        <NavItem to="/" label="Overview" icon={<IconGrid />} />
-        <NavItem to="/employees" label="Employees" icon={<IconUsers />} />
-        <NavItem to="/rules" label="Rules" icon={<IconShield />} />
-        <NavItem to="/violations" label="Violations" icon={<IconViolation />} />
-        <NavItem to="/reports" label="Reports" icon={<IconReport />} />
+        <NavItem to="/" label="Admin Dashboard & Live SOC" icon={<IconGrid />} />
+        <NavItem to="/rules" label="Security Policy Engine" icon={<IconShield />} />
+        <NavItem to="/employees" label="Monitored Employees" icon={<IconUsers />} />
         <NavItem to="/settings" label="Settings" icon={<IconSettings />} />
       </nav>
 

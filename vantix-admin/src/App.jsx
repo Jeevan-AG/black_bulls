@@ -5,9 +5,7 @@ import AdminRegister from './pages/AdminRegister';
 import Dashboard from './pages/Dashboard';
 import Employees from './pages/Employees';
 import Rules from './pages/Rules';
-import Reports from './pages/Reports';
 import Settings from './pages/Settings';
-import Violations from './pages/Violations';
 import AppShell from "./components/layout/AppShell";
 
 const Layout = ({ children }) => {
@@ -22,7 +20,7 @@ const Layout = ({ children }) => {
   );
 };
 
-// Protected routes wrapper
+// Protected routes wrapper for Admin
 const ProtectedRoute = ({ children }) => {
   const token = sessionStorage.getItem("vantixAdminToken");
   if (!token) return <Navigate to="/login" replace />;
@@ -36,11 +34,10 @@ function App() {
         <Route path="/login" element={<AdminAuth />} />
         <Route path="/register" element={<AdminRegister />} />
 
+        {/* Unified Admin Dashboard & Security Operations */}
         <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-        <Route path="/employees" element={<ProtectedRoute><Employees /></ProtectedRoute>} />
         <Route path="/rules" element={<ProtectedRoute><Rules /></ProtectedRoute>} />
-        <Route path="/violations" element={<ProtectedRoute><Violations /></ProtectedRoute>} />
-        <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
+        <Route path="/employees" element={<ProtectedRoute><Employees /></ProtectedRoute>} />
         <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
 
         <Route path="*" element={<Navigate to="/" replace />} />

@@ -14,17 +14,35 @@ const AppShell = ({ children, onLogout }) => {
         </div>
 
         <nav className="orion-nav-links">
-          <NavLink to="/" end className={({isActive}) => isActive ? 'active' : ''} data-active={window.location.pathname === '/'}>Overview</NavLink>
-          <NavLink to="/employees" data-active={window.location.pathname.includes('/employees')}>Employees</NavLink>
-          <NavLink to="/rules" data-active={window.location.pathname.includes('/rules')}>Rules</NavLink>
-          <NavLink to="/violations" data-active={window.location.pathname.includes('/violations')}>Violations</NavLink>
-          <NavLink to="/reports" data-active={window.location.pathname.includes('/reports')}>Reports</NavLink>
+          <NavLink to="/" end className={({isActive}) => isActive ? 'active' : ''} data-active={window.location.pathname === '/'}>SOC Overview</NavLink>
+          <NavLink to="/rules" data-active={window.location.pathname.includes('/rules')}>DLP Rules</NavLink>
           <NavLink to="/settings" data-active={window.location.pathname.includes('/settings')}>Settings</NavLink>
         </nav>
 
         <div className="orion-actions">
-          <User size={20} style={{cursor: 'pointer'}} onClick={onLogout} title="Logout" />
-          <Sliders size={20} style={{cursor: 'pointer'}} />
+          <button
+            onClick={onLogout}
+            title="Sign Out of Admin Console"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              background: "rgba(239, 68, 68, 0.1)",
+              border: "1px solid rgba(239, 68, 68, 0.25)",
+              color: "#f87171",
+              padding: "6px 14px",
+              borderRadius: "8px",
+              fontSize: "12px",
+              fontWeight: "600",
+              cursor: "pointer",
+              transition: "all 0.2s ease"
+            }}
+            onMouseOver={(e) => { e.currentTarget.style.background = "rgba(239, 68, 68, 0.2)"; }}
+            onMouseOut={(e) => { e.currentTarget.style.background = "rgba(239, 68, 68, 0.1)"; }}
+          >
+            <User size={14} />
+            <span>Logout</span>
+          </button>
         </div>
       </header>
 
