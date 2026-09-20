@@ -10,6 +10,8 @@
     "https://chatgpt.com/*",
     "https://claude.ai/*",
     "https://gemini.google.com/*",
+    "https://vantix-backend-7gcw.onrender.com/*",
+    "https://*.onrender.com/*",
     "http://localhost:5000/*",
     "http://127.0.0.1:5000/*"
   ],

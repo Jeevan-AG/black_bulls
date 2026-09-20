@@ -4,7 +4,10 @@
 
 "use strict";
 
-const BACKEND_URL = "http://localhost:5000";
+const CLOUD_BACKEND_URL = "https://vantix-backend-7gcw.onrender.com";
+const LOCAL_BACKEND_URL = "http://localhost:5000";
+
+let effectiveBackendUrl = LOCAL_BACKEND_URL;
 
 // Initialize extension state
 chrome.runtime.onInstalled.addListener(async () => {
@@ -15,6 +18,7 @@ chrome.runtime.onInstalled.addListener(async () => {
     redactedCount: 0,
     lastViolation: null,
     backendOnline: false,
+    activeGateway: "Detecting...",
   });
 
   chrome.action.setBadgeText({ text: "ON" });
@@ -22,22 +26,34 @@ chrome.runtime.onInstalled.addListener(async () => {
   console.log("[Vantix Guard] Background service worker initialized.");
 });
 
-// Periodic heartbeat to verify local Vantix engine
+// Periodic heartbeat to verify Vantix engine (Local first, then Cloud Render)
 async function checkEngineHealth() {
   try {
-    const res = await fetch(`${BACKEND_URL}/api/vantix/health`, { method: "GET" });
+    const res = await fetch(`${LOCAL_BACKEND_URL}/api/vantix/health`, { method: "GET" });
     const json = await res.json();
-    const isOnline = json && json.status === "operational";
-    await chrome.storage.local.set({ backendOnline: isOnline });
-    if (isOnline) {
+    if (json && json.status === "operational") {
+      effectiveBackendUrl = LOCAL_BACKEND_URL;
+      await chrome.storage.local.set({ backendOnline: true, activeGateway: "Local Engine (:5000)" });
       chrome.action.setBadgeText({ text: "PROT" });
       chrome.action.setBadgeBackgroundColor({ color: "#10b981" });
-    } else {
-      chrome.action.setBadgeText({ text: "WARN" });
-      chrome.action.setBadgeBackgroundColor({ color: "#f59e0b" });
+      return;
+    }
+  } catch (e) {
+    // Fallback to Cloud Render Gateway
+  }
+
+  try {
+    const res = await fetch(`${CLOUD_BACKEND_URL}/api/vantix/health`, { method: "GET" });
+    const json = await res.json();
+    if (json && json.status === "operational") {
+      effectiveBackendUrl = CLOUD_BACKEND_URL;
+      await chrome.storage.local.set({ backendOnline: true, activeGateway: "Cloud Gateway (Render)" });
+      chrome.action.setBadgeText({ text: "PROT" });
+      chrome.action.setBadgeBackgroundColor({ color: "#06b6d4" });
+      return;
     }
   } catch (err) {
-    await chrome.storage.local.set({ backendOnline: false });
+    await chrome.storage.local.set({ backendOnline: false, activeGateway: "Offline" });
     chrome.action.setBadgeText({ text: "OFF" });
     chrome.action.setBadgeBackgroundColor({ color: "#ef4444" });
   }
@@ -45,13 +61,14 @@ async function checkEngineHealth() {
 
 // Check engine health on startup and periodically
 checkEngineHealth();
+setInterval(checkEngineHealth, 15000);
 
 // Handle messages from content script
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === "INSPECT_PROMPT") {
     (async () => {
       try {
-        const res = await fetch(`${BACKEND_URL}/api/vantix/chat`, {
+        const res = await fetch(`${effectiveBackendUrl}/api/vantix/chat`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
