@@ -18,6 +18,8 @@ const Company   = require("../models/Company");
 const Rule      = require("../models/Rule");
 const Violation = require("../models/Violation");
 const ActivityLog = require("../models/ActivityLog");
+const AuditLog  = require("../models/AuditLog");
+const tee       = require("../engines/teeEnclave");
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -222,6 +224,41 @@ async function seed() {
     violationCount++;
   }
   console.log(`[Seed] ✓ Created ${violationCount} violations`);
+
+  // ── 7. Create Vantix Cryptographically Signed Audit Logs ──
+  const sampleAuditPrompts = [
+    { prompt: "Querying holding register 0x4001 on turbine controller at plant site B", action: "silent_redact", risk: 78, cats: ["REGISTER_ADDR", "DEVICE_TYPE", "LOCATION"] },
+    { prompt: "Checking 230V threshold for cooling pump at plant site B", action: "silent_redact", risk: 62, cats: ["ELECTRICAL_PARAM", "LOCATION"] },
+    { prompt: "Routing substation IP 192.168.1.50 to SCADA core", action: "silent_redact", risk: 54, cats: ["NETWORK_ADDR", "DEVICE_TYPE"] },
+    { prompt: "Attempting root login with master key sk-ant-api03-live-credentials", action: "hard_block", risk: 96, cats: ["CREDENTIAL"] },
+  ];
+
+  for (const sp of sampleAuditPrompts) {
+    const timestamp = randomDate(7);
+    const sig = tee.signAuditEntry({
+      timestamp: timestamp.toISOString(),
+      userId: "demo-engineer",
+      orgId: admin._id.toString(),
+      riskScore: sp.risk,
+      actionTaken: sp.action,
+      categoriesRedacted: sp.cats,
+    });
+
+    await AuditLog.create({
+      orgId: admin._id.toString(),
+      userId: "demo-engineer",
+      userEmail: "john.engineer@acme.com",
+      userRole: "OT_ENGINEER",
+      promptSnippet: sp.prompt,
+      actionTaken: sp.action,
+      riskScore: sp.risk,
+      categoriesRedacted: sp.cats,
+      detectionCount: sp.cats.length,
+      cryptoSignature: sig,
+      timestamp,
+    });
+  }
+  console.log(`[Seed] ✓ Created signed Vantix TEE audit records`);
 
   // ── Done ──
   console.log("──────────────────────────────────────────");

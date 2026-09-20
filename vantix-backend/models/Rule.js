@@ -41,6 +41,37 @@ const RuleSchema = new mongoose.Schema(
     apiKeys:          { type: [ApiKeySchema],           default: [] },
     sensitiveNumbers: { type: [SensitiveNumberSchema],  default: [] },
     monitoredApps:    { type: [String],                 default: ["ChatGPT", "Notepad"] },
+    sensitivityTiers: {
+      type: Map,
+      of: String,
+      default: {
+        REGISTER_ADDR: "silent_redact",
+        ELECTRICAL_PARAM: "silent_redact",
+        DEVICE_TYPE: "silent_redact",
+        LOCATION: "silent_redact",
+        NETWORK_ADDR: "silent_redact",
+        CREDENTIAL: "hard_block",
+        PII: "silent_redact",
+      },
+    },
+    rolePolicies: [
+      {
+        role: { type: String, required: true },
+        allowedActions: [String],
+        strictness: { type: String, enum: ["normal", "strict", "paranoid"], default: "normal" },
+      },
+    ],
+    platformPolicies: [
+      {
+        platform: { type: String, required: true },
+        actionOverride: { type: String, enum: ["allow", "silent_redact", "block"], default: "silent_redact" },
+      },
+    ],
+    killSwitch: {
+      enabled: { type: Boolean, default: false },
+      activatedAt: { type: Date },
+      reason: { type: String, default: "" },
+    },
   },
   { timestamps: true }
 );
