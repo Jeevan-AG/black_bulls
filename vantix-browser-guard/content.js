@@ -467,3 +467,22 @@ setInterval(() => {
     blockSendButton("Blocked by Vantix DLP policy");
   }
 }, 2000);
+
+// Self-Heal: If extension is active in tab but page shows the proxy unmanaged block card,
+// immediately activate session and auto-reload to display the real AI interface!
+function checkAndAutoRecover() {
+  if (document.body && document.body.innerText && document.body.innerText.includes("UNMANAGED AI ACCESS BLOCKED")) {
+    console.log("[Vantix Guard] Extension detected on blocked page. Activating guard session & reloading...");
+    chrome.runtime.sendMessage({ type: "ACTIVATE_GUARD_SESSION" }, () => {
+      setTimeout(() => {
+        window.location.reload();
+      }, 400);
+    });
+  }
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", checkAndAutoRecover);
+} else {
+  checkAndAutoRecover();
+}

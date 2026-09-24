@@ -404,7 +404,22 @@ function processInterceptedAiRequest(rawBuffer, hostname, port, clientTlsSocket)
   // Enforce Browser Guard for web AI interfaces (ChatGPT, Claude, Gemini)
   if (isWeb) {
     const headers = parseHeaders(headerPart);
-    const hasGuardExtension = headers["x-vantix-extension"] === "active" || headers["x-vantix-source"] === "browser-guard";
+    const hasExtensionHeader =
+      headers["x-vantix-extension"] === "active" ||
+      headers["x-vantix-source"] === "browser-guard";
+
+    const hasExtensionCookie =
+      Boolean(headers["cookie"] && headers["cookie"].includes("vantix_guard=active"));
+
+    let hasGuardHeartbeat = false;
+    try {
+      const proxyRoutes = require("../vantix-backend/routes/proxy");
+      if (typeof proxyRoutes.isGuardActiveForClient === "function") {
+        hasGuardHeartbeat = proxyRoutes.isGuardActiveForClient("127.0.0.1", identity.user);
+      }
+    } catch (e) {}
+
+    const hasGuardExtension = hasExtensionHeader || hasExtensionCookie || hasGuardHeartbeat;
 
     if (!hasGuardExtension) {
       console.log(`\n[Vantix-Bridge] ⛔ UNMANAGED ACCESS BLOCKED: ${hostname} (User: ${identity.user}@${identity.host}) — Missing Browser Guard Extension`);

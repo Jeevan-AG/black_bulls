@@ -267,6 +267,42 @@ router.get("/system-identity", (req, res) => {
   });
 });
 
+// ─── Browser Guard Extension Heartbeat & Verification ────────────────────────
+const _activeGuardClients = new Map(); // key -> lastSeenTimestamp
+
+router.post("/guard-heartbeat", (req, res) => {
+  const ip = extractClientIp(req);
+  const user = req.body?.user || "employee";
+  const now = Date.now();
+  _activeGuardClients.set(ip, now);
+  _activeGuardClients.set("127.0.0.1", now);
+  _activeGuardClients.set("::1", now);
+  _activeGuardClients.set("::ffff:127.0.0.1", now);
+  _activeGuardClients.set(user.toLowerCase(), now);
+  res.json({ success: true, registered: true, timestamp: now });
+});
+
+router.get("/guard-status", (req, res) => {
+  const ip = extractClientIp(req);
+  const user = req.query?.user || "employee";
+  const now = Date.now();
+  const lastSeen = _activeGuardClients.get(ip) || _activeGuardClients.get("127.0.0.1") || _activeGuardClients.get(user.toLowerCase()) || 0;
+  const isGuardActive = (now - lastSeen) < 90_000;
+  res.json({ success: true, isGuardActive, lastSeen });
+});
+
+function isGuardActiveForClient(ip, user) {
+  const now = Date.now();
+  const lastSeen =
+    _activeGuardClients.get(ip) ||
+    _activeGuardClients.get("127.0.0.1") ||
+    _activeGuardClients.get("::1") ||
+    _activeGuardClients.get(user ? user.toLowerCase() : "") ||
+    0;
+  return (now - lastSeen) < 90_000;
+}
+router.isGuardActiveForClient = isGuardActiveForClient;
+
 // ─── POST /api/vantix/chat — The 7-Step Pipeline ────────────────────────────
 
 router.post("/chat", async (req, res) => {

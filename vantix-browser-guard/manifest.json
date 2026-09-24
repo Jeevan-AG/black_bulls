@@ -5,14 +5,12 @@
   "description": "Enterprise AI Traffic Firewall & TEE Enclave Guard for ChatGPT, Claude, and Gemini.",
   "permissions": [
     "storage",
-    "declarativeNetRequest"
+    "cookies",
+    "declarativeNetRequest",
+    "declarativeNetRequestWithHostAccess"
   ],
   "host_permissions": [
-    "https://chatgpt.com/*",
-    "https://claude.ai/*",
-    "https://gemini.google.com/*",
-    "https://vantix-backend-7gcw.onrender.com/*",
-    "https://*.onrender.com/*",
+    "https://*/*",
     "http://localhost:5000/*",
     "http://127.0.0.1:5000/*"
   ],

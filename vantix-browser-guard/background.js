@@ -54,7 +54,23 @@ async function fetchSystemIdentity() {
   } catch (e) {}
 }
 
-// Register declarative rule so transparent proxy knows browser extension is active
+const TARGET_AI_DOMAINS = [
+  "chatgpt.com",
+  "openai.com",
+  "claude.ai",
+  "anthropic.com",
+  "google.com",
+  "gemini.google.com",
+  "perplexity.ai",
+  "deepseek.com",
+  "copilot.microsoft.com",
+  "grok.com",
+  "meta.ai",
+  "x.ai",
+  "poe.com"
+];
+
+// Register declarative rule with requestDomains so proxy knows browser extension is active
 let _headersConfigured = false;
 async function setupExtensionHeaders() {
   if (_headersConfigured) return;
@@ -79,7 +95,7 @@ async function setupExtensionHeaders() {
             condition: {
               urlFilter: "*",
               resourceTypes: ["main_frame", "sub_frame", "xmlhttprequest", "websocket", "other"],
-              domains: ["chatgpt.com", "openai.com", "claude.ai", "anthropic.com", "google.com", "perplexity.ai", "deepseek.com", "copilot.microsoft.com", "grok.com", "meta.ai", "x.ai", "poe.com"],
+              requestDomains: TARGET_AI_DOMAINS,
             },
           },
         ],
@@ -89,6 +105,38 @@ async function setupExtensionHeaders() {
   } catch (err) {
     console.warn("[Vantix Guard] Could not register declarative header rule:", err);
   }
+}
+
+// Sync authentication cookie to AI sites so proxy knows extension is active on all navigations
+async function syncGuardCookies() {
+  if (!chrome.cookies) return;
+  for (const domain of TARGET_AI_DOMAINS) {
+    try {
+      await chrome.cookies.set({
+        url: `https://${domain}`,
+        name: "vantix_guard",
+        value: "active",
+        path: "/",
+        sameSite: "no_restriction",
+        secure: true,
+      });
+    } catch (e) {}
+  }
+}
+
+// Register local proxy heartbeat so transparent proxy knows this workstation is managed
+async function sendGuardHeartbeat() {
+  try {
+    const stored = await chrome.storage.local.get(["systemUser", "systemHost"]);
+    const user = stored.systemUser || currentSystemUser || "employee";
+    const host = stored.systemHost || currentSystemHost || "workstation";
+
+    await fetch(`${LOCAL_BACKEND_URL}/api/vantix/guard-heartbeat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ user, host, active: true }),
+    });
+  } catch (e) {}
 }
 
 // Initialize extension state
@@ -109,9 +157,13 @@ chrome.runtime.onInstalled.addListener(async () => {
   chrome.action.setBadgeBackgroundColor({ color: "#22d3ee" });
   fetchSystemIdentity();
   setupExtensionHeaders();
+  syncGuardCookies();
+  sendGuardHeartbeat();
 });
 
 setupExtensionHeaders();
+syncGuardCookies();
+sendGuardHeartbeat();
 
 // Periodic heartbeat to verify Vantix engine (Local first, then Cloud Render)
 async function checkEngineHealth() {
@@ -236,4 +288,20 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     })();
     return true; // Keep message port open for async response
   }
+
+  if (message.type === "ACTIVATE_GUARD_SESSION") {
+    (async () => {
+      await setupExtensionHeaders();
+      await syncGuardCookies();
+      await sendGuardHeartbeat();
+      sendResponse({ success: true, active: true });
+    })();
+    return true;
+  }
 });
+
+// Periodic heartbeat & cookie refresh every 10 seconds
+setInterval(async () => {
+  await sendGuardHeartbeat();
+  await syncGuardCookies();
+}, 10000);
