@@ -373,6 +373,23 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     })();
     return true;
   }
+
+  if (message.type === "AUTHORIZE_AI_ACCESS") {
+    (async () => {
+      try {
+        const domain = message.domain;
+        await fetch(`${LOCAL_BACKEND_URL}/api/vantix/authorize-ai-access`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ domain, timestamp: Date.now() }),
+        });
+        sendResponse({ success: true });
+      } catch (err) {
+        sendResponse({ success: false, error: err.message });
+      }
+    })();
+    return true;
+  }
 });
 
 // Periodic heartbeat & cookie refresh every 10 seconds

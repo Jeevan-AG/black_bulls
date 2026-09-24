@@ -742,45 +742,14 @@ if (document.readyState === "loading") {
   checkAndAutoRecover();
 }
 
-// ─── Zero-Leak In-Page Interceptor Support ────────────────────────────────────
-function injectMainWorldInterceptor() {
-  if (document.getElementById("vantix-main-interceptor")) return;
-  try {
-    const s = document.createElement("script");
-    s.id = "vantix-main-interceptor";
-    s.src = chrome.runtime.getURL("pageInterceptor.js");
-    (document.head || document.documentElement).appendChild(s);
-  } catch (e) {}
-}
-injectMainWorldInterceptor();
-
-// Listen for network-level in-flight redactions from pageInterceptor.js
-window.addEventListener("vantix:network_redact", (e) => {
-  const detail = e.detail;
-  if (detail && detail.items && Array.isArray(detail.items)) {
-    registerTokenMappings(detail.items);
-  }
-  if (detail && detail.redactedCount) {
-    showRedactPill(detail.redactedCount);
-  }
-});
-
-// Listen for network-level hard blocks from pageInterceptor.js
-window.addEventListener("vantix:network_block", (e) => {
-  const detail = e.detail;
-  const inputEl = findPromptInput();
-  if (inputEl) {
-    blockInput(inputEl, detail?.reason || "Massive credential exposure detected", 95, ["MASSIVE_CREDENTIAL_EXPOSURE"]);
-  }
-});
-
-// Active tab single-load authorization (signals presence on initial document load only)
+// ─── Browser Domain Intent Authorization ────────────────────────────────────
+// Signals active tab presence on initial document load via extension background worker
+// (avoids Private Network Access / CORS loopback restrictions on chatgpt.com)
 try {
-  fetch("http://localhost:5000/api/vantix/authorize-ai-access", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ domain: location.hostname.toLowerCase(), timestamp: Date.now() }),
-  }).catch(() => {});
+  chrome.runtime.sendMessage({
+    type: "AUTHORIZE_AI_ACCESS",
+    domain: location.hostname.toLowerCase(),
+  });
 } catch (e) {}
 
 
