@@ -400,7 +400,9 @@ function processInterceptedAiRequest(rawBuffer, hostname, port, clientTlsSocket)
 
   // Parse HTTP method and path
   const firstLine = headerPart.split("\r\n")[0];
-  const [method, reqPath] = firstLine.split(" ");
+  const parts = firstLine.split(" ");
+  const method = (parts[0] || "GET").toUpperCase();
+  const reqPath = parts[1] || "/";
 
   const cleanHost = hostname.split(":")[0].toLowerCase();
   const isWeb = isWebAiDomain(cleanHost);
@@ -492,6 +494,14 @@ function processInterceptedAiRequest(rawBuffer, hostname, port, clientTlsSocket)
     return;
   }
 
+  // ── Non-web AI (Desktop IDEs: Kiro, Cursor, Copilot, SDK calls, curl, etc.) ──
+
+  // GET / HEAD / OPTIONS / DELETE — never contain prompt payloads, pass through directly
+  if (method !== "POST" && method !== "PUT" && method !== "PATCH") {
+    forwardRawToUpstream(rawBuffer, hostname, port, clientTlsSocket);
+    return;
+  }
+
   // Universal Prompt Extraction
   let parsedJson = null;
   let promptText = "";
@@ -510,7 +520,7 @@ function processInterceptedAiRequest(rawBuffer, hostname, port, clientTlsSocket)
     promptText = bodyPart.trim();
   }
 
-  if (!promptText) {
+  if (!promptText || promptText.length < 3) {
     // Not a prompt payload — forward directly to upstream
     forwardRawToUpstream(rawBuffer, hostname, port, clientTlsSocket);
     return;
@@ -523,6 +533,40 @@ function processInterceptedAiRequest(rawBuffer, hostname, port, clientTlsSocket)
   const detection = analyzePrompt(promptText);
   const sessionId = `bridge-${Date.now()}`;
   stats.interceptedPrompts++;
+
+  // If detection engine found NOTHING sensitive, skip the entire MITM pipeline → pure passthrough
+  if (!detection.detections || detection.detections.length === 0) {
+    console.log(`[Vantix-Bridge] ✓ Clean prompt (no sensitive data detected) — forwarding directly`);
+
+    // Still broadcast the clean pass-through to admin dashboard
+    setImmediate(() => {
+      try {
+        const sessionResult = sessionGraph.updateSessionGraph(identity.user, identity.email, detection);
+        ws.broadcastDetection({
+          originalPrompt: promptText,
+          sanitizedPrompt: promptText,
+          restoredResponse: "",
+          riskScore: detection.overallRisk || 0,
+          detections: [],
+          combinations: detection.combinations || [],
+          contextScore: detection.contextScore || 0,
+          actionTaken: "pass",
+          sessionCoverage: sessionResult.coverageMap || {},
+          sessionRiskScore: sessionResult.riskScore || 0,
+          promptCount: sessionResult.promptCount || 1,
+          anomalyTriggered: false,
+          anomalyReport: "",
+          user: identity.user,
+          host: identity.host,
+          interceptSource: "network-layer-bridge",
+          timestamp: new Date().toISOString(),
+        });
+      } catch (e) {}
+    });
+
+    forwardRawToUpstream(rawBuffer, hostname, port, clientTlsSocket);
+    return;
+  }
 
   const credentialCount = detection.detections.filter((d) => d.category === "CREDENTIAL").length;
   const isMassiveCredentialDump = credentialCount > 3;
@@ -601,6 +645,7 @@ function processInterceptedAiRequest(rawBuffer, hostname, port, clientTlsSocket)
     ].join("\r\n") + errorJson;
 
     try {
+      clientTlsSocket.removeAllListeners("data");
       if (!clientTlsSocket.destroyed && clientTlsSocket.writable) {
         clientTlsSocket.write(res);
         clientTlsSocket.end();
@@ -631,6 +676,13 @@ function processInterceptedAiRequest(rawBuffer, hostname, port, clientTlsSocket)
     modifiedBody = sanitizedPrompt;
   }
 
+  // Build clean outgoing headers — remove transfer-encoding, set correct content-length
+  const outgoingHeaders = parseHeaders(headerPart);
+  delete outgoingHeaders["transfer-encoding"];
+  delete outgoingHeaders["content-encoding"];
+  outgoingHeaders["content-length"] = String(Buffer.byteLength(modifiedBody));
+  outgoingHeaders["accept-encoding"] = "identity"; // Disable gzip for instant token restoration
+
   // Forward sanitized prompt to genuine AI endpoint over TLS
   const upstreamReq = https.request(
     {
@@ -638,19 +690,18 @@ function processInterceptedAiRequest(rawBuffer, hostname, port, clientTlsSocket)
       port,
       path: reqPath,
       method,
-      headers: {
-        ...parseHeaders(headerPart),
-        "content-length": Buffer.byteLength(modifiedBody),
-        "accept-encoding": "identity", // Disable gzip for instant token restoration
-      },
+      headers: outgoingHeaders,
     },
     (upstreamRes) => {
-      let resData = "";
+      let resChunks = [];
       upstreamRes.on("data", (chunk) => {
-        resData += chunk.toString("utf8");
+        resChunks.push(chunk);
       });
 
       upstreamRes.on("end", () => {
+        const resBuffer = Buffer.concat(resChunks);
+        const resData = resBuffer.toString("utf8");
+
         // Restore real tokens in AI response
         let restoredResponse = resData;
         try {
@@ -659,6 +710,25 @@ function processInterceptedAiRequest(rawBuffer, hostname, port, clientTlsSocket)
             const rawAiText = aiJson.choices[0].message.content;
             aiJson.choices[0].message.content = tee.restoreResponse(sessionId, rawAiText);
             restoredResponse = JSON.stringify(aiJson);
+          } else if (aiJson.output?.message?.content) {
+            // AWS Bedrock / Amazon Q format
+            if (Array.isArray(aiJson.output.message.content)) {
+              for (const part of aiJson.output.message.content) {
+                if (part && typeof part.text === "string") {
+                  part.text = tee.restoreResponse(sessionId, part.text);
+                }
+              }
+            } else if (typeof aiJson.output.message.content === "string") {
+              aiJson.output.message.content = tee.restoreResponse(sessionId, aiJson.output.message.content);
+            }
+            restoredResponse = JSON.stringify(aiJson);
+          } else if (aiJson.conversationState?.currentMessage?.assistantResponseMessage?.content) {
+            // Kiro / Amazon Q Developer conversationState format
+            const arm = aiJson.conversationState.currentMessage.assistantResponseMessage;
+            if (typeof arm.content === "string") {
+              arm.content = tee.restoreResponse(sessionId, arm.content);
+            }
+            restoredResponse = JSON.stringify(aiJson);
           }
         } catch (e) {
           restoredResponse = tee.restoreResponse(sessionId, resData);
@@ -666,78 +736,112 @@ function processInterceptedAiRequest(rawBuffer, hostname, port, clientTlsSocket)
 
         tee.destroySession(sessionId);
 
-        // Broadcast to Admin Dashboard via WebSocket
-        try {
-          const sessionResult = sessionGraph.updateSessionGraph(identity.user, identity.email, detection);
+        // Broadcast to Admin Dashboard via WebSocket (non-blocking)
+        setImmediate(() => {
+          try {
+            const sessionResult = sessionGraph.updateSessionGraph(identity.user, identity.email, detection);
 
-          ws.broadcastDetection({
-            originalPrompt: promptText,
-            sanitizedPrompt,
-            restoredResponse: (typeof restoredResponse === "string" ? restoredResponse.slice(0, 500) : ""),
-            riskScore: detection.overallRisk,
-            detections: detection.detections,
-            combinations: detection.combinations,
-            contextScore: detection.contextScore,
-            actionTaken: detection.overallRisk >= 30 ? "silent_redact" : "pass",
-            sessionCoverage: sessionResult.coverageMap,
-            sessionRiskScore: sessionResult.riskScore,
-            promptCount: sessionResult.promptCount,
-            anomalyTriggered: sessionResult.anomalyTriggered,
-            anomalyReport: sessionResult.anomalyReport,
-            user: identity.user,
-            host: identity.host,
-            interceptSource: "network-layer-bridge",
-            timestamp: new Date().toISOString(),
-          });
-
-          // Dual-sync to Cloud Render so cloud Vercel dashboard updates in real-time
-          fetch("https://vantix-backend-7gcw.onrender.com/api/vantix/chat", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "X-Vantix-User": identity.user,
-              "X-Vantix-Host": identity.host,
-              "X-Vantix-Source": "network-layer-bridge",
-            },
-            body: JSON.stringify({
-              prompt: promptText,
-              userId: identity.user,
+            ws.broadcastDetection({
+              originalPrompt: promptText,
+              sanitizedPrompt,
+              restoredResponse: (typeof restoredResponse === "string" ? restoredResponse.slice(0, 500) : ""),
+              riskScore: detection.overallRisk,
+              detections: detection.detections,
+              combinations: detection.combinations,
+              contextScore: detection.contextScore,
+              actionTaken: detection.overallRisk >= 30 ? "silent_redact" : "pass",
+              sessionCoverage: sessionResult.coverageMap,
+              sessionRiskScore: sessionResult.riskScore,
+              promptCount: sessionResult.promptCount,
+              anomalyTriggered: sessionResult.anomalyTriggered,
+              anomalyReport: sessionResult.anomalyReport,
               user: identity.user,
               host: identity.host,
-              sessionId,
-            }),
-          }).catch(() => {});
-        } catch (wsErr) {
-          // Non-blocking
+              interceptSource: "network-layer-bridge",
+              timestamp: new Date().toISOString(),
+            });
+
+            // Dual-sync to Cloud Render so cloud Vercel dashboard updates in real-time
+            fetch("https://vantix-backend-7gcw.onrender.com/api/vantix/chat", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "X-Vantix-User": identity.user,
+                "X-Vantix-Host": identity.host,
+                "X-Vantix-Source": "network-layer-bridge",
+              },
+              body: JSON.stringify({
+                prompt: promptText,
+                userId: identity.user,
+                user: identity.user,
+                host: identity.host,
+                sessionId,
+              }),
+            }).catch(() => {});
+          } catch (wsErr) {
+            // Non-blocking
+          }
+        });
+
+        // ── Return restored response to client ──
+        // CRITICAL: Build clean response headers — NEVER mix Content-Length with Transfer-Encoding
+        const cleanHeaders = {};
+        for (const [k, v] of Object.entries(upstreamRes.headers)) {
+          const lk = k.toLowerCase();
+          // Strip headers that conflict with our Content-Length reconstruction
+          if (lk === "transfer-encoding" || lk === "content-length" || lk === "content-encoding") continue;
+          cleanHeaders[k] = v;
         }
 
-        // Return restored response to client
-        const headersToSend = { ...upstreamRes.headers };
-        delete headersToSend["content-length"];
-        delete headersToSend["content-encoding"];
+        const restoredBuffer = Buffer.from(restoredResponse, "utf8");
 
         try {
           if (!clientTlsSocket.destroyed && clientTlsSocket.writable) {
-            clientTlsSocket.write(`HTTP/1.1 ${upstreamRes.statusCode} ${upstreamRes.statusMessage}\r\n`);
-            for (const [k, v] of Object.entries(headersToSend)) {
-              clientTlsSocket.write(`${k}: ${v}\r\n`);
+            clientTlsSocket.write(`HTTP/1.1 ${upstreamRes.statusCode} ${upstreamRes.statusMessage || "OK"}\r\n`);
+            for (const [k, v] of Object.entries(cleanHeaders)) {
+              if (Array.isArray(v)) {
+                for (const val of v) {
+                  clientTlsSocket.write(`${k}: ${val}\r\n`);
+                }
+              } else {
+                clientTlsSocket.write(`${k}: ${v}\r\n`);
+              }
             }
-            clientTlsSocket.write(`Content-Length: ${Buffer.byteLength(restoredResponse)}\r\n\r\n`);
-            clientTlsSocket.write(restoredResponse);
+            clientTlsSocket.write(`Content-Length: ${restoredBuffer.length}\r\n`);
+            clientTlsSocket.write("Connection: close\r\n");
+            clientTlsSocket.write("\r\n");
+            clientTlsSocket.write(restoredBuffer);
             clientTlsSocket.end();
           }
         } catch (sockErr) {}
+      });
+
+      upstreamRes.on("error", () => {
+        try {
+          if (!clientTlsSocket.destroyed) clientTlsSocket.destroy();
+        } catch (e) {}
       });
     }
   );
 
   upstreamReq.on("error", (err) => {
+    console.error(`[Vantix-Bridge] Upstream request error to ${hostname}: ${err.message}`);
     try {
       if (!clientTlsSocket.destroyed && clientTlsSocket.writable) {
-        clientTlsSocket.write("HTTP/1.1 502 Bad Gateway\r\n\r\n");
+        const errBody = JSON.stringify({ error: { message: `Vantix proxy error: ${err.message}`, type: "proxy_error" } });
+        clientTlsSocket.write("HTTP/1.1 502 Bad Gateway\r\n");
+        clientTlsSocket.write("Content-Type: application/json\r\n");
+        clientTlsSocket.write(`Content-Length: ${Buffer.byteLength(errBody)}\r\n`);
+        clientTlsSocket.write("Connection: close\r\n");
+        clientTlsSocket.write("\r\n");
+        clientTlsSocket.write(errBody);
         clientTlsSocket.end();
       }
     } catch (e) {}
+  });
+
+  upstreamReq.setTimeout(30000, () => {
+    upstreamReq.destroy(new Error("Request timeout after 30s"));
   });
 
   if (modifiedBody) {
@@ -955,8 +1059,11 @@ function createTransparentProxy(options = {}) {
         tlsServer.emit("connection", clientSocket);
 
         tlsServer.on("secureConnection", (tlsSocket) => {
+          tlsSocket.on("error", () => {});
           let buffer = Buffer.alloc(0);
+          let _processed = false;
           tlsSocket.on("data", (chunk) => {
+            if (_processed) return; // One request per connection for MITM
             buffer = Buffer.concat([buffer, chunk]);
             const headerEnd = buffer.indexOf("\r\n\r\n");
             if (headerEnd === -1) return;
@@ -971,6 +1078,7 @@ function createTransparentProxy(options = {}) {
                 headerStr.includes("vantix_guard=active");
               if (!hasExt) {
                 // Unmanaged browser: Block IMMEDIATELY (<1ms) without waiting for body!
+                _processed = true;
                 processInterceptedAiRequest(buffer, targetHost, targetPort, tlsSocket);
                 buffer = Buffer.alloc(0);
                 return;
@@ -984,6 +1092,7 @@ function createTransparentProxy(options = {}) {
               if (received < expected) return;
             }
 
+            _processed = true;
             const currentReq = buffer;
             buffer = Buffer.alloc(0);
             processInterceptedAiRequest(currentReq, targetHost, targetPort, tlsSocket);
@@ -1077,7 +1186,9 @@ function createTransparentProxy(options = {}) {
       tlsServer.on("secureConnection", (tlsSocket) => {
         tlsSocket.on("error", () => {});
         let buffer = Buffer.alloc(0);
+        let _processed = false;
         tlsSocket.on("data", (chunk) => {
+          if (_processed) return; // One request per connection for MITM
           buffer = Buffer.concat([buffer, chunk]);
           const headerEnd = buffer.indexOf("\r\n\r\n");
           if (headerEnd === -1) return;
@@ -1092,6 +1203,7 @@ function createTransparentProxy(options = {}) {
               headerStr.includes("vantix_guard=active");
             if (!hasExt) {
               // Unmanaged browser: Block IMMEDIATELY (<1ms) without waiting for body!
+              _processed = true;
               processInterceptedAiRequest(buffer, sni, 443, tlsSocket);
               buffer = Buffer.alloc(0);
               return;
@@ -1106,6 +1218,7 @@ function createTransparentProxy(options = {}) {
             if (received < expected) return; // Keep buffering
           }
 
+          _processed = true;
           const currentReq = buffer;
           buffer = Buffer.alloc(0);
           processInterceptedAiRequest(currentReq, sni, 443, tlsSocket);

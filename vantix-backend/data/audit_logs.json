@@ -1,5 +1,110 @@
 [
   {
+    "id": "audit-1790279458165-f50u7",
+    "orgId": "acme-corp",
+    "userId": "employee",
+    "userEmail": "employee@acme.com",
+    "userName": "employee (mohammed-Latitude-5400)",
+    "department": "Engineering & Cloud",
+    "endpointHost": "mohammed-Latitude-5400",
+    "endpointIp": "10.17.125.1",
+    "originalPrompt": "i want to add my aws account 56278162 to my google account example@gmail.com",
+    "sanitizedPrompt": "i want to add my aws account 56278162 to my google account [EMAIL_ADDRESS]",
+    "restoredResponse": "PROMPT_INSPECTED_AND_SANITIZED",
+    "promptSnippet": "i want to add my aws account 56278162 to my google account example@gmail.com",
+    "actionTaken": "silent_redact",
+    "riskScore": 45,
+    "categoriesRedacted": [
+      "PII"
+    ],
+    "detections": [
+      {
+        "patternName": "EMAIL",
+        "category": "PII",
+        "label": "Email Address",
+        "value": "example@gmail.com",
+        "start": 59,
+        "end": 76,
+        "isolationRisk": 45
+      }
+    ],
+    "detectionCount": 1,
+    "combinationCount": 0,
+    "aiPlatform": "chatgpt.com",
+    "cryptoSignature": "a2f5cd50f7f314bad5b3dac2aa1c51aebf8e08d7c86c0f6567fbae34cb45f518",
+    "timestamp": "2026-09-24T19:50:58.137Z"
+  },
+  {
+    "id": "audit-1790279445615-3x5nc",
+    "orgId": "acme-corp",
+    "userId": "employee",
+    "userEmail": "employee@acme.com",
+    "userName": "employee (mohammed-Latitude-5400)",
+    "department": "Engineering & Cloud",
+    "endpointHost": "mohammed-Latitude-5400",
+    "endpointIp": "10.17.125.1",
+    "originalPrompt": "i want to add my aws account 56278162 to my google account example@gmail.com",
+    "sanitizedPrompt": "i want to add my aws account 56278162 to my google account [EMAIL_ADDRESS]",
+    "restoredResponse": "PROMPT_INSPECTED_AND_SANITIZED",
+    "promptSnippet": "i want to add my aws account 56278162 to my google account example@gmail.com",
+    "actionTaken": "silent_redact",
+    "riskScore": 45,
+    "categoriesRedacted": [
+      "PII"
+    ],
+    "detections": [
+      {
+        "patternName": "EMAIL",
+        "category": "PII",
+        "label": "Email Address",
+        "value": "example@gmail.com",
+        "start": 59,
+        "end": 76,
+        "isolationRisk": 45
+      }
+    ],
+    "detectionCount": 1,
+    "combinationCount": 0,
+    "aiPlatform": "chatgpt.com",
+    "cryptoSignature": "37dbf8b7e0d3c669c3e84580cc8a57ca537978e80397662dbf768d33db48ba0a",
+    "timestamp": "2026-09-24T19:50:45.601Z"
+  },
+  {
+    "id": "audit-1790277993140-zlxox",
+    "orgId": "acme-corp",
+    "userId": "employee",
+    "userEmail": "employee@acme.com",
+    "userName": "employee (mohammed-Latitude-5400)",
+    "department": "Engineering & Cloud",
+    "endpointHost": "mohammed-Latitude-5400",
+    "endpointIp": "10.17.125.1",
+    "originalPrompt": "my phone is +1-555-0199 and my aws key is AKIAIOSFODNN7EXAMPLE",
+    "sanitizedPrompt": "my phone is +1-555-0199 and my aws key is [AWS_KEY]",
+    "restoredResponse": "PROMPT_INSPECTED_AND_SANITIZED",
+    "promptSnippet": "my phone is +1-555-0199 and my aws key is AKIAIOSFODNN7EXAMPLE",
+    "actionTaken": "silent_redact",
+    "riskScore": 90,
+    "categoriesRedacted": [
+      "CREDENTIAL"
+    ],
+    "detections": [
+      {
+        "patternName": "NATURAL_LANGUAGE_CREDENTIAL",
+        "category": "CREDENTIAL",
+        "label": "Exposed Credential",
+        "value": "AKIAIOSFODNN7EXAMPLE",
+        "start": 42,
+        "end": 62,
+        "isolationRisk": 90
+      }
+    ],
+    "detectionCount": 1,
+    "combinationCount": 0,
+    "aiPlatform": "chatgpt.com",
+    "cryptoSignature": "9fe5a3fd0a78535dadcdb97dd904f0fa8e99c383f5920f974fe21760128371d5",
+    "timestamp": "2026-09-24T19:26:33.131Z"
+  },
+  {
     "id": "audit-1790272706842-j6czt",
     "orgId": "acme-corp",
     "userId": "employee",
