@@ -209,15 +209,27 @@ const INDUSTRIAL_PATTERNS = {
     ],
     category: "PII",
     label: "Email Address",
-    baseRisk: 5,
+    baseRisk: 45,
   },
   PHONE: {
     patterns: [
+      /(?:\+?\d{1,3}[\s-]?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}\b/g,
       /(?<!\d)(?:\+91[\s-]?)?[6-9]\d{9}(?!\d)/g,
+      /(?:\+\d{1,3}[\s-]?)?\d{2,4}[\s.-]?\d{3,4}[\s.-]?\d{3,4}\b/g,
     ],
     category: "PII",
     label: "Phone Number",
-    baseRisk: 5,
+    baseRisk: 45,
+  },
+  PERSONAL_IDENTIFIER: {
+    patterns: [
+      /(?:patient|customer|employee|client|user)\s+(?:name|fullname|full\s+name)\s*[:=]\s*['"]?([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3})['"]?/gi,
+      /(?:passport|driver'?s?\s+license|national\s+id)\s*(?:number|no|#)?\s*[:=]?\s*[A-Z0-9]{6,12}\b/gi,
+      /\b(?:dob|date\s+of\s+birth)\s*[:=]?\s*\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}\b/gi,
+    ],
+    category: "PII",
+    label: "Personal Identifier",
+    baseRisk: 50,
   },
   SSN: {
     patterns: [
@@ -334,6 +346,9 @@ const COMBINATION_MATRIX = {
   "REGISTER_ADDR+NETWORK_ADDR":      2.0,
   "FINANCIAL+CREDENTIAL":            2.5,
   "FINANCIAL+PII":                   2.0,
+  "PII+NETWORK_ADDR":                1.8,
+  "PII+CREDENTIAL":                  2.4,
+  "PII+LOCATION":                    1.7,
   "PROMPT_INJECTION+CREDENTIAL":     3.2,
   "PROMPT_INJECTION+NETWORK_ADDR":   2.8,
   "PROMPT_INJECTION+REGISTER_ADDR":  2.8,
@@ -465,6 +480,7 @@ function analyzePrompt(text) {
     "CREDENTIAL",
     "FINANCIAL",
     "CRITICAL_PII",
+    "PII",
     "REGISTER_ADDR",
     "PROMPT_INJECTION",
   ]);

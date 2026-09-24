@@ -118,9 +118,9 @@ function broadcastDetection(data) {
     sessionRiskScore: data.sessionRiskScore || 0,
     promptCount: data.promptCount || 0,
     anomalyTriggered: data.anomalyTriggered || false,
-    anomalyReport: data.anomalyReport || null,
-    user: data.user || "mohammed",
-    host: data.host || "mohammed-Latitude-5400",
+    user: data.user || (process.env.USERNAME || process.env.USER || "employee"),
+    host: data.host || (require("os").hostname() || "workstation"),
+    endpointIp: data.endpointIp || "127.0.0.1",
     signature: data.signature || "HMAC-SHA256-VERIFIED",
   });
 }

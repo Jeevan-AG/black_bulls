@@ -32,6 +32,30 @@ const mongoose = require("mongoose");
 // Fast in-memory audit ring buffer (survives offline DB during live demos)
 let _inMemoryAuditLogs = [];
 
+function extractClientIp(req) {
+  if (!req) return "127.0.0.1";
+  let ip = req.headers?.["x-forwarded-for"]?.split(",")[0]?.trim() || 
+           req.headers?.["x-real-ip"] || 
+           req.socket?.remoteAddress || 
+           req.connection?.remoteAddress || 
+           req.ip || 
+           "";
+  if (ip.startsWith("::ffff:")) ip = ip.slice(7);
+  if (ip === "::1" || ip === "127.0.0.1" || !ip) {
+    const os = require("os");
+    const interfaces = os.networkInterfaces();
+    for (const name of Object.keys(interfaces)) {
+      for (const iface of interfaces[name] || []) {
+        if (iface.family === "IPv4" && !iface.internal) {
+          return iface.address;
+        }
+      }
+    }
+    return "127.0.0.1";
+  }
+  return ip;
+}
+
 // ─── Centralized Record & Telemetry Broadcaster ──────────────────────────────
 function recordAndBroadcast({
   resolvedUser,
@@ -49,22 +73,21 @@ function recordAndBroadcast({
   req,
 }) {
   const os = require("os");
-  // Cloud server identities that should never appear as end-user names
   const SERVER_IDENTITIES = ["render", "root", "nobody", "www-data", "node", "ubuntu", "ec2-user"];
 
-  let fallbackUser = "unknown-user";
-  let fallbackHost = "unknown-host";
+  let fallbackUser = "employee";
+  let fallbackHost = os.hostname() || "workstation";
   try {
-    const osUser = process.env.USER || process.env.USERNAME || (os.userInfo && os.userInfo().username) || "";
-    const osHost = os.hostname() || "";
-    // Only use OS identity if it's NOT a cloud server identity
+    const osUser = process.env.USERNAME || process.env.USER || (os.userInfo && os.userInfo().username) || "";
     if (osUser && !SERVER_IDENTITIES.includes(osUser.toLowerCase())) fallbackUser = osUser;
+    const osHost = os.hostname() || "";
     if (osHost && !osHost.startsWith("srv-")) fallbackHost = osHost;
   } catch (e) {}
 
   const rawUser = (resolvedUser && resolvedUser !== "employee" && !SERVER_IDENTITIES.includes(resolvedUser.toLowerCase()) ? resolvedUser : fallbackUser).trim();
   const rawHost = (resolvedHost && resolvedHost !== "browser-endpoint" && !resolvedHost.startsWith("srv-") ? resolvedHost : fallbackHost).trim();
   const userNameFormatted = `${rawUser} (${rawHost})`;
+  const actualIp = (typeof endpointIp === "string" && endpointIp && endpointIp !== "127.0.0.1" ? endpointIp.split(",")[0].trim() : null) || extractClientIp(req);
 
   const logRecord = {
     id: `audit-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
@@ -74,7 +97,7 @@ function recordAndBroadcast({
     userName: userNameFormatted,
     department: "Engineering & Cloud",
     endpointHost: rawHost,
-    endpointIp: (typeof endpointIp === "string" && endpointIp ? endpointIp.split(",")[0].trim() : null) || (req && (req.headers["x-forwarded-for"]?.split(",")[0]?.trim() || req.ip || req.connection?.remoteAddress)) || "127.0.0.1",
+    endpointIp: actualIp,
     originalPrompt: prompt,
     sanitizedPrompt: sanitizedPrompt || "[SANITIZED]",
     restoredResponse: restoredResponse || "",
@@ -152,21 +175,23 @@ function getGeminiModel() {
 // ─── Action Decision Engine ──────────────────────────────────────────────────
 
 function decideAction(overallRisk, detections) {
-  // If overallRisk is 0 or no detections, always pass
-  if (!overallRisk || overallRisk === 0 || !detections || detections.length === 0) {
+  if (!detections || detections.length === 0) {
     return "pass";
   }
 
-  // Check for critical hard-block items (live credentials, private keys, financial cards, SSN)
+  // Check for critical hard-block items (live credentials, private keys, financial cards, SSN, PAN, Aadhaar)
   const hasCriticalSecrets = detections.some(
     (d) =>
       (d.category === "CREDENTIAL" && d.isolationRisk >= 85) ||
       (d.category === "FINANCIAL" && d.isolationRisk >= 80) ||
-      (d.category === "PII" && d.isolationRisk >= 80)
+      (d.category === "CRITICAL_PII" && d.isolationRisk >= 70) ||
+      (d.category === "PROMPT_INJECTION" && d.isolationRisk >= 90)
   );
 
-  if (hasCriticalSecrets && overallRisk >= 85) return "hard_block";
-  if (overallRisk >= 35) return "silent_redact";
+  if (hasCriticalSecrets && overallRisk >= 70) return "hard_block";
+  if (overallRisk >= 30 || detections.some(d => ["PII", "CRITICAL_PII", "REGISTER_ADDR", "FINANCIAL", "CREDENTIAL", "NETWORK_ADDR"].includes(d.category))) {
+    return "silent_redact";
+  }
   if (overallRisk > 10) return "monitor";
   return "pass";
 }
@@ -186,16 +211,16 @@ router.get("/health", (req, res) => {
 router.get("/system-identity", (req, res) => {
   const os = require("os");
   const SERVER_IDENTITIES = ["render", "root", "nobody", "www-data", "node", "ubuntu", "ec2-user"];
-  let user = "mohammed";
-  let host = "mohammed-Latitude-5400";
+  let user = "employee";
+  let host = os.hostname() || "workstation";
   try {
-    const osUser = process.env.USER || process.env.USERNAME || (os.userInfo && os.userInfo().username) || "";
-    const osHost = os.hostname() || "";
+    const osUser = process.env.USERNAME || process.env.USER || (os.userInfo && os.userInfo().username) || "";
     if (osUser && !SERVER_IDENTITIES.includes(osUser.toLowerCase())) user = osUser;
+    const osHost = os.hostname() || "";
     if (osHost && !osHost.startsWith("srv-")) host = osHost;
   } catch (e) {}
 
-  const clientIp = req.headers["x-forwarded-for"]?.split(",")[0]?.trim() || req.ip || req.connection?.remoteAddress || "127.0.0.1";
+  const clientIp = extractClientIp(req);
 
   res.json({
     success: true,
@@ -212,12 +237,13 @@ router.get("/system-identity", (req, res) => {
 router.post("/chat", async (req, res) => {
   const startTime = Date.now();
   const SERVER_IDENTITIES = ["render", "root", "nobody", "www-data", "node", "ubuntu", "ec2-user"];
-  let fallbackUser = "mohammed";
-  let fallbackHost = "mohammed-Latitude-5400";
+  const os = require("os");
+  let fallbackUser = "employee";
+  let fallbackHost = os.hostname() || "workstation";
   try {
-    const osUser = process.env.USER || process.env.USERNAME || (os.userInfo && os.userInfo().username) || "";
-    const osHost = os.hostname() || "";
+    const osUser = process.env.USERNAME || process.env.USER || (os.userInfo && os.userInfo().username) || "";
     if (osUser && !SERVER_IDENTITIES.includes(osUser.toLowerCase())) fallbackUser = osUser;
+    const osHost = os.hostname() || "";
     if (osHost && !osHost.startsWith("srv-")) fallbackHost = osHost;
   } catch (e) {}
 
@@ -229,6 +255,7 @@ router.post("/chat", async (req, res) => {
   if (!resolvedHost || resolvedHost === "browser-endpoint" || resolvedHost.startsWith("srv-")) {
     resolvedHost = fallbackHost;
   }
+  const clientIp = extractClientIp(req);
   const { prompt, sessionId = `session-${resolvedUser}-${Date.now()}`, userId = resolvedUser, userEmail = `${resolvedUser}@acme.com` } = req.body;
 
   if (!prompt || typeof prompt !== "string") {

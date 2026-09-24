@@ -37,8 +37,18 @@ const AI_DOMAINS = [
 const WEB_AI_DOMAINS = [
   "chatgpt.com",
   "chat.openai.com",
+  "openai.com",
   "claude.ai",
+  "anthropic.com",
   "gemini.google.com",
+  "perplexity.ai",
+  "deepseek.com",
+  "chat.deepseek.com",
+  "copilot.microsoft.com",
+  "grok.com",
+  "x.ai",
+  "meta.ai",
+  "poe.com",
 ];
 
 const DEFAULT_PORT = 8443;
@@ -129,6 +139,7 @@ function createBridgeServer(options = {}) {
     const tlsServer = new tls.Server({
       key: hostCert.key,
       cert: hostCert.cert,
+      ALPNProtocols: ["http/1.1"],
     });
 
     tlsServer.emit("connection", clientSocket);
@@ -539,15 +550,80 @@ function createTransparentProxy(options = {}) {
   const server = net.createServer((clientSocket) => {
     let dataHandler;
     clientSocket.once("data", dataHandler = (firstChunk) => {
+      if (!firstChunk || firstChunk.length < 5) {
+        clientSocket.destroy();
+        return;
+      }
+
+      // ── Mode 1: HTTP CONNECT Tunneling (Windows, macOS, curl -x, explicit proxy) ──
+      const chunkStr = firstChunk.toString("utf8");
+      if (chunkStr.startsWith("CONNECT ")) {
+        const match = chunkStr.match(/^CONNECT\s+([^:\s]+)(?::(\d+))?/i);
+        if (!match) {
+          clientSocket.destroy();
+          return;
+        }
+        const targetHost = match[1];
+        const targetPort = parseInt(match[2]) || 443;
+
+        if (!isAiDomain(targetHost)) {
+          // Non-AI traffic: Direct passthrough
+          const upstream = net.connect(targetPort, targetHost, () => {
+            clientSocket.write("HTTP/1.1 200 Connection Established\r\n\r\n");
+            clientSocket.pipe(upstream);
+            upstream.pipe(clientSocket);
+          });
+          upstream.on("error", () => clientSocket.destroy());
+          clientSocket.on("error", () => upstream.destroy());
+          return;
+        }
+
+        // AI traffic via CONNECT: Intercept TLS handshake
+        console.log(`\n[Vantix] ⚡ CONNECT INTERCEPT: ${targetHost}:${targetPort}`);
+        stats.interceptedPrompts++;
+        clientSocket.write("HTTP/1.1 200 Connection Established\r\n\r\n");
+
+        const hostCert = getCertForHost(targetHost);
+        const tlsServer = new tls.Server({
+          key: hostCert.key,
+          cert: hostCert.cert,
+          ALPNProtocols: ["http/1.1"],
+        });
+
+        tlsServer.emit("connection", clientSocket);
+
+        tlsServer.on("secureConnection", (tlsSocket) => {
+          let buffer = Buffer.alloc(0);
+          tlsSocket.on("data", (chunk) => {
+            buffer = Buffer.concat([buffer, chunk]);
+            const headerEnd = buffer.indexOf("\r\n\r\n");
+            if (headerEnd === -1) return;
+
+            const headerStr = buffer.slice(0, headerEnd).toString("utf8");
+            const clMatch = headerStr.match(/content-length:\s*(\d+)/i);
+            if (clMatch) {
+              const expected = parseInt(clMatch[1]);
+              const received = buffer.length - (headerEnd + 4);
+              if (received < expected) return;
+            }
+
+            processInterceptedAiRequest(buffer, targetHost, targetPort, tlsSocket);
+          });
+        });
+
+        tlsServer.on("error", () => {});
+        return;
+      }
+
+      // ── Mode 2: Transparent TLS Handshake (Linux iptables REDIRECT mode) ──
       // Must be a TLS record (0x16 = Handshake)
-      if (!firstChunk || firstChunk.length < 11 || firstChunk[0] !== 0x16) {
+      if (firstChunk[0] !== 0x16) {
         clientSocket.destroy();
         return;
       }
 
       const sni = parseSNI(firstChunk);
       if (!sni) {
-        // No SNI — can't determine target, pass raw to nowhere → close
         clientSocket.destroy();
         return;
       }
@@ -575,6 +651,7 @@ function createTransparentProxy(options = {}) {
       const tlsServer = new tls.Server({
         key: hostCert.key,
         cert: hostCert.cert,
+        ALPNProtocols: ["http/1.1"],
       });
 
       tlsServer.emit("connection", clientSocket);

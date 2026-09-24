@@ -8,11 +8,10 @@ const CLOUD_BACKEND_URL = "https://vantix-backend-7gcw.onrender.com";
 const LOCAL_BACKEND_URL = "http://localhost:5000";
 
 let effectiveBackendUrl = LOCAL_BACKEND_URL;
-let currentSystemUser = "mohammed";
-let currentSystemHost = "mohammed-Latitude-5400";
+let currentSystemUser = "";
+let currentSystemHost = "";
 
-// Fetch dynamic system identity — ONLY from local engine (which runs on user's machine)
-// Never query cloud Render for identity — it would return the server's OS, not the user's.
+// Fetch dynamic system identity — from local engine (OS level) or dynamic platform detection
 async function fetchSystemIdentity() {
   // 1. Try local engine (runs on user's machine — returns real OS user/hostname)
   try {
@@ -21,7 +20,7 @@ async function fetchSystemIdentity() {
     if (data && data.user && data.user !== "render") {
       currentSystemUser = data.user;
       currentSystemHost = data.host;
-      await chrome.storage.local.set({ systemUser: data.user, systemHost: data.host });
+      await chrome.storage.local.set({ systemUser: data.user, systemHost: data.host, clientIp: data.clientIp });
       return;
     }
   } catch (e) {}
@@ -41,6 +40,7 @@ async function fetchSystemIdentity() {
     const info = await chrome.runtime.getPlatformInfo();
     const platformMap = { win: "Windows", mac: "macOS", linux: "Linux", cros: "ChromeOS" };
     currentSystemHost = `${platformMap[info.os] || info.os}-${info.arch}-workstation`;
+    currentSystemUser = `${(platformMap[info.os] || "user").toLowerCase()}-user`;
     await chrome.storage.local.set({ systemUser: currentSystemUser, systemHost: currentSystemHost });
   } catch (e) {}
 
@@ -77,7 +77,7 @@ async function setupExtensionHeaders() {
             condition: {
               urlFilter: "*",
               resourceTypes: ["main_frame", "sub_frame", "xmlhttprequest", "websocket", "other"],
-              domains: ["chatgpt.com", "openai.com", "claude.ai", "anthropic.com", "google.com"],
+              domains: ["chatgpt.com", "openai.com", "claude.ai", "anthropic.com", "google.com", "perplexity.ai", "deepseek.com", "copilot.microsoft.com", "grok.com", "meta.ai", "x.ai", "poe.com"],
             },
           },
         ],
@@ -157,10 +157,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     (async () => {
       try {
         const stored = await chrome.storage.local.get(["systemUser", "systemHost"]);
-        let user = message.user || stored.systemUser || currentSystemUser || "mohammed";
-        let host = stored.systemHost || currentSystemHost || "mohammed-Latitude-5400";
-        if (user === "render" || user === "unknown-user" || user === "root") user = "mohammed";
-        if (!host || host.startsWith("srv-") || host === "unknown-host") host = "mohammed-Latitude-5400";
+        let user = message.user || stored.systemUser || currentSystemUser || "employee";
+        let host = stored.systemHost || currentSystemHost || "workstation";
+        if (user === "render" || user === "unknown-user" || user === "root") user = "employee";
+        if (!host || host.startsWith("srv-") || host === "unknown-host") host = "workstation";
 
         const payload = {
           prompt: message.prompt,

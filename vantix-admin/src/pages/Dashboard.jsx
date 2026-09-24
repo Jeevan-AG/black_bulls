@@ -145,7 +145,7 @@ export default function Dashboard() {
 
   // Simulation Modal State
   const [showSimModal, setShowSimModal] = useState(false);
-  const [simEmployee, setSimEmployee] = useState("mohammed");
+  const [simEmployee, setSimEmployee] = useState("employee");
   const [simLeakType, setSimLeakType] = useState("aws_keys");
   const [simCustomPrompt, setSimCustomPrompt] = useState("");
   const [isSimulating, setIsSimulating] = useState(false);
@@ -187,9 +187,9 @@ export default function Dashboard() {
                   userEmail: log.userEmail || `${log.userId}@acme.corp`,
                   department: log.department || (log.userId.includes("chen") ? "Cloud Infrastructure & DevOps" : "Core Systems"),
                   endpointHost: log.endpointHost || log.host || `${log.userId}-workstation`,
-                  endpointIp: log.endpointIp || "10.0.12.50",
+                  endpointIp: log.endpointIp || "127.0.0.1",
                   aiPlatform: log.aiPlatform || "chatgpt.com",
-                  actionTaken: log.actionTaken || (log.riskScore >= 85 ? "hard_block" : log.riskScore >= 35 ? "silent_redact" : "pass"),
+                  actionTaken: log.actionTaken || (log.riskScore >= 70 ? "hard_block" : log.riskScore >= 30 ? "silent_redact" : "pass"),
                   riskScore: log.riskScore !== undefined ? log.riskScore : 0,
                   categoriesRedacted: log.categoriesRedacted || ["CONFIDENTIAL_DATA"],
                   detections: log.detections || [],
@@ -233,16 +233,16 @@ export default function Dashboard() {
             if (packet.type === "detection" || packet.originalPrompt) {
               const incomingIncident = {
                 id: packet.id || `ws-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-                userId: packet.user || "mohammed",
-                userName: packet.userName || (packet.user ? packet.user.charAt(0).toUpperCase() + packet.user.slice(1).replace(/[._]/g, " ") : "Mohammed"),
-                userEmail: packet.userEmail || `${packet.user || "mohammed"}@acme.corp`,
+                userId: packet.user || "employee",
+                userName: packet.userName || (packet.user ? packet.user.charAt(0).toUpperCase() + packet.user.slice(1).replace(/[._]/g, " ") : "Employee"),
+                userEmail: packet.userEmail || `${packet.user || "employee"}@acme.corp`,
                 department: packet.department || "Core Systems",
-                endpointHost: packet.host || "mohammed-Latitude-5400",
+                endpointHost: packet.host || "workstation",
                 endpointIp: packet.endpointIp || "127.0.0.1",
                 aiPlatform: packet.aiPlatform || "chatgpt.com",
-                actionTaken: packet.actionTaken || (packet.riskScore >= 85 ? "hard_block" : packet.riskScore >= 35 ? "silent_redact" : "pass"),
+                actionTaken: packet.actionTaken || (packet.riskScore >= 70 ? "hard_block" : packet.riskScore >= 30 ? "silent_redact" : "pass"),
                 riskScore: packet.riskScore !== undefined ? packet.riskScore : 0,
-                categoriesRedacted: packet.detections ? Array.from(new Set(packet.detections.map((d) => d.category))) : ["CONFIDENTIAL_DATA"],
+                categoriesRedacted: packet.detections ? Array.from(new Set(packet.detections.map((d) => d.category))) : (packet.categoriesRedacted || ["CONFIDENTIAL_DATA"]),
                 detections: packet.detections || [],
                 originalPrompt: packet.originalPrompt || "Outbound prompt intercepted",
                 sanitizedPrompt: packet.sanitizedPrompt || "[SANITIZED]",
@@ -253,11 +253,12 @@ export default function Dashboard() {
 
               setIncidents((prev) => [incomingIncident, ...prev]);
 
-              // ONLY show exfiltration alert banner if sensitive confidential data was actually detected
-              if (incomingIncident.riskScore >= 35 || incomingIncident.actionTaken === "hard_block") {
-                showToast(`🚨 Outbound Data Leak Intercepted from ${incomingIncident.userName} (${incomingIncident.actionTaken === "hard_block" ? "Hard Blocked" : "Redacted"})`);
+              // Show exfiltration alert banner if sensitive confidential data (credentials, PII, industrial) was detected
+              const isSensitive = incomingIncident.riskScore >= 30 || incomingIncident.actionTaken === "hard_block" || incomingIncident.actionTaken === "silent_redact" || (incomingIncident.detections && incomingIncident.detections.length > 0);
+              if (isSensitive) {
+                showToast(`🚨 Sensitive Data Intercepted from ${incomingIncident.userName} (${incomingIncident.actionTaken === "hard_block" ? "Hard Blocked" : "Redacted"})`);
               } else {
-                showToast(`✅ Prompt from ${incomingIncident.userName} passed inspection safely (Risk: 0 - Clean/Sanitized)`);
+                showToast(`✅ Prompt from ${incomingIncident.userName} passed inspection safely (Clean/Sanitized)`);
               }
             } else if (packet.type === "reset") {
               setIncidents([]);
@@ -297,11 +298,10 @@ export default function Dashboard() {
     const userMap = new Map();
 
     incidents.forEach((inc) => {
-      // ONLY track and flag if the employee actually attempted to leak confidential data or credentials!
-      // Normal/benign prompts (riskScore < 35 and actionTaken !== 'hard_block') DO NOT raise risk and DO NOT flag employees.
-      const isActualLeak = (inc.riskScore >= 35) || (inc.actionTaken === "hard_block");
+      // Track and flag if the employee attempted to leak sensitive data (credentials, PII, industrial)
+      const isActualLeak = (inc.riskScore >= 30) || (inc.actionTaken === "hard_block") || (inc.actionTaken === "silent_redact") || (Array.isArray(inc.detections) && inc.detections.length > 0);
       if (!isActualLeak) {
-        return; // Harmless prompt: skip, do not flag employee or artificially pump risk!
+        return; // Harmless clean prompt: skip
       }
 
       const key = (inc.userId || inc.userEmail || "unknown").toLowerCase();
@@ -313,7 +313,7 @@ export default function Dashboard() {
           email: inc.userEmail || `${key}@acme.corp`,
           department: inc.department || "Core Engineering",
           endpointHost: inc.endpointHost || "ws-node",
-          endpointIp: inc.endpointIp || "10.0.12.50",
+          endpointIp: inc.endpointIp || "127.0.0.1",
           totalAttempts: 0,
           hardBlockedCount: 0,
           redactedCount: 0,
@@ -394,7 +394,7 @@ export default function Dashboard() {
       (inc) =>
         ((inc.userId && inc.userId.toLowerCase() === selectedEmployeeId.toLowerCase()) ||
         (inc.userEmail && inc.userEmail.toLowerCase().includes(selectedEmployeeId.toLowerCase()))) &&
-        (inc.riskScore >= 35 || inc.actionTaken === "hard_block")
+        (inc.riskScore >= 30 || inc.actionTaken === "hard_block" || inc.actionTaken === "silent_redact" || (inc.detections && inc.detections.length > 0))
     );
   }, [selectedEmployeeId, incidents]);
 
@@ -1450,8 +1450,8 @@ export default function Dashboard() {
                 value={simEmployee}
                 onChange={(e) => setSimEmployee(e.target.value)}
               >
-                <option value="mohammed">Mohammed (mohammed-Latitude-5400)</option>
-                {flaggedEmployees.filter(e => e.userId !== "mohammed").map(emp => (
+                <option value="employee">Current Workstation User</option>
+                {flaggedEmployees.filter(e => e.userId !== "employee").map(emp => (
                   <option key={emp.id} value={emp.userId}>{emp.name}</option>
                 ))}
               </select>

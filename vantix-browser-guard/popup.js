@@ -34,10 +34,10 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   const elIdentityStatus = document.getElementById("identity-status");
   const elIpStatus = document.getElementById("ip-status");
-  const activeUser = stats.systemUser && stats.systemUser !== "render" ? stats.systemUser : "mohammed";
-  const activeHost = stats.systemHost && !stats.systemHost.startsWith("srv-") ? stats.systemHost : "mohammed-Latitude-5400";
+  const activeUser = stats.systemUser && stats.systemUser !== "render" ? stats.systemUser : "Active User";
+  const activeHost = stats.systemHost && !stats.systemHost.startsWith("srv-") ? stats.systemHost : "Workstation";
   if (elIdentityStatus) elIdentityStatus.textContent = `${activeUser} (${activeHost})`;
-  if (elIpStatus) elIpStatus.textContent = stats.clientIp || "106.192.237.130";
+  if (elIpStatus) elIpStatus.textContent = stats.clientIp || "Resolving IP...";
 
   // Check backend engine connectivity (local first, then Cloud Render)
   let isOperational = false;
