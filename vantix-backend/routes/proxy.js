@@ -206,19 +206,27 @@ function decideAction(overallRisk, detections) {
     return "pass";
   }
 
-  // Check for critical hard-block items (live credentials, private keys, financial cards, SSN, PAN, Aadhaar)
-  const hasCriticalSecrets = detections.some(
-    (d) =>
-      (d.category === "CREDENTIAL" && d.isolationRisk >= 85) ||
-      (d.category === "FINANCIAL" && d.isolationRisk >= 80) ||
-      (d.category === "CRITICAL_PII" && d.isolationRisk >= 70) ||
-      (d.category === "PROMPT_INJECTION" && d.isolationRisk >= 90)
+  // Count distinct credentials
+  const credentialCount = detections.filter((d) => d.category === "CREDENTIAL").length;
+  const isSevereInjection = detections.some(
+    (d) => d.category === "PROMPT_INJECTION" && d.isolationRisk >= 95
   );
 
-  if (hasCriticalSecrets && overallRisk >= 70) return "hard_block";
-  if (overallRisk >= 30 || detections.some(d => ["PII", "CRITICAL_PII", "REGISTER_ADDR", "FINANCIAL", "CREDENTIAL", "NETWORK_ADDR"].includes(d.category))) {
+  // Policy: Hard block ONLY if massive leaked credentials (>3) or severe prompt injection attack
+  if (credentialCount > 3 || isSevereInjection) {
+    return "hard_block";
+  }
+
+  // Otherwise, silently redact credentials (<=3), PII, financial, ICS registers, network addresses
+  if (
+    overallRisk >= 30 ||
+    detections.some((d) =>
+      ["CREDENTIAL", "PII", "CRITICAL_PII", "REGISTER_ADDR", "FINANCIAL", "NETWORK_ADDR"].includes(d.category)
+    )
+  ) {
     return "silent_redact";
   }
+
   if (overallRisk > 10) return "monitor";
   return "pass";
 }

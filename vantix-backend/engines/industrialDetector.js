@@ -399,21 +399,21 @@ function analyzePrompt(text) {
       const re = new RegExp(regex.source, regex.flags);
       let match;
       while ((match = re.exec(text)) !== null) {
-        const value = match[0];
+        const matchedStr = match[0];
 
         // Skip sanitized placeholder tokens like [REGISTER_ADDR], [SCADA_REG_01], [AWS_KEY_01], [SANITIZED], etc.
-        if (/^['"]?\[[A-Z0-9_]+\]['"]?$/.test(value.trim())) {
+        if (/^['"]?\[[A-Z0-9_]+\]['"]?$/.test(matchedStr.trim())) {
           continue;
         }
 
         // Check if value is a secret assignment whose assigned RHS is purely a placeholder token
-        if (config.category === "CREDENTIAL" && /[:=]\s*['"]?\[[A-Z0-9_]+\]['"]?\s*$/.test(value.trim())) {
+        if (config.category === "CREDENTIAL" && /[:=]\s*['"]?\[[A-Z0-9_]+\]['"]?\s*$/.test(matchedStr.trim())) {
           continue;
         }
 
         // Also check if match is enclosed within a bracketed placeholder token like [SCADA_REG_01]
         const matchStart = match.index;
-        const matchEnd = match.index + value.length;
+        const matchEnd = match.index + matchedStr.length;
         const prevBracket = text.lastIndexOf("[", matchStart);
         const nextBracket = text.indexOf("]", matchEnd - 1);
         if (prevBracket !== -1 && nextBracket !== -1 && prevBracket < matchStart && nextBracket >= matchEnd - 1) {
@@ -423,9 +423,9 @@ function analyzePrompt(text) {
           }
         }
 
-        let value = match[0];
+        let value = matchedStr;
         let valStart = match.index;
-        let valEnd = match.index + value.length;
+        let valEnd = match.index + matchedStr.length;
 
         // If pattern is a credential assignment with capture group, extract the actual secret token
         if (config.category === "CREDENTIAL" && match[1] && match[1].length >= 4) {

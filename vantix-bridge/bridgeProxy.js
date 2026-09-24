@@ -500,19 +500,24 @@ function processInterceptedAiRequest(rawBuffer, hostname, port, clientTlsSocket)
   const sessionId = `bridge-${Date.now()}`;
   stats.interceptedPrompts++;
 
-  const isCredentialOrCritical = detection.overallRisk >= 70 ||
-    detection.detections.some(d => d.category === "CREDENTIAL" || d.severity === "CRITICAL");
+  const credentialCount = detection.detections.filter((d) => d.category === "CREDENTIAL").length;
+  const isMassiveCredentialDump = credentialCount > 3;
+  const isSevereInjection = detection.detections.some(
+    (d) => d.category === "PROMPT_INJECTION" && d.isolationRisk >= 95
+  );
 
-  // ── RULE 1: HARD BLOCK ON EXPOSED CREDENTIALS OR CRITICAL ATTACKS ─────────
-  if (isCredentialOrCritical) {
-    console.log(`[Vantix-Bridge] ⛔ EXPOSED CREDENTIAL HARD-BLOCKED (${detection.detections.map(d => d.label || d.category).join(", ")})`);
+  const shouldHardBlock = isMassiveCredentialDump || isSevereInjection;
+
+  // ── RULE 1: HARD BLOCK ONLY ON MASSIVE CREDENTIAL LEAKS (>3) OR SEVERE INJECTIONS ──
+  if (shouldHardBlock) {
+    console.log(`[Vantix-Bridge] ⛔ MASSIVE CREDENTIAL EXPOSURE HARD-BLOCKED (${credentialCount} credentials detected)`);
     
     let sessionResult = { coverageMap: {}, riskScore: detection.overallRisk, promptCount: 1, anomalyTriggered: true, anomalyReport: "" };
     try {
       sessionResult = sessionGraph.updateSessionGraph(identity.user, identity.email, detection);
     } catch (e) {}
 
-    const blockMsg = `[VANTIX AI FIREWALL] Request blocked: Sensitive credential detected (${detection.detections.map(d => d.label || d.category).join(", ")}). Outbound transmission halted by enterprise DLP policy.`;
+    const blockMsg = `[VANTIX AI FIREWALL] Request blocked: Massive credential exposure detected (${credentialCount} secrets). Outbound transmission halted by enterprise DLP policy.`;
 
     try {
       ws.broadcastDetection({
@@ -528,7 +533,7 @@ function processInterceptedAiRequest(rawBuffer, hostname, port, clientTlsSocket)
         sessionRiskScore: sessionResult.riskScore || detection.overallRisk,
         promptCount: sessionResult.promptCount || 1,
         anomalyTriggered: true,
-        anomalyReport: `CRITICAL SECURITY BLOCK: Employee attempted to send exposed credentials to ${hostname}. Connection terminated by Layer 1 Firewall.`,
+        anomalyReport: `CRITICAL SECURITY BLOCK: Employee attempted to send ${credentialCount} exposed credentials to ${hostname}. Connection terminated by Layer 1 Firewall.`,
         user: identity.user,
         host: identity.host,
         interceptSource: "network-layer-bridge",
@@ -557,7 +562,7 @@ function processInterceptedAiRequest(rawBuffer, hostname, port, clientTlsSocket)
       error: {
         message: blockMsg,
         type: "vantix_security_violation",
-        code: "CREDENTIAL_EXPOSURE_BLOCKED",
+        code: "MASSIVE_CREDENTIAL_EXPOSURE_BLOCKED",
         param: null,
       },
       message: blockMsg,
@@ -571,19 +576,23 @@ function processInterceptedAiRequest(rawBuffer, hostname, port, clientTlsSocket)
       "\r\n",
     ].join("\r\n") + errorJson;
 
-    clientTlsSocket.write(res);
-    clientTlsSocket.end();
+    try {
+      if (!clientTlsSocket.destroyed && clientTlsSocket.writable) {
+        clientTlsSocket.write(res);
+        clientTlsSocket.end();
+      }
+    } catch (err) {}
     return;
   }
 
-  // ── RULE 2: TEE SILENT REDACTION FOR PII & CONFIDENTIAL DATA ──────────────
+  // ── RULE 2: TEE SILENT REDACTION FOR CREDENTIALS (<=3), PII & CONFIDENTIAL DATA ──
   let sanitizedPrompt = promptText;
   let tokenTable = new Map();
 
   if (detection.detections.length > 0) {
     tokenTable = tee.createTokenTable(sessionId, detection.detections);
     sanitizedPrompt = tee.sanitizePrompt(promptText, tokenTable);
-    console.log(`[Vantix-Bridge] 🛡 TEE Sanitized (${detection.detections.length} sensitive tokens redacted)`);
+    console.log(`[Vantix-Bridge] 🛡 TEE Sanitized (${detection.detections.length} sensitive tokens redacted seamlessly)`);
     stats.redactedTokens += detection.detections.length;
 
     if (promptReplacer) {
@@ -598,7 +607,7 @@ function processInterceptedAiRequest(rawBuffer, hostname, port, clientTlsSocket)
     modifiedBody = sanitizedPrompt;
   }
 
-  // Forward to real AI endpoint over genuine HTTPS
+  // Forward sanitized prompt to genuine AI endpoint over TLS
   const upstreamReq = https.request(
     {
       hostname,
@@ -683,22 +692,34 @@ function processInterceptedAiRequest(rawBuffer, hostname, port, clientTlsSocket)
         delete headersToSend["content-length"];
         delete headersToSend["content-encoding"];
 
-        clientTlsSocket.write(`HTTP/1.1 ${upstreamRes.statusCode} ${upstreamRes.statusMessage}\r\n`);
-        for (const [k, v] of Object.entries(headersToSend)) {
-          clientTlsSocket.write(`${k}: ${v}\r\n`);
-        }
-        clientTlsSocket.write(`Content-Length: ${Buffer.byteLength(restoredResponse)}\r\n\r\n`);
-        clientTlsSocket.write(restoredResponse);
-        clientTlsSocket.end();
+        try {
+          if (!clientTlsSocket.destroyed && clientTlsSocket.writable) {
+            clientTlsSocket.write(`HTTP/1.1 ${upstreamRes.statusCode} ${upstreamRes.statusMessage}\r\n`);
+            for (const [k, v] of Object.entries(headersToSend)) {
+              clientTlsSocket.write(`${k}: ${v}\r\n`);
+            }
+            clientTlsSocket.write(`Content-Length: ${Buffer.byteLength(restoredResponse)}\r\n\r\n`);
+            clientTlsSocket.write(restoredResponse);
+            clientTlsSocket.end();
+          }
+        } catch (sockErr) {}
       });
     }
   );
 
   upstreamReq.on("error", (err) => {
-    clientTlsSocket.write("HTTP/1.1 502 Bad Gateway\r\n\r\n");
-    clientTlsSocket.end();
+    try {
+      if (!clientTlsSocket.destroyed && clientTlsSocket.writable) {
+        clientTlsSocket.write("HTTP/1.1 502 Bad Gateway\r\n\r\n");
+        clientTlsSocket.end();
+      }
+    } catch (e) {}
   });
 
+  if (modifiedBody) {
+    upstreamReq.write(modifiedBody);
+  }
+  upstreamReq.end();
 }
 
 function forwardRawToUpstream(rawBuffer, hostname, port, clientTlsSocket) {
@@ -954,6 +975,24 @@ function createTransparentProxy(options = {}) {
 
       duplex.on("error", () => {});
       clientSocket.on("error", () => {});
+
+      // Forward subsequent TLS handshake and encrypted HTTP data to duplex
+      clientSocket.on("data", (chunk) => {
+        duplex.push(chunk);
+      });
+      clientSocket.on("end", () => {
+        duplex.push(null);
+      });
+      clientSocket.on("close", () => {
+        duplex.destroy();
+      });
+      duplex.on("finish", () => {
+        if (!clientSocket.destroyed && clientSocket.writable) {
+          try {
+            clientSocket.end();
+          } catch (e) {}
+        }
+      });
 
       duplex.push(firstChunk);
 
