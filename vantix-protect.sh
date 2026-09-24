@@ -61,13 +61,15 @@ install_ca() {
   # Install into Chrome/Chromium/Brave NSS database
   if command -v certutil &>/dev/null; then
     mkdir -p "$REAL_HOME/.pki/nssdb" 2>/dev/null || true
-    certutil -d sql:"$REAL_HOME/.pki/nssdb" -A -t "C,," -n "Vantix Enterprise CA" -i "$CA_CERT" 2>/dev/null || true
+    certutil -d sql:"$REAL_HOME/.pki/nssdb" -A -t "TCu,Cu,Tu" -n "Vantix Enterprise CA" -i "$CA_CERT" 2>/dev/null || \
+    certutil -d sql:"$REAL_HOME/.pki/nssdb" -M -t "TCu,Cu,Tu" -n "Vantix Enterprise CA" 2>/dev/null || true
     echo "  [CA] Chrome / Chromium / Brave NSS DB: TRUSTED ✓"
 
     # Also install into Firefox profiles if present
     for ff_profile in "$REAL_HOME"/.mozilla/firefox/*.default*; do
       if [ -d "$ff_profile" ]; then
-        certutil -d sql:"$ff_profile" -A -t "C,," -n "Vantix Enterprise CA" -i "$CA_CERT" 2>/dev/null || true
+        certutil -d sql:"$ff_profile" -A -t "TCu,Cu,Tu" -n "Vantix Enterprise CA" -i "$CA_CERT" 2>/dev/null || \
+        certutil -d sql:"$ff_profile" -M -t "TCu,Cu,Tu" -n "Vantix Enterprise CA" 2>/dev/null || true
       fi
     done
   fi

@@ -102,12 +102,36 @@ let stats = {
   startedAt: new Date().toISOString(),
 };
 
+// Prevent any socket teardown or unhandled stream errors from crashing the proxy daemon
+process.on("uncaughtException", (err) => {
+  if (err.code === "EPIPE" || err.code === "ECONNRESET" || err.message?.includes("ended by the other party")) {
+    return;
+  }
+  console.error("[Vantix-Bridge] Handled unhandled error:", err.message);
+});
+process.on("unhandledRejection", (err) => {
+  console.error("[Vantix-Bridge] Handled rejection:", err?.message || err);
+});
+
 /**
  * Checks if a hostname matches any monitored AI platform.
  */
 function isAiDomain(host) {
   if (!host) return false;
   const cleanHost = host.split(":")[0].toLowerCase();
+  
+  // NEVER intercept non-AI internal services: authentication, telemetry, crash reporting, updates
+  if (
+    cleanHost.includes("auth.") ||
+    cleanHost.includes("telemetry.") ||
+    cleanHost.includes("download.") ||
+    cleanHost.includes("crashpad") ||
+    cleanHost.includes("sso.") ||
+    cleanHost.includes("identity.") ||
+    cleanHost.includes("metrics.")
+  ) {
+    return false;
+  }
   
   if (AI_DOMAINS.some((domain) => cleanHost === domain || cleanHost.endsWith("." + domain)) ||
       WEB_AI_DOMAINS.some((domain) => cleanHost === domain || cleanHost.endsWith("." + domain))) {
@@ -127,10 +151,8 @@ function isAiDomain(host) {
     }
   }
 
-  // Any Kiro, Cursor, Codeium subdomains
+  // Any AI IDE backends
   if (
-    cleanHost.endsWith(".kiro.dev") ||
-    cleanHost.endsWith(".kiro.aws.dev") ||
     cleanHost.endsWith(".cursor.sh") ||
     cleanHost.endsWith(".codeium.com")
   ) {
@@ -918,13 +940,20 @@ function createTransparentProxy(options = {}) {
       const duplex = new stream.Duplex({
         read(size) {},
         write(chunk, encoding, callback) {
-          clientSocket.write(chunk, encoding, callback);
+          if (!clientSocket.destroyed && clientSocket.writable) {
+            try {
+              clientSocket.write(chunk, encoding, callback);
+            } catch (err) {
+              callback();
+            }
+          } else {
+            callback();
+          }
         },
       });
 
-      clientSocket.on("data", (c) => duplex.push(c));
-      clientSocket.on("end", () => duplex.push(null));
-      clientSocket.on("error", (e) => duplex.emit("error", e));
+      duplex.on("error", () => {});
+      clientSocket.on("error", () => {});
 
       duplex.push(firstChunk);
 
@@ -935,9 +964,11 @@ function createTransparentProxy(options = {}) {
         ALPNProtocols: ["http/1.1"],
       });
 
+      tlsServer.on("error", () => {});
       tlsServer.emit("connection", duplex);
 
       tlsServer.on("secureConnection", (tlsSocket) => {
+        tlsSocket.on("error", () => {});
         let buffer = Buffer.alloc(0);
         tlsSocket.on("data", (chunk) => {
           buffer = Buffer.concat([buffer, chunk]);

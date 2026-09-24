@@ -80,6 +80,20 @@ function getCertForHost(hostname) {
 
   const { keyPath: caKey, crtPath: caCrt } = getOrCreateRootCa();
   const hostCsrPath = path.join(CERT_CACHE_DIR, `${cleanHost}.csr`);
+  const hostExtPath = path.join(CERT_CACHE_DIR, `${cleanHost}.ext`);
+
+  const extConfig = `
+[v3_req]
+basicConstraints = CA:FALSE
+keyUsage = digitalSignature, keyEncipherment
+extendedKeyUsage = serverAuth
+subjectAltName = @alt_names
+
+[alt_names]
+DNS.1 = ${cleanHost}
+DNS.2 = *.${cleanHost}
+`;
+  fs.writeFileSync(hostExtPath, extConfig);
 
   try {
     // Generate CSR
@@ -88,14 +102,15 @@ function getCertForHost(hostname) {
       { stdio: "ignore" }
     );
 
-    // Sign with CA
+    // Sign with CA including SAN extension for modern browser compliance
     execSync(
-      `openssl x509 -req -in "${hostCsrPath}" -CA "${caCrt}" -CAkey "${caKey}" -CAcreateserial -out "${hostCrtPath}" -days 60`,
+      `openssl x509 -req -in "${hostCsrPath}" -CA "${caCrt}" -CAkey "${caKey}" -CAcreateserial -out "${hostCrtPath}" -days 365 -extfile "${hostExtPath}" -extensions v3_req`,
       { stdio: "ignore" }
     );
 
-    // Clean up CSR
+    // Clean up temporary CSR and ext files
     if (fs.existsSync(hostCsrPath)) fs.unlinkSync(hostCsrPath);
+    if (fs.existsSync(hostExtPath)) fs.unlinkSync(hostExtPath);
 
     try {
       fs.chmodSync(hostKeyPath, 0o644);

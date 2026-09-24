@@ -24,6 +24,16 @@ const connectDB  = require("./config/db");
 const { errorHandler } = require("./middleware/errorHandler");
 const { attachWebSocket } = require("./engines/wsServer");
 
+process.on("uncaughtException", (err) => {
+  if (err.code === "EPIPE" || err.code === "ECONNRESET" || err.message?.includes("ended by the other party")) {
+    return;
+  }
+  console.error("[Vantix] Handled uncaught exception:", err.message);
+});
+process.on("unhandledRejection", (err) => {
+  console.error("[Vantix] Handled unhandled rejection:", err?.message || err);
+});
+
 // ── Connect to MongoDB ────────────────────────────────────────────────────────
 connectDB();
 
