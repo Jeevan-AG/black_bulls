@@ -100,6 +100,7 @@ setup_browser_policies() {
   cat <<EOF > "$CHROME_DIR/vantix_guard.json"
 {
   "QuicAllowed": false,
+  "EncryptedClientHelloEnabled": false,
   "CertificateTransparencyEnforcementDisabledForUrls": [
     "*.chatgpt.com",
     "*.openai.com",

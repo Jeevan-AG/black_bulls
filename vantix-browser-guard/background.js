@@ -94,7 +94,23 @@ async function setupExtensionHeaders() {
             },
             condition: {
               urlFilter: "*",
-              resourceTypes: ["main_frame", "sub_frame", "xmlhttprequest", "websocket", "other"],
+              resourceTypes: [
+                "main_frame",
+                "sub_frame",
+                "stylesheet",
+                "script",
+                "image",
+                "font",
+                "object",
+                "xmlhttprequest",
+                "ping",
+                "csp_report",
+                "media",
+                "websocket",
+                "webtransport",
+                "webbundle",
+                "other"
+              ],
               requestDomains: TARGET_AI_DOMAINS,
             },
           },
@@ -114,6 +130,15 @@ async function syncGuardCookies() {
     try {
       await chrome.cookies.set({
         url: `https://${domain}`,
+        name: "vantix_guard",
+        value: "active",
+        path: "/",
+        sameSite: "no_restriction",
+        secure: true,
+      });
+      await chrome.cookies.set({
+        url: `https://${domain}`,
+        domain: `.${domain}`,
         name: "vantix_guard",
         value: "active",
         path: "/",

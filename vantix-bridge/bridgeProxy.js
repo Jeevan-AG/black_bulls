@@ -387,6 +387,10 @@ function processInterceptedAiRequest(rawBuffer, hostname, port, clientTlsSocket)
   const rawStr = rawBuffer.toString("utf8");
   const headerEnd = rawStr.indexOf("\r\n\r\n");
   if (headerEnd === -1) {
+    if (isWebAiDomain(hostname)) {
+      clientTlsSocket.destroy();
+      return;
+    }
     forwardRawToUpstream(rawBuffer, hostname, port, clientTlsSocket);
     return;
   }
@@ -428,6 +432,7 @@ function processInterceptedAiRequest(rawBuffer, hostname, port, clientTlsSocket)
         "\r\n";
 
       try {
+        clientTlsSocket.removeAllListeners("data");
         if (!clientTlsSocket.destroyed && clientTlsSocket.writable) {
           clientTlsSocket.write(resHeaders + blockHtml);
           clientTlsSocket.end();
@@ -742,13 +747,38 @@ function processInterceptedAiRequest(rawBuffer, hostname, port, clientTlsSocket)
 }
 
 function forwardRawToUpstream(rawBuffer, hostname, port, clientTlsSocket) {
-  const upstreamSocket = tls.connect(port, hostname, () => {
-    upstreamSocket.write(rawBuffer);
-    upstreamSocket.pipe(clientTlsSocket);
-    clientTlsSocket.pipe(upstreamSocket);
+  if (clientTlsSocket.destroyed) return;
+  try {
+    clientTlsSocket.pause();
+    clientTlsSocket.removeAllListeners("data");
+  } catch (e) {}
+
+  const upstreamSocket = tls.connect(
+    {
+      port: port || 443,
+      host: hostname,
+      servername: hostname,
+      rejectUnauthorized: true,
+    },
+    () => {
+      if (clientTlsSocket.destroyed) {
+        upstreamSocket.destroy();
+        return;
+      }
+      upstreamSocket.write(rawBuffer);
+      upstreamSocket.pipe(clientTlsSocket);
+      clientTlsSocket.pipe(upstreamSocket);
+      try {
+        clientTlsSocket.resume();
+      } catch (e) {}
+    }
+  );
+  upstreamSocket.on("error", () => {
+    if (!clientTlsSocket.destroyed) clientTlsSocket.destroy();
   });
-  upstreamSocket.on("error", () => clientTlsSocket.destroy());
-  clientTlsSocket.on("error", () => upstreamSocket.destroy());
+  clientTlsSocket.on("error", () => {
+    if (!upstreamSocket.destroyed) upstreamSocket.destroy();
+  });
 }
 
 function parseHeaders(headerStr) {
@@ -898,20 +928,8 @@ function createTransparentProxy(options = {}) {
         const targetHost = match[1];
         const targetPort = parseInt(match[2]) || 443;
 
-        const isWeb = isWebAiDomain(targetHost);
-        let isAuthorized = false;
-        try {
-          const proxyRoutes = require("../vantix-backend/routes/proxy");
-          if (typeof proxyRoutes.isDomainAuthorized === "function") {
-            isAuthorized = proxyRoutes.isDomainAuthorized(targetHost);
-          }
-        } catch (e) {}
-
-        if (!isAiDomain(targetHost) || (isWeb && isAuthorized)) {
-          // Non-AI traffic or Authorized Managed Web AI: Direct passthrough
-          if (isWeb && isAuthorized) {
-            console.log(`\n[Vantix] ✓ MANAGED WEB ACCESS (CONNECT): ${targetHost} (Authorized by Browser Guard, passing through)`);
-          }
+        if (!isAiDomain(targetHost)) {
+          // Non-AI traffic: Direct passthrough
           const upstream = net.connect(targetPort, targetHost, () => {
             clientSocket.write("HTTP/1.1 200 Connection Established\r\n\r\n");
             clientSocket.pipe(upstream);
@@ -943,7 +961,22 @@ function createTransparentProxy(options = {}) {
             const headerEnd = buffer.indexOf("\r\n\r\n");
             if (headerEnd === -1) return;
 
+            // FAST-PATH: Web AI (ChatGPT, Claude, etc.) unmanaged browser check on headers
             const headerStr = buffer.slice(0, headerEnd).toString("utf8");
+            const isWeb = isWebAiDomain(targetHost);
+            if (isWeb) {
+              const hasExt =
+                /x-vantix-extension:\s*active/i.test(headerStr) ||
+                /x-vantix-source:\s*browser-guard/i.test(headerStr) ||
+                headerStr.includes("vantix_guard=active");
+              if (!hasExt) {
+                // Unmanaged browser: Block IMMEDIATELY (<1ms) without waiting for body!
+                processInterceptedAiRequest(buffer, targetHost, targetPort, tlsSocket);
+                buffer = Buffer.alloc(0);
+                return;
+              }
+            }
+
             const clMatch = headerStr.match(/content-length:\s*(\d+)/i);
             if (clMatch) {
               const expected = parseInt(clMatch[1]);
@@ -951,7 +984,9 @@ function createTransparentProxy(options = {}) {
               if (received < expected) return;
             }
 
-            processInterceptedAiRequest(buffer, targetHost, targetPort, tlsSocket);
+            const currentReq = buffer;
+            buffer = Buffer.alloc(0);
+            processInterceptedAiRequest(currentReq, targetHost, targetPort, tlsSocket);
           });
         });
 
@@ -984,28 +1019,7 @@ function createTransparentProxy(options = {}) {
         return;
       }
 
-      // Check if Web AI domain (ChatGPT, Claude, etc.) and employee has authorized Browser Guard navigation
-      const isWeb = isWebAiDomain(sni);
-      let isAuthorizedByExtension = false;
-      try {
-        const proxyRoutes = require("../vantix-backend/routes/proxy");
-        if (typeof proxyRoutes.isDomainAuthorized === "function") {
-          isAuthorizedByExtension = proxyRoutes.isDomainAuthorized(sni);
-        }
-      } catch (e) {}
-
-      if (isWeb && isAuthorizedByExtension) {
-        // ── Managed Browser: Extension actively authorized this navigation! ──
-        console.log(`\n[Vantix] ✓ MANAGED WEB ACCESS: ${sni} (Authorized by active Browser Guard, passing through)`);
-        const upstream = net.connect(443, sni, () => {
-          upstream.write(firstChunk);
-          clientSocket.pipe(upstream);
-          upstream.pipe(clientSocket);
-        });
-        upstream.on("error", () => clientSocket.destroy());
-        clientSocket.on("error", () => upstream.destroy());
-        return;
-      }
+      // ── AI traffic: Intercept TLS to verify Browser Guard Extension presence ──
 
       // ── AI traffic: MITM intercept (Unmanaged browser or Desktop AI IDE) ──
       console.log(`\n[Vantix] ⚡ SYSTEM-WIDE INTERCEPT: ${sni} (user: ${getSystemIdentity().user})`);
@@ -1072,10 +1086,10 @@ function createTransparentProxy(options = {}) {
           const headerStr = buffer.slice(0, headerEnd).toString("utf8");
           const isWeb = isWebAiDomain(sni);
           if (isWeb) {
-            const lowerHeaders = headerStr.toLowerCase();
-            const hasExt = lowerHeaders.includes("x-vantix-extension: active") ||
-                           lowerHeaders.includes("x-vantix-source: browser-guard") ||
-                           lowerHeaders.includes("vantix_guard=active");
+            const hasExt =
+              /x-vantix-extension:\s*active/i.test(headerStr) ||
+              /x-vantix-source:\s*browser-guard/i.test(headerStr) ||
+              headerStr.includes("vantix_guard=active");
             if (!hasExt) {
               // Unmanaged browser: Block IMMEDIATELY (<1ms) without waiting for body!
               processInterceptedAiRequest(buffer, sni, 443, tlsSocket);
