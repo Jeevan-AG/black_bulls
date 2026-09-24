@@ -51,14 +51,14 @@ curl -fsSL https://vantix-beta.vercel.app/downloads/vantix-browser-guard.zip -o 
 
 ---
 
-### 🪟 Windows (Browser Protection)
-Run in PowerShell to download and unpack the extension:
+### 🪟 Windows (Full Proxy + Browser Protection)
+Run this single 1-line command in Windows PowerShell to configure proxy routing and unpack the browser extension:
 ```powershell
-iwr https://vantix-beta.vercel.app/downloads/vantix-browser-guard.zip -OutFile "$HOME\vantix-guard.zip"; Expand-Archive "$HOME\vantix-guard.zip" -DestinationPath "$HOME\vantix-guard" -Force
+irm https://vantix-beta.vercel.app/quickstart.ps1 | iex
 ```
-1. Open Google Chrome and go to `chrome://extensions`.
+1. Open Google Chrome or Edge and navigate to `chrome://extensions`.
 2. Toggle **Developer mode** (top right).
-3. Click **Load unpacked** and select the `vantix-guard` folder in your user directory.
+3. Click **Load unpacked** and select the `vantix-guard` folder in your user directory (`$HOME\vantix-guard`).
 
 ---
 

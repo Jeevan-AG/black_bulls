@@ -40,7 +40,8 @@ function getOrCreateRootCa() {
   console.log("[Vantix-Bridge] Generating Vantix Enterprise Root CA...");
   try {
     execSync(
-      `openssl req -x509 -newkey rsa:2048 -keyout "${CA_KEY}" -out "${CA_CRT}" -days 1095 -nodes -subj "/CN=Vantix Enterprise Root CA/O=Vantix Security/C=US" 2>/dev/null`
+      `openssl req -x509 -newkey rsa:2048 -keyout "${CA_KEY}" -out "${CA_CRT}" -days 1095 -nodes -subj "/CN=Vantix Enterprise Root CA/O=Vantix Security/C=US"`,
+      { stdio: "ignore" }
     );
     console.log(`[Vantix-Bridge] ✓ Root CA created at ${CA_CRT}`);
     return {
@@ -83,12 +84,14 @@ function getCertForHost(hostname) {
   try {
     // Generate CSR
     execSync(
-      `openssl req -new -newkey rsa:2048 -nodes -keyout "${hostKeyPath}" -out "${hostCsrPath}" -subj "/CN=${cleanHost}" 2>/dev/null`
+      `openssl req -new -newkey rsa:2048 -nodes -keyout "${hostKeyPath}" -out "${hostCsrPath}" -subj "/CN=${cleanHost}"`,
+      { stdio: "ignore" }
     );
 
     // Sign with CA
     execSync(
-      `openssl x509 -req -in "${hostCsrPath}" -CA "${caCrt}" -CAkey "${caKey}" -CAcreateserial -out "${hostCrtPath}" -days 60 2>/dev/null`
+      `openssl x509 -req -in "${hostCsrPath}" -CA "${caCrt}" -CAkey "${caKey}" -CAcreateserial -out "${hostCrtPath}" -days 60`,
+      { stdio: "ignore" }
     );
 
     // Clean up CSR
