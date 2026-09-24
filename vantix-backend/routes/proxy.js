@@ -334,6 +334,140 @@ function isDomainAuthorized(domain) {
 }
 router.isDomainAuthorized = isDomainAuthorized;
 
+// ─── POST /api/vantix/inspect — Ultra-Fast (<5ms) TEE Prompt Inspection ──────
+router.post("/inspect", async (req, res) => {
+  const startTime = Date.now();
+  const SERVER_IDENTITIES = ["render", "root", "nobody", "www-data", "node", "ubuntu", "ec2-user"];
+  const os = require("os");
+  let fallbackUser = "employee";
+  let fallbackHost = os.hostname() || "workstation";
+  try {
+    const osUser = process.env.USERNAME || process.env.USER || (os.userInfo && os.userInfo().username) || "";
+    if (osUser && !SERVER_IDENTITIES.includes(osUser.toLowerCase())) fallbackUser = osUser;
+    const osHost = os.hostname() || "";
+    if (osHost && !osHost.startsWith("srv-")) fallbackHost = osHost;
+  } catch (e) {}
+
+  let resolvedUser = req.headers["x-vantix-user"] || req.body.userId || req.body.user;
+  if (!resolvedUser || SERVER_IDENTITIES.includes(resolvedUser.toLowerCase())) {
+    resolvedUser = fallbackUser;
+  }
+  let resolvedHost = req.headers["x-vantix-host"] || req.body.host;
+  if (!resolvedHost || resolvedHost === "browser-endpoint" || resolvedHost.startsWith("srv-")) {
+    resolvedHost = fallbackHost;
+  }
+  const { prompt, sessionId = `session-${resolvedUser}-${Date.now()}`, userId = resolvedUser, userEmail = `${resolvedUser}@acme.com` } = req.body;
+
+  if (!prompt || typeof prompt !== "string") {
+    return res.status(400).json({ success: false, error: "prompt is required" });
+  }
+
+  try {
+    const interceptedAt = new Date().toISOString();
+    const detection = analyzePrompt(prompt);
+    const action = decideAction(detection.overallRisk, detection.detections);
+    let sanitizedPrompt = prompt;
+    let tokenMap = new Map();
+
+    if (action === "hard_block") {
+      const auditEntry = {
+        timestamp: interceptedAt,
+        userId: resolvedUser,
+        orgId: req.orgId || "demo",
+        riskScore: detection.overallRisk,
+        actionTaken: "hard_block",
+        categoriesRedacted: detection.categoriesFound,
+        aiPlatform: req.headers["x-vantix-app"] || req.body.app || "chatgpt.com",
+      };
+      const signature = tee.signAuditEntry(auditEntry);
+
+      const { logRecord, sessionResult } = recordAndBroadcast({
+        resolvedUser,
+        userEmail,
+        resolvedHost,
+        prompt,
+        sanitizedPrompt: "[BLOCKED — Prompt contained live credentials / confidential parameters]",
+        restoredResponse: "🚫 BLOCKED BY ENTERPRISE POLICY (Credentials detected)",
+        action: "hard_block",
+        detection,
+        signature,
+        interceptedAt,
+        aiPlatform: req.headers["x-vantix-app"] || req.body.app || "chatgpt.com",
+        req,
+      });
+
+      return res.json({
+        success: true,
+        blocked: true,
+        action: "hard_block",
+        message: "This prompt contains live credentials and has been blocked by your organization's security policy.",
+        riskScore: detection.overallRisk,
+        sanitizedPrompt: prompt,
+        processingTime: Date.now() - startTime,
+        meta: {
+          action: "hard_block",
+          riskScore: detection.overallRisk,
+          detectionsCount: detection.detections.length,
+          combinationsCount: detection.combinations.length,
+          sessionRiskScore: sessionResult.riskScore,
+          anomalyTriggered: sessionResult.anomalyTriggered,
+          categoriesRedacted: detection.categoriesFound || Array.from(new Set(detection.detections.map(d => d.category))),
+        },
+      });
+    }
+
+    if (action === "silent_redact" && detection.detections.length > 0) {
+      tokenMap = tee.createTokenTable(sessionId, detection.detections, prompt);
+      sanitizedPrompt = tee.sanitizePrompt(prompt, tokenMap);
+    }
+
+    const auditEntry = {
+      timestamp: interceptedAt,
+      userId,
+      orgId: req.orgId || "demo",
+      riskScore: detection.overallRisk,
+      actionTaken: action,
+      categoriesRedacted: detection.categoriesFound,
+      aiPlatform: req.headers["x-vantix-app"] || req.body.app || "chatgpt.com",
+    };
+    const signature = tee.signAuditEntry(auditEntry);
+
+    const { logRecord, sessionResult } = recordAndBroadcast({
+      resolvedUser,
+      userEmail,
+      resolvedHost,
+      prompt,
+      sanitizedPrompt,
+      restoredResponse: "PROMPT_INSPECTED_AND_SANITIZED",
+      action,
+      detection,
+      signature,
+      interceptedAt,
+      aiPlatform: req.headers["x-vantix-app"] || req.body.app || "chatgpt.com",
+      req,
+    });
+
+    return res.json({
+      success: true,
+      blocked: false,
+      sanitizedPrompt,
+      riskScore: detection.overallRisk,
+      processingTime: Date.now() - startTime,
+      meta: {
+        action,
+        riskScore: detection.overallRisk,
+        detectionsCount: detection.detections.length,
+        combinationsCount: detection.combinations.length,
+        sessionRiskScore: sessionResult.riskScore,
+        anomalyTriggered: sessionResult.anomalyTriggered,
+        categoriesRedacted: detection.categoriesFound,
+      },
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // ─── POST /api/vantix/chat — The 7-Step Pipeline ────────────────────────────
 
 router.post("/chat", async (req, res) => {

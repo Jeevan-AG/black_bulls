@@ -84,17 +84,21 @@ function setInputText(el, newText) {
     el.dispatchEvent(new Event("change", { bubbles: true }));
   } else if (el.isContentEditable) {
     try {
-      const selection = window.getSelection();
-      const range = document.createRange();
-      range.selectNodeContents(el);
-      selection.removeAllRanges();
-      selection.addRange(range);
-
+      el.focus();
+      document.execCommand("selectAll", false, null);
       const success = document.execCommand("insertText", false, newText);
       if (!success) {
-        el.innerText = newText;
-        el.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: newText }));
-        el.dispatchEvent(new Event("change", { bubbles: true }));
+        const selection = window.getSelection();
+        const range = document.createRange();
+        range.selectNodeContents(el);
+        selection.removeAllRanges();
+        selection.addRange(range);
+        const success2 = document.execCommand("insertText", false, newText);
+        if (!success2) {
+          el.innerText = newText;
+          el.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: newText }));
+          el.dispatchEvent(new Event("change", { bubbles: true }));
+        }
       }
     } catch (err) {
       el.innerText = newText;
@@ -273,10 +277,110 @@ function handleLiveInput(inputEl) {
   }, 400);
 }
 
+// ─── Zero-Leak Local Regex Sanitizer (Always-On Client Fallback) ─────────────
+const LOCAL_SENSITIVE_PATTERNS = [
+  // 1. Natural Language Keys & Secrets
+  {
+    regex: /(?:(?:my|the|our|test|sample|here\s+is\s+(?:my|the))\s+)?(?:aws|amazon)\s*(?:access\s*)?key\s*(?:is|[:=]|\s+)\s*['"]?([^\s"'.,;]{4,})['"]?/gi,
+    type: "AWS_KEY",
+    isSecret: true,
+  },
+  {
+    regex: /(?:(?:my|the|our|test|sample|here\s+is\s+(?:my|the))\s+)?(?:openai|chatgpt)\s*(?:api\s*)?key\s*(?:is|[:=]|\s+)\s*['"]?([^\s"'.,;]{4,})['"]?/gi,
+    type: "OPENAI_API_KEY",
+    isSecret: true,
+  },
+  {
+    regex: /(?:(?:my|the|our|test|sample|here\s+is\s+(?:my|the))\s+)?(?:password|passwd)\s*(?:is|[:=]|\s+)\s*['"]?([^\s"'.,;]{4,})['"]?/gi,
+    type: "PASSWORD",
+    isSecret: true,
+  },
+  {
+    regex: /(?:(?:my|the|our|test|sample|here\s+is\s+(?:my|the))\s+)?(?:auth_token|token)\s*(?:is|[:=]|\s+)\s*['"]?([^\s"'.,;]{4,})['"]?/gi,
+    type: "AUTH_TOKEN",
+    isSecret: true,
+  },
+  {
+    regex: /(?:(?:my|the|our|test|sample|here\s+is\s+(?:my|the))\s+)?(?:secret|secret_key)\s*(?:is|[:=]|\s+)\s*['"]?([^\s"'.,;]{4,})['"]?/gi,
+    type: "SECRET_KEY",
+    isSecret: true,
+  },
+  {
+    regex: /(?:(?:my|the|our|test|sample|here\s+is\s+(?:my|the))\s+)?(?:api_key|api\s*key|apikey)\s*(?:is|[:=]|\s+)\s*['"]?([^\s"'.,;]{4,})['"]?/gi,
+    type: "API_KEY",
+    isSecret: true,
+  },
+
+  // 2. High-Entropy Tokens & API Keys
+  { regex: /\bAKIA[A-Z0-9]{16}\b/g, type: "AWS_KEY", isSecret: true },
+  { regex: /\bsk-[A-Za-z0-9_\-]{20,}\b/g, type: "OPENAI_API_KEY", isSecret: true },
+  { regex: /\bghp_[A-Za-z0-9]{36,}\b/g, type: "GITHUB_TOKEN", isSecret: true },
+  { regex: /\bAIza[A-Za-z0-9_\-]{35}\b/g, type: "GOOGLE_API_KEY", isSecret: true },
+
+  // 3. Phone Numbers
+  { regex: /(?:\+?\d{1,3}[\s-]?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}\b/g, type: "PHONE_NUMBER" },
+  { regex: /(?<!\d)(?:\+91[\s-]?)?[6-9]\d{9}(?!\d)/g, type: "PHONE_NUMBER" },
+
+  // 4. Email Addresses
+  { regex: /\b[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}\b/gi, type: "EMAIL_ADDRESS" },
+
+  // 5. Government IDs
+  { regex: /(?<!\d)\d{4}[\s-]?\d{4}[\s-]?\d{4}(?!\d)/g, type: "AADHAAR_NUMBER" },
+  { regex: /\b[A-Z]{5}[0-9]{4}[A-Z]\b/g, type: "PAN_NUMBER" },
+  { regex: /\b\d{3}-\d{2}-\d{4}\b/g, type: "SSN_NUMBER" },
+
+  // 6. Financial
+  { regex: /\b(?:4[0-9]{3}|5[1-5][0-9]{2}|3[47][0-9]{2})[\s-][0-9]{4}[\s-][0-9]{4}[\s-][0-9]{4}\b/g, type: "CREDIT_DEBIT_CARD" },
+
+  // 7. Network / Industrial
+  { regex: /\b(?:192\.168|10\.\d{1,3}|172\.(?:1[6-9]|2\d|3[01]))\.\d{1,3}\.\d{1,3}\b/g, type: "IP_ADDRESS" },
+  { regex: /\b(?:modbus|holding|input|scada)\s+(?:register\s+)?(?:address\s*)?[:=]?\s*[34][0-9]{4}\b/gi, type: "REGISTER_ADDR" },
+];
+
+function sanitizeLocally(text) {
+  if (!text || typeof text !== "string") {
+    return { sanitized: text, redactedCount: 0, secretsCount: 0, categories: [] };
+  }
+
+  let sanitized = text;
+  let redactedCount = 0;
+  let secretsCount = 0;
+  const categories = [];
+  const counts = {};
+
+  for (const pat of LOCAL_SENSITIVE_PATTERNS) {
+    const re = new RegExp(pat.regex.source, pat.regex.flags);
+    const matches = [...sanitized.matchAll(re)];
+    for (const m of matches) {
+      const val = m[1] || m[0];
+      if (!val || val.length < 3) continue;
+      if (/^\[[A-Z0-9_]+\]$/.test(val)) continue; // Already placeholder
+
+      if (pat.isSecret) secretsCount++;
+      redactedCount++;
+
+      if (!counts[pat.type]) counts[pat.type] = 0;
+      counts[pat.type]++;
+      const placeholder = `[${pat.type}${counts[pat.type] > 1 ? `_${counts[pat.type]}` : ""}]`;
+
+      sanitized = sanitized.split(val).join(placeholder);
+      if (!categories.includes(pat.type)) categories.push(pat.type);
+    }
+  }
+
+  return { sanitized, redactedCount, secretsCount, categories };
+}
+
 // ─── Core Interception Pipeline ──────────────────────────────────────────────
 let isProcessing = false;
+let _isDispatchingSyntheticSubmit = false;
 
 async function handlePromptSubmission(e) {
+  // If this submit event was triggered by our own triggerRealSubmit, allow it through to the web app!
+  if (_isDispatchingSyntheticSubmit) {
+    return;
+  }
+
   const inputEl = findPromptInput();
   if (!inputEl) return;
 
@@ -293,12 +397,6 @@ async function handlePromptSubmission(e) {
 
   const rawPrompt = getInputText(inputEl).trim();
   if (!rawPrompt || rawPrompt.length < 3) return;
-
-  // Prevent recursive loop if already sanitized by Vantix
-  if (inputEl.__vantix_sanitized) {
-    inputEl.__vantix_sanitized = false;
-    return;
-  }
 
   if (isProcessing) {
     e.preventDefault();
@@ -324,9 +422,26 @@ async function handlePromptSubmission(e) {
       (response) => {
         isProcessing = false;
 
+        // Fallback: if background service worker is unreachable or returns error,
+        // sanitize locally using client-side regex engine so zero leaks can occur!
         if (!response || !response.success || !response.result) {
-          console.warn("[Vantix Guard] Engine not reachable, allowing prompt.");
-          inputEl.__vantix_sanitized = true;
+          console.warn("[Vantix Guard] Engine not directly reachable, engaging local Zero-Leak sanitizer...");
+          const local = sanitizeLocally(rawPrompt);
+          if (local.secretsCount > 3) {
+            blockInput(inputEl, "Outbound transmission blocked due to massive credential exposure.", 95, local.categories);
+            return;
+          }
+          if (local.redactedCount > 0) {
+            console.log("[Vantix Guard] ⚡ LOCAL SILENT REDACTION applied:", local.sanitized);
+            unblockInput(inputEl);
+            setInputText(inputEl, local.sanitized);
+            showRedactPill(local.redactedCount);
+            setTimeout(() => {
+              triggerRealSubmit(inputEl);
+            }, 80);
+            return;
+          }
+          unblockInput(inputEl);
           triggerRealSubmit(inputEl);
           return;
         }
@@ -351,50 +466,62 @@ async function handlePromptSubmission(e) {
           setInputText(inputEl, res.sanitizedPrompt);
           showRedactPill(categories.length || 1);
 
-          inputEl.__vantix_sanitized = true;
           setTimeout(() => {
             triggerRealSubmit(inputEl);
-          }, 60);
+          }, 80);
           return;
         }
 
         // ── Case 3: Pass ───────────────────────────────────────────────────
         unblockInput(inputEl);
-        inputEl.__vantix_sanitized = true;
         triggerRealSubmit(inputEl);
       }
     );
   } catch (err) {
     isProcessing = false;
-    console.error("[Vantix Guard] Error during prompt interception:", err);
-    inputEl.__vantix_sanitized = true;
+    console.error("[Vantix Guard] Error during prompt interception, falling back to local sanitizer:", err);
+    const local = sanitizeLocally(rawPrompt);
+    if (local.secretsCount > 3) {
+      blockInput(inputEl, "Outbound transmission blocked due to massive credential exposure.", 95, local.categories);
+      return;
+    }
+    if (local.redactedCount > 0) {
+      setInputText(inputEl, local.sanitized);
+      showRedactPill(local.redactedCount);
+      setTimeout(() => triggerRealSubmit(inputEl), 80);
+      return;
+    }
     triggerRealSubmit(inputEl);
   }
 }
 
 // ─── Helper: Trigger Native Submit ───────────────────────────────────────────
 function triggerRealSubmit(inputEl) {
+  _isDispatchingSyntheticSubmit = true;
   const sendBtn = findSendButton();
 
   if (sendBtn && !sendBtn.disabled && !sendBtn.dataset.vantixBlocked) {
     sendBtn.click();
-  } else {
+  } else if (inputEl) {
     try {
-      if (typeof KeyboardEvent !== "undefined") {
-        const enterEvt = new KeyboardEvent("keydown", {
-          key: "Enter",
-          code: "Enter",
-          keyCode: 13,
-          which: 13,
-          bubbles: true,
-          cancelable: true,
-        });
-        inputEl.dispatchEvent(enterEvt);
-      }
+      const enterEvt = new KeyboardEvent("keydown", {
+        key: "Enter",
+        code: "Enter",
+        keyCode: 13,
+        which: 13,
+        bubbles: true,
+        cancelable: true,
+      });
+      inputEl.dispatchEvent(enterEvt);
     } catch (err) {
       console.warn("[Vantix Guard] Could not dispatch enter event:", err);
     }
   }
+
+  // Release the synthetic dispatch lock after event dispatch finishes
+  setTimeout(() => {
+    _isDispatchingSyntheticSubmit = false;
+  }, 100);
 }
 
 // ─── Event Listeners: Keydown, Button Click & Form Submit ─────────────────────
@@ -404,6 +531,7 @@ function setupListeners() {
     "keydown",
     (e) => {
       if (e.key === "Enter" && !e.shiftKey) {
+        if (_isDispatchingSyntheticSubmit) return; // Allow synthetic enter through
         const inputEl = findPromptInput();
         if (inputEl && (e.target === inputEl || inputEl.contains(e.target))) {
           if (inputEl.dataset.vantixBlocked === "true") {
@@ -425,16 +553,19 @@ function setupListeners() {
   document.addEventListener(
     "click",
     (e) => {
+      if (_isDispatchingSyntheticSubmit) return; // Allow synthetic click through
       const inputEl = findPromptInput();
-      const target = e.target.closest("button");
+      const target = e.target.closest("button") || e.target.closest('[role="button"]');
       if (!target) return;
 
+      const sendBtn = findSendButton();
       const isSend =
+        target === sendBtn ||
+        (sendBtn && (sendBtn.contains(e.target) || sendBtn.contains(target))) ||
         target.getAttribute("data-testid")?.includes("send") ||
         target.getAttribute("aria-label")?.toLowerCase().includes("send") ||
         target.getAttribute("aria-label")?.toLowerCase().includes("submit") ||
-        target.type === "submit" ||
-        target === findSendButton();
+        target.type === "submit";
 
       if (isSend) {
         if (inputEl && inputEl.dataset.vantixBlocked === "true") {
@@ -447,9 +578,7 @@ function setupListeners() {
           return false;
         }
 
-        if (inputEl && !inputEl.__vantix_sanitized) {
-          handlePromptSubmission(e);
-        }
+        handlePromptSubmission(e);
       }
     },
     true // Capture phase
@@ -459,6 +588,7 @@ function setupListeners() {
   document.addEventListener(
     "submit",
     (e) => {
+      if (_isDispatchingSyntheticSubmit) return;
       const inputEl = findPromptInput();
       if (inputEl && inputEl.dataset.vantixBlocked === "true") {
         e.preventDefault();
@@ -466,9 +596,7 @@ function setupListeners() {
         e.stopImmediatePropagation();
         return false;
       }
-      if (inputEl && !inputEl.__vantix_sanitized) {
-        handlePromptSubmission(e);
-      }
+      handlePromptSubmission(e);
     },
     true
   );

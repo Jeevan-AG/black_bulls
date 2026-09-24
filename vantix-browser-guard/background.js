@@ -264,24 +264,42 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           sessionId: `browser-${user}-${Date.now()}`,
         };
 
-        // 1. Primary inspection for low-latency (<5ms)
-        const res = await fetch(`${effectiveBackendUrl}/api/vantix/chat`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-Vantix-User": user,
-            "X-Vantix-Host": host,
-            "X-Vantix-Source": "browser-guard",
-          },
-          body: JSON.stringify(payload),
-        });
+        // 1. Primary inspection for ultra-low latency (<5ms TEE Enclave)
+        let json;
+        try {
+          const res = await fetch(`${effectiveBackendUrl}/api/vantix/inspect`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Vantix-User": user,
+              "X-Vantix-Host": host,
+              "X-Vantix-Source": "browser-guard",
+            },
+            body: JSON.stringify(payload),
+          });
+          json = await res.json();
+          if (!res.ok || !json.success) {
+            throw new Error(json.error || `HTTP ${res.status}`);
+          }
+        } catch (e) {
+          // Fallback to /chat if /inspect route is temporarily offline or restarting
+          const res = await fetch(`${effectiveBackendUrl}/api/vantix/chat`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Vantix-User": user,
+              "X-Vantix-Host": host,
+              "X-Vantix-Source": "browser-guard",
+            },
+            body: JSON.stringify(payload),
+          });
+          json = await res.json();
+        }
 
-        const json = await res.json();
-
-        // 2. Dual-Sync: If local engine was used, sync to Cloud Render in background
+        // 2. Dual-Sync: If local engine was used, sync audit to Cloud Render asynchronously
         // so live Vercel dashboard updates in real-time
         if (effectiveBackendUrl !== CLOUD_BACKEND_URL) {
-          fetch(`${CLOUD_BACKEND_URL}/api/vantix/chat`, {
+          fetch(`${CLOUD_BACKEND_URL}/api/vantix/inspect`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",

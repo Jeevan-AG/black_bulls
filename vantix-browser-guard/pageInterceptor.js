@@ -16,38 +16,38 @@
   const PATTERNS = [
     // 1. Natural Language Keys & Secrets with keyword context
     {
-      regex: /(?:(?:my|the|our|test|sample)\s+)?aws\s*(?:access\s*)?key\s*(?:is|[:=])\s*['"]?([^\s"'.,;]{4,})['"]?/gi,
+      regex: /(?:(?:my|the|our|test|sample|here\s+is\s+(?:my|the))\s+)?(?:aws|amazon)\s*(?:access\s*)?key\s*(?:is|[:=]|\s+)\s*['"]?([^\s"'.,;]{4,})['"]?/gi,
       type: "AWS_KEY",
       isSecret: true,
     },
     {
-      regex: /(?:(?:my|the|our|test|sample)\s+)?openai\s*(?:api\s*)?key\s*(?:is|[:=])\s*['"]?([^\s"'.,;]{4,})['"]?/gi,
+      regex: /(?:(?:my|the|our|test|sample|here\s+is\s+(?:my|the))\s+)?(?:openai|chatgpt)\s*(?:api\s*)?key\s*(?:is|[:=]|\s+)\s*['"]?([^\s"'.,;]{4,})['"]?/gi,
       type: "OPENAI_API_KEY",
       isSecret: true,
     },
     {
-      regex: /(?:(?:my|the|our|test|sample)\s+)?(?:password|passwd)\s*(?:is|[:=])\s*['"]?([^\s"'.,;]{4,})['"]?/gi,
+      regex: /(?:(?:my|the|our|test|sample|here\s+is\s+(?:my|the))\s+)?(?:password|passwd)\s*(?:is|[:=]|\s+)\s*['"]?([^\s"'.,;]{4,})['"]?/gi,
       type: "PASSWORD",
       isSecret: true,
     },
     {
-      regex: /(?:(?:my|the|our|test|sample)\s+)?(?:auth_token|token)\s*(?:is|[:=])\s*['"]?([^\s"'.,;]{4,})['"]?/gi,
+      regex: /(?:(?:my|the|our|test|sample|here\s+is\s+(?:my|the))\s+)?(?:auth_token|token)\s*(?:is|[:=]|\s+)\s*['"]?([^\s"'.,;]{4,})['"]?/gi,
       type: "AUTH_TOKEN",
       isSecret: true,
     },
     {
-      regex: /(?:(?:my|the|our|test|sample)\s+)?(?:secret|secret_key)\s*(?:is|[:=])\s*['"]?([^\s"'.,;]{4,})['"]?/gi,
+      regex: /(?:(?:my|the|our|test|sample|here\s+is\s+(?:my|the))\s+)?(?:secret|secret_key)\s*(?:is|[:=]|\s+)\s*['"]?([^\s"'.,;]{4,})['"]?/gi,
       type: "SECRET_KEY",
       isSecret: true,
     },
     {
-      regex: /(?:(?:my|the|our|test|sample)\s+)?(?:api_key|api\s*key)\s*(?:is|[:=])\s*['"]?([^\s"'.,;]{4,})['"]?/gi,
+      regex: /(?:(?:my|the|our|test|sample|here\s+is\s+(?:my|the))\s+)?(?:api_key|api\s*key|apikey)\s*(?:is|[:=]|\s+)\s*['"]?([^\s"'.,;]{4,})['"]?/gi,
       type: "API_KEY",
       isSecret: true,
     },
 
     // 2. High-Entropy Tokens & API Keys
-    { regex: /\bAKIA[A-Z0-9]{16}\b/g, type: "AWS_ACCESS_KEY", isSecret: true },
+    { regex: /\bAKIA[A-Z0-9]{16}\b/g, type: "AWS_KEY", isSecret: true },
     { regex: /\bsk-[A-Za-z0-9_\-]{20,}\b/g, type: "OPENAI_API_KEY", isSecret: true },
     { regex: /\bghp_[A-Za-z0-9]{36,}\b/g, type: "GITHUB_TOKEN", isSecret: true },
     { regex: /\bAIza[A-Za-z0-9_\-]{35}\b/g, type: "GOOGLE_API_KEY", isSecret: true },
@@ -97,6 +97,9 @@
           const valToReplace = match[1] || match[0];
           if (!valToReplace || valToReplace.length < 3) continue;
 
+          // Skip if already a bracketed placeholder token like [API_KEY]
+          if (/^\[[A-Z0-9_]+\]$/.test(valToReplace)) continue;
+
           if (pat.isSecret) secretsCount++;
           redactedCount++;
 
@@ -119,8 +122,10 @@
     let url = typeof resource === "string" ? resource : (resource && resource.url) || "";
 
     const isAiChatEndpoint =
-      url.includes("/backend-api/conversation") ||
-      url.includes("/backend-api/lat/r") ||
+      url.includes("/backend-api/") ||
+      url.includes("/backend-anon/") ||
+      url.includes("/conversation") ||
+      url.includes("/lat/r") ||
       url.includes("/api/chat") ||
       url.includes("/chat_conversations") ||
       url.includes("/completion") ||
@@ -129,51 +134,66 @@
       url.includes("/v1/chat") ||
       url.includes("/graphql");
 
-    if (config && config.body && isAiChatEndpoint) {
-      if (typeof config.body === "string") {
-        const { text, redactedCount, secretsCount, items } = sanitizePayloadString(config.body);
+    let bodyText = null;
+    let isRequest = false;
 
-        if (secretsCount > 3) {
-          console.warn("[Vantix Guard] ⛔ HARD BLOCK: Outgoing payload contained > 3 exposed secrets. Request aborted.");
-          window.dispatchEvent(
-            new CustomEvent("vantix:network_block", {
-              detail: { reason: `Massive credential exposure detected (${secretsCount} secrets). Request blocked by Vantix.`, secretsCount },
-            })
-          );
-          return new Response(
-            JSON.stringify({
-              error: {
-                message: "Vantix AI Firewall: Outgoing prompt blocked due to massive credential exposure.",
-                type: "vantix_violation",
-              },
-            }),
-            { status: 403, statusText: "Forbidden", headers: { "Content-Type": "application/json" } }
-          );
-        }
+    if (config && typeof config.body === "string") {
+      bodyText = config.body;
+    } else if (resource && typeof resource === "object" && typeof resource.clone === "function") {
+      try {
+        const cloned = resource.clone();
+        bodyText = await cloned.text();
+        isRequest = true;
+      } catch (e) {}
+    }
 
-        if (redactedCount > 0) {
-          console.log(`[Vantix Guard] 🛡 IN-FLIGHT REDACTION: Scrubbed ${redactedCount} sensitive values from outgoing request.`);
+    if (bodyText && isAiChatEndpoint) {
+      const { text, redactedCount, secretsCount, items } = sanitizePayloadString(bodyText);
+
+      if (secretsCount > 3) {
+        console.warn("[Vantix Guard] ⛔ HARD BLOCK: Outgoing payload contained > 3 exposed secrets. Request aborted.");
+        window.dispatchEvent(
+          new CustomEvent("vantix:network_block", {
+            detail: { reason: `Massive credential exposure detected (${secretsCount} secrets). Request blocked by Vantix.`, secretsCount },
+          })
+        );
+        return new Response(
+          JSON.stringify({
+            error: {
+              message: "Vantix AI Firewall: Outgoing prompt blocked due to massive credential exposure.",
+              type: "vantix_violation",
+            },
+          }),
+          { status: 403, statusText: "Forbidden", headers: { "Content-Type": "application/json" } }
+        );
+      }
+
+      if (redactedCount > 0) {
+        console.log(`[Vantix Guard] 🛡 IN-FLIGHT REDACTION: Scrubbed ${redactedCount} sensitive values from outgoing request.`);
+        if (isRequest) {
+          resource = new Request(resource, { body: text });
+        } else if (config) {
           config.body = text;
-
-          window.dispatchEvent(
-            new CustomEvent("vantix:network_redact", {
-              detail: { redactedCount, items },
-            })
-          );
-
-          // Dual-sync telemetry to local engine & cloud dashboard asynchronously
-          try {
-            originalFetch("http://localhost:5000/api/vantix/chat", {
-              method: "POST",
-              headers: { "Content-Type": "application/json", "X-Vantix-Source": "browser-in-flight" },
-              body: JSON.stringify({
-                prompt: `[In-Flight Protected Request] Scrubbed ${redactedCount} sensitive items: ${items.map((i) => i.placeholder).join(", ")}`,
-                userId: "employee",
-                sessionId: `browser-${Date.now()}`,
-              }),
-            }).catch(() => {});
-          } catch (e) {}
         }
+
+        window.dispatchEvent(
+          new CustomEvent("vantix:network_redact", {
+            detail: { redactedCount, items },
+          })
+        );
+
+        // Dual-sync telemetry to local engine & cloud dashboard asynchronously
+        try {
+          originalFetch("http://localhost:5000/api/vantix/inspect", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "X-Vantix-Source": "browser-in-flight" },
+            body: JSON.stringify({
+              prompt: `[In-Flight Protected Request] Scrubbed ${redactedCount} sensitive items: ${items.map((i) => i.placeholder).join(", ")}`,
+              userId: "employee",
+              sessionId: `browser-${Date.now()}`,
+            }),
+          }).catch(() => {});
+        } catch (e) {}
       }
     }
 
@@ -210,4 +230,33 @@
 
     return originalXhrSend.call(this, body);
   };
+
+  // ── Hook 3: WebSocket.prototype.send ───────────────────────────────────────
+  if (typeof WebSocket !== "undefined" && WebSocket.prototype) {
+    const originalWsSend = WebSocket.prototype.send;
+    WebSocket.prototype.send = function (data) {
+      if (typeof data === "string") {
+        const { text, redactedCount, secretsCount, items } = sanitizePayloadString(data);
+        if (secretsCount > 3) {
+          console.warn("[Vantix Guard] ⛔ HARD BLOCK (WebSocket): Aborted due to >3 secrets.");
+          window.dispatchEvent(
+            new CustomEvent("vantix:network_block", {
+              detail: { reason: "Massive credential exposure detected over WebSocket.", secretsCount },
+            })
+          );
+          return;
+        }
+        if (redactedCount > 0) {
+          console.log(`[Vantix Guard] 🛡 IN-FLIGHT REDACTION (WebSocket): Scrubbed ${redactedCount} sensitive values.`);
+          data = text;
+          window.dispatchEvent(
+            new CustomEvent("vantix:network_redact", {
+              detail: { redactedCount, items },
+            })
+          );
+        }
+      }
+      return originalWsSend.call(this, data);
+    };
+  }
 })();
