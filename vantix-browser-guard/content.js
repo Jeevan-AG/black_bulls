@@ -474,8 +474,14 @@ async function handlePromptSubmission(e) {
         }
 
         // Register any token mapping returned by the TEE Enclave for two-way restoration
-        if (res.tokenMapping && Array.isArray(res.tokenMapping)) {
+        if (res.tokenMapping && Array.isArray(res.tokenMapping) && res.tokenMapping.length > 0) {
           registerTokenMappings(res.tokenMapping);
+        } else {
+          // Client-side fallback ensures two-way un-redaction works seamlessly under all network states
+          const local = sanitizeLocally(rawPrompt);
+          if (local.tokenMapping && local.tokenMapping.length > 0) {
+            registerTokenMappings(local.tokenMapping);
+          }
         }
 
         // ── Case 2: Silent Redaction (<=3 credentials / PII) ───────────────
