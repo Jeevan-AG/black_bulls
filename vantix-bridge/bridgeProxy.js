@@ -417,6 +417,24 @@ function processInterceptedAiRequest(rawBuffer, hostname, port, clientTlsSocket)
       console.log(`\n[Vantix-Bridge] ⛔ UNMANAGED ACCESS BLOCKED: ${hostname} (User: ${identity.user}@${identity.host}) — Missing Browser Guard Extension`);
       stats.interceptedPrompts++;
 
+      // 1. Deliver 403 Forbidden block page IMMEDIATELY (<1ms latency)
+      const blockHtml = getUnmanagedBlockHtml(hostname, identity);
+      const resHeaders =
+        "HTTP/1.1 403 Forbidden\r\n" +
+        "Content-Type: text/html; charset=utf-8\r\n" +
+        `Content-Length: ${Buffer.byteLength(blockHtml)}\r\n` +
+        "Connection: close\r\n" +
+        "Cache-Control: no-cache, no-store, must-revalidate\r\n" +
+        "\r\n";
+
+      try {
+        if (!clientTlsSocket.destroyed && clientTlsSocket.writable) {
+          clientTlsSocket.write(resHeaders + blockHtml);
+          clientTlsSocket.end();
+        }
+      } catch (err) {}
+
+      // 2. Broadcast alert to local admin dashboard in real-time
       try {
         ws.broadcastDetection({
           originalPrompt: `[UNMANAGED ACCESS BLOCKED] User attempted to open ${hostname} without Vantix Browser Guard`,
@@ -437,40 +455,30 @@ function processInterceptedAiRequest(rawBuffer, hostname, port, clientTlsSocket)
           interceptSource: "network-layer-unmanaged-block",
           timestamp: new Date().toISOString(),
         });
-
-        fetch("https://vantix-backend-7gcw.onrender.com/api/vantix/chat", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-Vantix-User": identity.user,
-            "X-Vantix-Host": identity.host,
-            "X-Vantix-Source": "network-unmanaged-block",
-          },
-          body: JSON.stringify({
-            prompt: `[UNMANAGED WEB AI ACCESS BLOCKED] Attempted connection to ${hostname} without Vantix Browser Guard.`,
-            userId: identity.user,
-            user: identity.user,
-            host: identity.host,
-            sessionId: `unmanaged-${Date.now()}`,
-          }),
-        }).catch(() => {});
       } catch (e) {}
 
-      const blockHtml = getUnmanagedBlockHtml(hostname, identity);
-      const resHeaders =
-        "HTTP/1.1 403 Forbidden\r\n" +
-        "Content-Type: text/html; charset=utf-8\r\n" +
-        `Content-Length: ${Buffer.byteLength(blockHtml)}\r\n` +
-        "Connection: close\r\n" +
-        "Cache-Control: no-cache, no-store, must-revalidate\r\n" +
-        "\r\n";
+      // 3. Asynchronous cloud sync in background (non-blocking)
+      setImmediate(() => {
+        try {
+          fetch("https://vantix-backend-7gcw.onrender.com/api/vantix/chat", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Vantix-User": identity.user,
+              "X-Vantix-Host": identity.host,
+              "X-Vantix-Source": "network-unmanaged-block",
+            },
+            body: JSON.stringify({
+              prompt: `[UNMANAGED WEB AI ACCESS BLOCKED] Attempted connection to ${hostname} without Vantix Browser Guard.`,
+              userId: identity.user,
+              user: identity.user,
+              host: identity.host,
+              sessionId: `unmanaged-${Date.now()}`,
+            }),
+          }).catch(() => {});
+        } catch (e) {}
+      });
 
-      try {
-        if (!clientTlsSocket.destroyed && clientTlsSocket.writable) {
-          clientTlsSocket.write(resHeaders + blockHtml);
-          clientTlsSocket.end();
-        }
-      } catch (err) {}
       return;
     }
 
@@ -1060,8 +1068,23 @@ function createTransparentProxy(options = {}) {
           const headerEnd = buffer.indexOf("\r\n\r\n");
           if (headerEnd === -1) return;
 
-          // Wait for full body if Content-Length is present
+          // FAST-PATH: Web AI (ChatGPT, Claude, etc.) unmanaged browser check on headers
           const headerStr = buffer.slice(0, headerEnd).toString("utf8");
+          const isWeb = isWebAiDomain(sni);
+          if (isWeb) {
+            const lowerHeaders = headerStr.toLowerCase();
+            const hasExt = lowerHeaders.includes("x-vantix-extension: active") ||
+                           lowerHeaders.includes("x-vantix-source: browser-guard") ||
+                           lowerHeaders.includes("vantix_guard=active");
+            if (!hasExt) {
+              // Unmanaged browser: Block IMMEDIATELY (<1ms) without waiting for body!
+              processInterceptedAiRequest(buffer, sni, 443, tlsSocket);
+              buffer = Buffer.alloc(0);
+              return;
+            }
+          }
+
+          // Wait for full body if Content-Length is present (for API requests / IDE agents)
           const clMatch = headerStr.match(/content-length:\s*(\d+)/i);
           if (clMatch) {
             const expected = parseInt(clMatch[1]);

@@ -676,16 +676,13 @@ window.addEventListener("vantix:network_block", (e) => {
   }
 });
 
-// Active tab keep-alive domain authorization (runs ONLY in managed browser where extension is loaded)
-function sendTabDomainAuthorization() {
-  try {
-    fetch("http://localhost:5000/api/vantix/authorize-ai-access", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ domain: location.hostname.toLowerCase(), timestamp: Date.now() }),
-    }).catch(() => {});
-  } catch (e) {}
-}
-sendTabDomainAuthorization();
-setInterval(sendTabDomainAuthorization, 3000);
+// Active tab single-load authorization (signals presence on initial document load only)
+try {
+  fetch("http://localhost:5000/api/vantix/authorize-ai-access", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ domain: location.hostname.toLowerCase(), timestamp: Date.now() }),
+  }).catch(() => {});
+} catch (e) {}
+
 

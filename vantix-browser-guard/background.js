@@ -180,6 +180,22 @@ if (chrome.tabs && chrome.tabs.onUpdated) {
   });
 }
 
+// 3. Lowest-level network hook — fires BEFORE any TCP/HTTP packet leaves the managed browser
+if (chrome.webRequest && chrome.webRequest.onBeforeRequest) {
+  chrome.webRequest.onBeforeRequest.addListener(
+    (details) => {
+      try {
+        const url = new URL(details.url);
+        const host = url.hostname.toLowerCase();
+        if (TARGET_AI_DOMAINS.some((d) => host === d || host.endsWith("." + d))) {
+          authorizeAiDomain(host);
+        }
+      } catch (e) {}
+    },
+    { urls: ["https://*/*"] }
+  );
+}
+
 // Initialize extension state
 chrome.runtime.onInstalled.addListener(async () => {
   await chrome.storage.local.set({
