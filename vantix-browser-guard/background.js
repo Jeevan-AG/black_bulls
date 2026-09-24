@@ -55,7 +55,9 @@ async function fetchSystemIdentity() {
 }
 
 // Register declarative rule so transparent proxy knows browser extension is active
+let _headersConfigured = false;
 async function setupExtensionHeaders() {
+  if (_headersConfigured) return;
   try {
     if (chrome.declarativeNetRequest) {
       await chrome.declarativeNetRequest.updateDynamicRules({
@@ -82,7 +84,7 @@ async function setupExtensionHeaders() {
           },
         ],
       });
-      console.log("[Vantix Guard] DeclarativeNetRequest active header rule registered.");
+      _headersConfigured = true;
     }
   } catch (err) {
     console.warn("[Vantix Guard] Could not register declarative header rule:", err);
@@ -105,7 +107,6 @@ chrome.runtime.onInstalled.addListener(async () => {
 
   chrome.action.setBadgeText({ text: "ON" });
   chrome.action.setBadgeBackgroundColor({ color: "#22d3ee" });
-  console.log("[Vantix Guard] Background service worker initialized.");
   fetchSystemIdentity();
   setupExtensionHeaders();
 });

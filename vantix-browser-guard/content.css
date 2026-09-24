@@ -155,5 +155,22 @@
 
 .vantix-shake-element {
   animation: vantix-shake 0.4s ease-in-out !important;
+  border: 2px solid #ef4444 !important;
+  box-shadow: 0 0 16px rgba(239, 68, 68, 0.4) !important;
+}
+
+/* Blocked Input and Send Button Styles */
+.vantix-input-blocked {
+  border: 2px solid #ef4444 !important;
+  box-shadow: 0 0 16px rgba(239, 68, 68, 0.35) !important;
+  background-color: rgba(239, 68, 68, 0.04) !important;
+}
+
+.vantix-btn-blocked {
+  opacity: 0.3 !important;
+  cursor: not-allowed !important;
+  pointer-events: none !important;
+  filter: grayscale(1) !important;
+  background-color: #334155 !important;
   border: 1px solid #ef4444 !important;
 }

@@ -450,16 +450,20 @@ function processInterceptedAiRequest(rawBuffer, hostname, port, clientTlsSocket)
       } catch (e) {}
 
       const blockHtml = getUnmanagedBlockHtml(hostname, identity);
-      const resHeaders = [
-        "HTTP/1.1 403 Forbidden",
-        "Content-Type: text/html; charset=utf-8",
-        `Content-Length: ${Buffer.byteLength(blockHtml)}`,
-        "Connection: close",
-        "\r\n",
-      ].join("\r\n");
+      const resHeaders =
+        "HTTP/1.1 403 Forbidden\r\n" +
+        "Content-Type: text/html; charset=utf-8\r\n" +
+        `Content-Length: ${Buffer.byteLength(blockHtml)}\r\n` +
+        "Connection: close\r\n" +
+        "Cache-Control: no-cache, no-store, must-revalidate\r\n" +
+        "\r\n";
 
-      clientTlsSocket.write(resHeaders + blockHtml);
-      clientTlsSocket.end();
+      try {
+        if (!clientTlsSocket.destroyed && clientTlsSocket.writable) {
+          clientTlsSocket.write(resHeaders + blockHtml);
+          clientTlsSocket.end();
+        }
+      } catch (err) {}
       return;
     }
 

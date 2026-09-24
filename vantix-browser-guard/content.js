@@ -1,6 +1,7 @@
 // ─── Vantix Enterprise AI Guard — Content Interceptor ─────────────────────────
 // Hooks into ChatGPT, Claude, and Gemini DOM. Intercepts prompt submission,
-// executes pre-flight TEE inspection, enforces Hard Block, or performs Silent Redact.
+// executes pre-flight TEE inspection, enforces Hard Block (disabling send button
+// and showing prominent block banner), or performs Silent Redact.
 // ─────────────────────────────────────────────────────────────────────────────
 
 "use strict";
@@ -10,7 +11,11 @@ console.log("[Vantix Guard] Content script loaded into AI chat interface.");
 // ─── Helper: Identify Active Input Element ───────────────────────────────────
 function findPromptInput() {
   // ChatGPT
-  const cgPrompt = document.getElementById("prompt-textarea");
+  const cgPrompt = document.getElementById("prompt-textarea") ||
+                   document.querySelector('div[contenteditable="true"]#prompt-textarea') ||
+                   document.querySelector('textarea[data-id="root"]') ||
+                   document.querySelector('div[data-placeholder*="Message"]') ||
+                   document.querySelector('div[data-placeholder*="Ask"]');
   if (cgPrompt) return cgPrompt;
 
   // Claude
@@ -26,6 +31,22 @@ function findPromptInput() {
 
   // Generic fallback
   return document.querySelector('textarea, [contenteditable="true"]');
+}
+
+// ─── Helper: Identify Active Send Button ─────────────────────────────────────
+function findSendButton() {
+  return (
+    document.querySelector('button[data-testid="send-button"]') ||
+    document.querySelector('button[data-testid="composer-send-button"]') ||
+    document.querySelector('button[data-testid="fruitjuice-send-button"]') ||
+    document.querySelector('#send-button') ||
+    document.querySelector('button[aria-label*="Send" i]') ||
+    document.querySelector('button[aria-label*="Submit" i]') ||
+    document.querySelector('form button[type="submit"]') ||
+    document.querySelector('fieldset button[type="submit"]') ||
+    document.querySelector('button:has(svg path[d*="M2.01 21L23 12 2.01 3"])') ||
+    document.querySelector('button.send-button')
+  );
 }
 
 // ─── Helper: Get Text from Input Element ─────────────────────────────────────
@@ -72,6 +93,37 @@ function injectStatusBadge() {
   document.body.appendChild(badge);
 }
 
+// ─── Helper: Block and Disable Send Button ────────────────────────────────────
+function blockSendButton(reason) {
+  const sendBtn = findSendButton();
+  if (sendBtn) {
+    sendBtn.disabled = true;
+    sendBtn.setAttribute("disabled", "true");
+    sendBtn.classList.add("vantix-btn-blocked");
+    sendBtn.dataset.vantixBlocked = "true";
+    sendBtn.title = reason || "Blocked by Vantix AI Firewall";
+    sendBtn.style.opacity = "0.35";
+    sendBtn.style.cursor = "not-allowed";
+    sendBtn.style.pointerEvents = "none";
+    sendBtn.style.filter = "grayscale(1)";
+  }
+}
+
+function unblockSendButton() {
+  const sendBtn = findSendButton();
+  if (sendBtn) {
+    sendBtn.disabled = false;
+    sendBtn.removeAttribute("disabled");
+    sendBtn.classList.remove("vantix-btn-blocked");
+    delete sendBtn.dataset.vantixBlocked;
+    sendBtn.removeAttribute("title");
+    sendBtn.style.opacity = "";
+    sendBtn.style.cursor = "";
+    sendBtn.style.pointerEvents = "";
+    sendBtn.style.filter = "";
+  }
+}
+
 // ─── Visual UI: Hard Block Alert Banner ──────────────────────────────────────
 function showBlockBanner(message, riskScore, categories) {
   let banner = document.getElementById("vantix-block-banner");
@@ -83,12 +135,12 @@ function showBlockBanner(message, riskScore, categories) {
 
   const categoryList = Array.isArray(categories) && categories.length > 0
     ? categories.join(", ")
-    : "CREDENTIAL / INDUSTRIAL SECRET";
+    : "MASSIVE CREDENTIAL EXPOSURE / EXPLOIT DETECTED";
 
   banner.innerHTML = `
     <div class="vantix-banner-header">
       <div class="vantix-banner-title">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
           <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
           <line x1="12" y1="8" x2="12" y2="12"/>
           <line x1="12" y1="16" x2="12.01" y2="16"/>
@@ -98,25 +150,23 @@ function showBlockBanner(message, riskScore, categories) {
       <div class="vantix-banner-risk">RISK SCORE: ${riskScore || 90}/100</div>
     </div>
     <div class="vantix-banner-body">
-      ${message || "This prompt contains live credentials or sensitive industrial parameters and was aborted before leaving this device."}
+      ${message || "This prompt contains live credentials or prohibited secrets. Outbound transmission has been blocked and the send button is disabled."}
     </div>
     <div class="vantix-banner-meta">
       <span>Violation Categories: <strong>${categoryList}</strong></span>
-      <span>Logged to Vantix Security Admin</span>
+      <span>Send Button: <strong style="color: #ef4444;">LOCKED</strong></span>
+      <span>Logged to Security Admin</span>
     </div>
   `;
 
   banner.classList.add("visible");
+}
 
-  // Auto-hide after 8 seconds or on click
-  const timer = setTimeout(() => {
+function hideBlockBanner() {
+  const banner = document.getElementById("vantix-block-banner");
+  if (banner) {
     banner.classList.remove("visible");
-  }, 8000);
-
-  banner.onclick = () => {
-    clearTimeout(timer);
-    banner.classList.remove("visible");
-  };
+  }
 }
 
 // ─── Visual UI: Silent Redaction Pill ─────────────────────────────────────────
@@ -141,6 +191,58 @@ function showRedactPill(tokensCount) {
   }, 4000);
 }
 
+// ─── Input Locking Helpers ───────────────────────────────────────────────────
+function blockInput(inputEl, message, riskScore, categories) {
+  if (!inputEl) return;
+  inputEl.dataset.vantixBlocked = "true";
+  inputEl.classList.add("vantix-input-blocked");
+  inputEl.classList.add("vantix-shake-element");
+  setTimeout(() => inputEl.classList.remove("vantix-shake-element"), 500);
+
+  blockSendButton(message);
+  showBlockBanner(message, riskScore, categories);
+}
+
+function unblockInput(inputEl) {
+  if (!inputEl) return;
+  delete inputEl.dataset.vantixBlocked;
+  inputEl.classList.remove("vantix-input-blocked");
+  unblockSendButton();
+  hideBlockBanner();
+}
+
+// ─── Real-Time Typing Pre-Check (Debounced) ──────────────────────────────────
+let _debounceTimer = null;
+function handleLiveInput(inputEl) {
+  clearTimeout(_debounceTimer);
+  _debounceTimer = setTimeout(() => {
+    const text = getInputText(inputEl).trim();
+    if (text.length < 8) {
+      if (inputEl.dataset.vantixBlocked === "true") {
+        unblockInput(inputEl);
+      }
+      return;
+    }
+
+    try {
+      chrome.runtime.sendMessage(
+        { type: "INSPECT_PROMPT", prompt: text },
+        (response) => {
+          if (response && response.success && response.result) {
+            const res = response.result;
+            const isBlocked = res.blocked || res.meta?.action === "hard_block";
+            if (isBlocked) {
+              blockInput(inputEl, res.message, res.meta?.riskScore || 90, res.meta?.categoriesRedacted || []);
+            } else if (inputEl.dataset.vantixBlocked === "true") {
+              unblockInput(inputEl);
+            }
+          }
+        }
+      );
+    } catch (e) {}
+  }, 400);
+}
+
 // ─── Core Interception Pipeline ──────────────────────────────────────────────
 let isProcessing = false;
 
@@ -148,8 +250,19 @@ async function handlePromptSubmission(e) {
   const inputEl = findPromptInput();
   if (!inputEl) return;
 
+  // If already locked by Hard Block, halt immediately!
+  if (inputEl.dataset.vantixBlocked === "true") {
+    e.preventDefault();
+    e.stopPropagation();
+    e.stopImmediatePropagation();
+    blockSendButton("Blocked by Vantix DLP policy");
+    inputEl.classList.add("vantix-shake-element");
+    setTimeout(() => inputEl.classList.remove("vantix-shake-element"), 500);
+    return;
+  }
+
   const rawPrompt = getInputText(inputEl).trim();
-  if (!rawPrompt || rawPrompt.length < 5) return;
+  if (!rawPrompt || rawPrompt.length < 3) return;
 
   // Prevent recursive loop if already sanitized by Vantix
   if (inputEl.__vantix_sanitized) {
@@ -159,6 +272,7 @@ async function handlePromptSubmission(e) {
 
   if (isProcessing) {
     e.preventDefault();
+    e.stopPropagation();
     e.stopImmediatePropagation();
     return;
   }
@@ -196,16 +310,14 @@ async function handlePromptSubmission(e) {
         // ── Case 1: Hard Block ─────────────────────────────────────────────
         if (isBlocked) {
           console.warn("[Vantix Guard] ⛔ HARD BLOCK triggered for prompt.");
-          inputEl.classList.add("vantix-shake-element");
-          setTimeout(() => inputEl.classList.remove("vantix-shake-element"), 500);
-
-          showBlockBanner(res.message, riskScore, categories);
+          blockInput(inputEl, res.message, riskScore, categories);
           return;
         }
 
-        // ── Case 2: Silent Redaction ───────────────────────────────────────
+        // ── Case 2: Silent Redaction (<=3 credentials / PII) ───────────────
         if (isRedacted && res.sanitizedPrompt && res.sanitizedPrompt !== rawPrompt) {
           console.log("[Vantix Guard] ⚡ SILENT REDACTION applied.");
+          unblockInput(inputEl);
           setInputText(inputEl, res.sanitizedPrompt);
           showRedactPill(categories.length || 1);
 
@@ -215,6 +327,7 @@ async function handlePromptSubmission(e) {
         }
 
         // ── Case 3: Pass ───────────────────────────────────────────────────
+        unblockInput(inputEl);
         inputEl.__vantix_sanitized = true;
         triggerRealSubmit(inputEl);
       }
@@ -229,14 +342,9 @@ async function handlePromptSubmission(e) {
 
 // ─── Helper: Trigger Native Submit ───────────────────────────────────────────
 function triggerRealSubmit(inputEl) {
-  // Find send button
-  const sendBtn =
-    document.querySelector('button[data-testid="send-button"]') ||
-    document.querySelector('button[aria-label="Send prompt"]') ||
-    document.querySelector('button[data-testid="composer-send-button"]') ||
-    document.querySelector('button[aria-label*="Send"]');
+  const sendBtn = findSendButton();
 
-  if (sendBtn && !sendBtn.disabled) {
+  if (sendBtn && !sendBtn.disabled && !sendBtn.dataset.vantixBlocked) {
     sendBtn.click();
   } else {
     try {
@@ -257,15 +365,23 @@ function triggerRealSubmit(inputEl) {
   }
 }
 
-// ─── Event Listeners: Keydown & Button Click ──────────────────────────────────
+// ─── Event Listeners: Keydown, Button Click & Form Submit ─────────────────────
 function setupListeners() {
-  // Intercept Enter key inside the prompt input (capture phase)
+  // 1. Intercept Enter key inside the prompt input (capture phase)
   document.addEventListener(
     "keydown",
     (e) => {
       if (e.key === "Enter" && !e.shiftKey) {
         const inputEl = findPromptInput();
         if (inputEl && (e.target === inputEl || inputEl.contains(e.target))) {
+          if (inputEl.dataset.vantixBlocked === "true") {
+            e.preventDefault();
+            e.stopPropagation();
+            e.stopImmediatePropagation();
+            inputEl.classList.add("vantix-shake-element");
+            setTimeout(() => inputEl.classList.remove("vantix-shake-element"), 500);
+            return false;
+          }
           handlePromptSubmission(e);
         }
       }
@@ -273,21 +389,32 @@ function setupListeners() {
     true // Capture phase: execute BEFORE web app's React handlers
   );
 
-  // Intercept clicks on any submit / send buttons (capture phase)
+  // 2. Intercept clicks on send buttons (capture phase)
   document.addEventListener(
     "click",
     (e) => {
+      const inputEl = findPromptInput();
       const target = e.target.closest("button");
       if (!target) return;
 
-      const isSendBtn =
-        target.getAttribute("data-testid") === "send-button" ||
-        target.getAttribute("data-testid") === "composer-send-button" ||
-        target.getAttribute("aria-label") === "Send prompt" ||
-        (target.getAttribute("aria-label") && target.getAttribute("aria-label").includes("Send"));
+      const isSend =
+        target.getAttribute("data-testid")?.includes("send") ||
+        target.getAttribute("aria-label")?.toLowerCase().includes("send") ||
+        target.getAttribute("aria-label")?.toLowerCase().includes("submit") ||
+        target.type === "submit" ||
+        target === findSendButton();
 
-      if (isSendBtn) {
-        const inputEl = findPromptInput();
+      if (isSend) {
+        if (inputEl && inputEl.dataset.vantixBlocked === "true") {
+          e.preventDefault();
+          e.stopPropagation();
+          e.stopImmediatePropagation();
+          blockSendButton("Blocked by Vantix DLP policy");
+          inputEl.classList.add("vantix-shake-element");
+          setTimeout(() => inputEl.classList.remove("vantix-shake-element"), 500);
+          return false;
+        }
+
         if (inputEl && !inputEl.__vantix_sanitized) {
           handlePromptSubmission(e);
         }
@@ -295,6 +422,32 @@ function setupListeners() {
     },
     true // Capture phase
   );
+
+  // 3. Intercept form submit events (capture phase)
+  document.addEventListener(
+    "submit",
+    (e) => {
+      const inputEl = findPromptInput();
+      if (inputEl && inputEl.dataset.vantixBlocked === "true") {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        return false;
+      }
+      if (inputEl && !inputEl.__vantix_sanitized) {
+        handlePromptSubmission(e);
+      }
+    },
+    true
+  );
+
+  // 4. Live typing listener on prompt input
+  document.addEventListener("input", (e) => {
+    const inputEl = findPromptInput();
+    if (inputEl && (e.target === inputEl || inputEl.contains(e.target))) {
+      handleLiveInput(inputEl);
+    }
+  });
 
   injectStatusBadge();
 }
@@ -306,5 +459,11 @@ if (document.readyState === "loading") {
   setupListeners();
 }
 
-// Periodically check if badge needs re-injecting after single-page navigation
-setInterval(injectStatusBadge, 3000);
+// Periodically check if badge and listeners need re-attaching after single-page navigation
+setInterval(() => {
+  injectStatusBadge();
+  const inputEl = findPromptInput();
+  if (inputEl && inputEl.dataset.vantixBlocked === "true") {
+    blockSendButton("Blocked by Vantix DLP policy");
+  }
+}, 2000);
