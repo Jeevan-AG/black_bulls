@@ -390,12 +390,14 @@ export default function Dashboard() {
 
   const employeeIncidents = useMemo(() => {
     if (!selectedEmployeeId) return [];
-    return incidents.filter(
+    const list = incidents.filter(
       (inc) =>
         ((inc.userId && inc.userId.toLowerCase() === selectedEmployeeId.toLowerCase()) ||
         (inc.userEmail && inc.userEmail.toLowerCase().includes(selectedEmployeeId.toLowerCase()))) &&
         (inc.riskScore >= 30 || inc.actionTaken === "hard_block" || inc.actionTaken === "silent_redact" || (inc.detections && inc.detections.length > 0))
     );
+    // Sort descending by timestamp so the latest cases are at the TOP
+    return list.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
   }, [selectedEmployeeId, incidents]);
 
   // Graph 1: Category Distribution for Selected Employee
@@ -423,18 +425,19 @@ export default function Dashboard() {
       .sort((a, b) => b.count - a.count);
   }, [employeeIncidents]);
 
-  // Graph 2: Risk Progression Timeline
+  // Graph 2: Risk Progression Timeline (Chronological Case #1 -> Case #N)
   const riskTimelineData = useMemo(() => {
     if (employeeIncidents.length === 0) return [];
-    return [...employeeIncidents]
-      .reverse()
-      .map((inc, idx) => ({
-        attempt: `#${idx + 1}`,
-        time: new Date(inc.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-        riskScore: inc.riskScore || 0,
-        action: inc.actionTaken === "hard_block" ? "Blocked" : "Redacted",
-        service: inc.aiPlatform || "chatgpt.com",
-      }));
+    const chronological = [...employeeIncidents].sort(
+      (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+    );
+    return chronological.map((inc, idx) => ({
+      attempt: `Case #${idx + 1}`,
+      time: new Date(inc.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      riskScore: inc.riskScore || 0,
+      action: inc.actionTaken === "hard_block" ? "Blocked" : "Redacted",
+      service: inc.aiPlatform || "chatgpt.com",
+    }));
   }, [employeeIncidents]);
 
   // Targeted AI Platforms Visited by this Employee
@@ -1268,7 +1271,7 @@ export default function Dashboard() {
                 <div className="leak-attempts-header">
                   <div className="leak-attempts-title">
                     <Terminal size={18} color="#818cf8" />
-                    <span>Chronological Forensics & Prompt Audit Stream ({employeeIncidents.length} Incidents)</span>
+                    <span>Forensic Case History ({employeeIncidents.length} Cases — Latest Case #{employeeIncidents.length} at Top)</span>
                   </div>
 
                   {/* Filter by Target Service */}
@@ -1311,7 +1314,7 @@ export default function Dashboard() {
                         <div className="attempt-card-top">
                           <div className="attempt-card-meta">
                             <span style={{ fontWeight: 800, color: "#fff", letterSpacing: "0.5px" }}>
-                              INCIDENT #{employeeIncidents.length - idx}
+                              CASE #{employeeIncidents.length - idx}{idx === 0 ? " • LATEST CASE" : ""}
                             </span>
                             {/* Branded AI Platform Badge */}
                             {renderAiPlatformBadge(incident.aiPlatform)}

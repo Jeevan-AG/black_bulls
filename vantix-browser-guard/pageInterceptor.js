@@ -108,7 +108,7 @@
           const placeholder = `[${pat.type}${counts[pat.type] > 1 ? `_${counts[pat.type]}` : ""}]`;
 
           text = text.split(valToReplace).join(placeholder);
-          items.push({ type: pat.type, placeholder, originalLength: valToReplace.length });
+          items.push({ type: pat.type, placeholder, realVal: valToReplace, originalLength: valToReplace.length });
         }
       }
     }

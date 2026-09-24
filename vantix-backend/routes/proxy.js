@@ -456,10 +456,16 @@ router.post("/inspect", async (req, res) => {
       req,
     });
 
+    const tokenMapping = Array.from(tokenMap.entries()).map(([realVal, placeholder]) => ({
+      realVal,
+      placeholder,
+    }));
+
     return res.json({
       success: true,
       blocked: false,
       sanitizedPrompt,
+      tokenMapping,
       riskScore: detection.overallRisk,
       processingTime: Date.now() - startTime,
       meta: {

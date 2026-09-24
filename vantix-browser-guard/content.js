@@ -245,36 +245,47 @@ function unblockInput(inputEl) {
   hideBlockBanner();
 }
 
-// ─── Real-Time Typing Pre-Check (Debounced) ──────────────────────────────────
-let _debounceTimer = null;
-function handleLiveInput(inputEl) {
-  clearTimeout(_debounceTimer);
-  _debounceTimer = setTimeout(() => {
-    const text = getInputText(inputEl).trim();
-    if (text.length < 8) {
-      if (inputEl.dataset.vantixBlocked === "true") {
-        unblockInput(inputEl);
-      }
-      return;
-    }
+// ─── Ephemeral Token Store (Two-Way Round-Trip Un-Redaction) ──────────────────
+// Maps placeholder -> realValue (e.g. "[AWS_KEY]" -> "AKIA1234567890ABCDEF")
+// Holds tokens in memory and session storage so responses are restored to original
+// format with actual values before reaching the user.
+const _activeTokenMap = new Map();
 
-    try {
-      chrome.runtime.sendMessage(
-        { type: "INSPECT_PROMPT", prompt: text },
-        (response) => {
-          if (response && response.success && response.result) {
-            const res = response.result;
-            const isBlocked = res.blocked || res.meta?.action === "hard_block";
-            if (isBlocked) {
-              blockInput(inputEl, res.message, res.meta?.riskScore || 90, res.meta?.categoriesRedacted || []);
-            } else if (inputEl.dataset.vantixBlocked === "true") {
-              unblockInput(inputEl);
-            }
-          }
+function persistTokenMap() {
+  try {
+    const list = Array.from(_activeTokenMap.entries());
+    sessionStorage.setItem("vantix_active_tokens", JSON.stringify(list));
+  } catch (e) {}
+}
+
+function loadTokenMap() {
+  try {
+    const raw = sessionStorage.getItem("vantix_active_tokens");
+    if (raw) {
+      const list = JSON.parse(raw);
+      if (Array.isArray(list)) {
+        for (const [ph, rv] of list) {
+          if (ph && rv) _activeTokenMap.set(ph, rv);
         }
-      );
-    } catch (e) {}
-  }, 400);
+      }
+    }
+  } catch (e) {}
+}
+loadTokenMap();
+
+function registerTokenMappings(mappings) {
+  if (!mappings || !Array.isArray(mappings)) return;
+  let added = false;
+  for (const item of mappings) {
+    if (item && item.placeholder && item.realVal) {
+      _activeTokenMap.set(item.placeholder, item.realVal);
+      added = true;
+    }
+  }
+  if (added) {
+    persistTokenMap();
+    scheduleUnredact();
+  }
 }
 
 // ─── Zero-Leak Local Regex Sanitizer (Always-On Client Fallback) ─────────────
@@ -339,13 +350,14 @@ const LOCAL_SENSITIVE_PATTERNS = [
 
 function sanitizeLocally(text) {
   if (!text || typeof text !== "string") {
-    return { sanitized: text, redactedCount: 0, secretsCount: 0, categories: [] };
+    return { sanitized: text, redactedCount: 0, secretsCount: 0, categories: [], tokenMapping: [] };
   }
 
   let sanitized = text;
   let redactedCount = 0;
   let secretsCount = 0;
   const categories = [];
+  const tokenMapping = [];
   const counts = {};
 
   for (const pat of LOCAL_SENSITIVE_PATTERNS) {
@@ -365,10 +377,11 @@ function sanitizeLocally(text) {
 
       sanitized = sanitized.split(val).join(placeholder);
       if (!categories.includes(pat.type)) categories.push(pat.type);
+      tokenMapping.push({ realVal: val, placeholder });
     }
   }
 
-  return { sanitized, redactedCount, secretsCount, categories };
+  return { sanitized, redactedCount, secretsCount, categories, tokenMapping };
 }
 
 // ─── Core Interception Pipeline ──────────────────────────────────────────────
@@ -433,12 +446,13 @@ async function handlePromptSubmission(e) {
           }
           if (local.redactedCount > 0) {
             console.log("[Vantix Guard] ⚡ LOCAL SILENT REDACTION applied:", local.sanitized);
+            registerTokenMappings(local.tokenMapping);
             unblockInput(inputEl);
             setInputText(inputEl, local.sanitized);
             showRedactPill(local.redactedCount);
             setTimeout(() => {
               triggerRealSubmit(inputEl);
-            }, 80);
+            }, 40);
             return;
           }
           unblockInput(inputEl);
@@ -459,6 +473,11 @@ async function handlePromptSubmission(e) {
           return;
         }
 
+        // Register any token mapping returned by the TEE Enclave for two-way restoration
+        if (res.tokenMapping && Array.isArray(res.tokenMapping)) {
+          registerTokenMappings(res.tokenMapping);
+        }
+
         // ── Case 2: Silent Redaction (<=3 credentials / PII) ───────────────
         if (isRedacted && res.sanitizedPrompt && res.sanitizedPrompt !== rawPrompt) {
           console.log("[Vantix Guard] ⚡ SILENT REDACTION applied:", res.sanitizedPrompt);
@@ -468,7 +487,7 @@ async function handlePromptSubmission(e) {
 
           setTimeout(() => {
             triggerRealSubmit(inputEl);
-          }, 80);
+          }, 40);
           return;
         }
 
@@ -486,9 +505,10 @@ async function handlePromptSubmission(e) {
       return;
     }
     if (local.redactedCount > 0) {
+      registerTokenMappings(local.tokenMapping);
       setInputText(inputEl, local.sanitized);
       showRedactPill(local.redactedCount);
-      setTimeout(() => triggerRealSubmit(inputEl), 80);
+      setTimeout(() => triggerRealSubmit(inputEl), 40);
       return;
     }
     triggerRealSubmit(inputEl);
@@ -601,16 +621,85 @@ function setupListeners() {
     true
   );
 
-  // 4. Live typing listener on prompt input
-  document.addEventListener("input", (e) => {
-    const inputEl = findPromptInput();
-    if (inputEl && (e.target === inputEl || inputEl.contains(e.target))) {
-      handleLiveInput(inputEl);
-    }
-  });
-
   injectStatusBadge();
 }
+
+// ─── Real-Time Roundtrip Response Un-Redactor (Two-Way Restoration) ──────────
+let _unredactScheduled = false;
+
+function scheduleUnredact() {
+  if (_unredactScheduled || _activeTokenMap.size === 0) return;
+  _unredactScheduled = true;
+  requestAnimationFrame(() => {
+    _unredactScheduled = false;
+    runUnredaction();
+  });
+}
+
+function runUnredaction() {
+  if (_activeTokenMap.size === 0) return;
+
+  const placeholders = Array.from(_activeTokenMap.keys());
+  if (placeholders.length === 0) return;
+
+  // Build combined regex: sort longest first to prevent partial token collisions
+  const escaped = placeholders
+    .sort((a, b) => b.length - a.length)
+    .map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+    .join("|");
+  const placeholderRegex = new RegExp(escaped, "g");
+
+  // Chat message containers across ChatGPT, Claude, Gemini, and LLM web clients
+  const candidates = document.querySelectorAll(
+    '[data-message-author-role], .markdown, .prose, .font-claude-message, message-content, [data-testid*="conversation-turn"], [class*="message-content"], [class*="turn-content"], [class*="chat-message"], div[class*="ChatMessage"]'
+  );
+
+  const targets = candidates.length > 0 ? Array.from(candidates) : [document.body];
+
+  for (const root of targets) {
+    if (!root || !root.textContent || root.textContent.indexOf("[") === -1) continue;
+
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+      acceptNode(node) {
+        if (!node.nodeValue || node.nodeValue.indexOf("[") === -1) {
+          return NodeFilter.FILTER_REJECT;
+        }
+        return NodeFilter.FILTER_ACCEPT;
+      },
+    });
+
+    let textNode;
+    while ((textNode = walker.nextNode())) {
+      const original = textNode.nodeValue;
+      if (placeholderRegex.test(original)) {
+        placeholderRegex.lastIndex = 0;
+        const restored = original.replace(placeholderRegex, (match) => {
+          return _activeTokenMap.get(match) || match;
+        });
+        if (restored !== original) {
+          textNode.nodeValue = restored;
+        }
+      }
+    }
+  }
+}
+
+// Observe DOM mutations to un-redact streaming AI responses as words arrive
+const _domObserver = new MutationObserver((mutations) => {
+  if (_activeTokenMap.size === 0) return;
+  for (const m of mutations) {
+    if (m.type === "childList" || m.type === "characterData") {
+      scheduleUnredact();
+      break;
+    }
+  }
+});
+
+_domObserver.observe(document.body, {
+  childList: true,
+  subtree: true,
+  characterData: true,
+});
 
 // Ensure listeners are registered
 if (document.readyState === "loading") {
@@ -662,6 +751,9 @@ injectMainWorldInterceptor();
 // Listen for network-level in-flight redactions from pageInterceptor.js
 window.addEventListener("vantix:network_redact", (e) => {
   const detail = e.detail;
+  if (detail && detail.items && Array.isArray(detail.items)) {
+    registerTokenMappings(detail.items);
+  }
   if (detail && detail.redactedCount) {
     showRedactPill(detail.redactedCount);
   }
