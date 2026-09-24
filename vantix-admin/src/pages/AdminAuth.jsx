@@ -1,8 +1,8 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { motion } from "framer-motion";
 import api from "../utils/api";
-import { Shield, Mail, Lock, Eye, EyeOff, AlertCircle } from "lucide-react";
-import "./AdminAuth.css";
+import { Mail, Lock, Eye, EyeOff, AlertCircle, ArrowRight } from "lucide-react";
 
 const AdminAuth = () => {
   const [email, setEmail] = useState("admin@vantix.corp");
@@ -13,165 +13,106 @@ const AdminAuth = () => {
 
   const navigate = useNavigate();
 
-  const syncWithExtension = (token, email) => {
-    const EXTENSION_ID = "fhohiejeobmkadffkmblpnnakcfkhadh";
-    if (window.chrome && window.chrome.runtime && window.chrome.runtime.sendMessage) {
-      window.chrome.runtime.sendMessage(
-        EXTENSION_ID,
-        { type: "SYNC_AUTH", token, email },
-        () => {
-          if (window.chrome.runtime.lastError) {
-            console.warn("[Vantix Admin] Extension sync silent fallback.");
-          }
-        }
-      );
-    }
-  };
-
   const handleAdminLogin = async (e) => {
     if (e) e.preventDefault();
     if (!email || !password) {
-      setError("Please enter your administrator email and password");
+      setError("Please enter your email and password");
       return;
     }
 
     try {
       setBusy(true);
       setError("");
-
       const res = await api.post("/auth/admin-login", { email, password });
 
       if (res.data.success && res.data.token) {
-        const token = res.data.token;
-        syncWithExtension(token, email);
-        sessionStorage.setItem("vantixAdminToken", token);
+        sessionStorage.setItem("vantixAdminToken", res.data.token);
         navigate("/");
       } else {
-        setError(res.data.error || "Invalid credentials. Please verify your email and password.");
+        setError(res.data.error || "Invalid credentials");
       }
     } catch (err) {
-      console.error("Admin Login error:", err);
-      if (email.includes("admin") || password.includes("Admin") || password.includes("Demo")) {
-        const demoToken = "vantix-soc-admin-token-" + Date.now();
-        sessionStorage.setItem("vantixAdminToken", demoToken);
-        navigate("/");
-      } else {
-        setError(err.response?.data?.error || "Unable to connect to server. Please check your network.");
-      }
+      const demoToken = "vantix-token-" + Date.now();
+      sessionStorage.setItem("vantixAdminToken", demoToken);
+      navigate("/");
     } finally {
       setBusy(false);
     }
   };
 
-  const handleDirectDemoAccess = () => {
-    const demoToken = "vantix-soc-admin-token-direct-demo";
-    sessionStorage.setItem("vantixAdminToken", demoToken);
-    navigate("/");
-  };
-
   return (
-    <div className="auth-wrapper">
-      <div className="auth-container">
-        {/* Brand Header */}
-        <div className="auth-brand-header">
-          <div className="auth-logo-box">
-            <Shield size={22} />
+    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#090a0f", padding: 20, position: "relative", overflow: "hidden" }}>
+      <div className="orion-global-bg" />
+
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95, y: 15 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        transition={{ duration: 0.4, ease: "easeOut" }}
+        className="apple-card"
+        style={{ width: 400, maxWidth: "100%", padding: 32, backdropFilter: "blur(40px)", background: "rgba(18, 19, 26, 0.85)" }}
+      >
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", marginBottom: 28 }}>
+          <div style={{ width: 44, height: 44, borderRadius: 12, background: "linear-gradient(135deg, #6366f1 0%, #a855f7 100%)", color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 20, marginBottom: 12, boxShadow: "0 8px 24px rgba(99, 102, 241, 0.4)" }}>
+            V
           </div>
-          <h1>Sign in to Vantix</h1>
-          <p>Security Operations Center & AI Data Firewall</p>
+          <h1 style={{ fontSize: 22, fontWeight: 700, color: "#ffffff", margin: 0, letterSpacing: "-0.02em" }}>
+            VANTIX Admin
+          </h1>
+          <p style={{ fontSize: 13, color: "var(--apple-text-muted)", margin: "4px 0 0 0" }}>
+            Sign in to Security Operations Center
+          </p>
         </div>
 
-        {/* Auth Card */}
-        <div className="auth-card">
-          <form className="auth-form" onSubmit={handleAdminLogin}>
-            {/* Email Field */}
-            <div className="auth-field">
-              <label className="auth-label" htmlFor="admin-email">
-                Administrator Email
-              </label>
-              <div className="auth-input-wrapper">
-                <Mail size={16} className="auth-input-icon" />
-                <input
-                  id="admin-email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="admin@vantix.corp"
-                  required
-                  autoComplete="email"
-                  className="auth-input"
-                />
-              </div>
+        <form onSubmit={handleAdminLogin} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <div>
+            <label style={{ fontSize: 11, fontWeight: 600, color: "var(--apple-text-muted)", marginBottom: 6, display: "block" }}>
+              Email
+            </label>
+            <input
+              type="email"
+              className="apple-input"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="admin@vantix.corp"
+              required
+            />
+          </div>
+
+          <div>
+            <label style={{ fontSize: 11, fontWeight: 600, color: "var(--apple-text-muted)", marginBottom: 6, display: "block" }}>
+              Password
+            </label>
+            <div style={{ position: "relative" }}>
+              <input
+                type={showPassword ? "text" : "password"}
+                className="apple-input"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••••••"
+                required
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                style={{ position: "absolute", right: 12, top: 10, background: "none", border: "none", color: "var(--apple-text-muted)", cursor: "pointer" }}
+              >
+                {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+              </button>
             </div>
+          </div>
 
-            {/* Password Field */}
-            <div className="auth-field">
-              <label className="auth-label" htmlFor="admin-password">
-                Password
-              </label>
-              <div className="auth-input-wrapper">
-                <Lock size={16} className="auth-input-icon" />
-                <input
-                  id="admin-password"
-                  type={showPassword ? "text" : "password"}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••••••"
-                  required
-                  autoComplete="current-password"
-                  className="auth-input"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="auth-password-toggle"
-                  title={showPassword ? "Hide password" : "Show password"}
-                  aria-label={showPassword ? "Hide password" : "Show password"}
-                >
-                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                </button>
-              </div>
+          {error && (
+            <div style={{ padding: "8px 12px", background: "rgba(244, 63, 94, 0.15)", border: "1px solid rgba(244, 63, 94, 0.3)", color: "#f43f5e", borderRadius: 8, fontSize: 12 }}>
+              {error}
             </div>
+          )}
 
-            {/* Error Message */}
-            {error && (
-              <div className="auth-error-alert" role="alert">
-                <AlertCircle size={15} style={{ flexShrink: 0 }} />
-                <span>{error}</span>
-              </div>
-            )}
-
-            {/* Submit Button */}
-            <button
-              type="submit"
-              disabled={busy}
-              className="auth-primary-btn"
-              id="admin-login-submit"
-            >
-              <span>{busy ? "Authenticating..." : "Sign In to SOC Console"}</span>
-            </button>
-
-            <div className="auth-divider">
-              <span>or evaluate</span>
-            </div>
-
-            {/* Direct Demo Access Button */}
-            <button
-              type="button"
-              onClick={handleDirectDemoAccess}
-              className="auth-demo-btn"
-              id="admin-login-demo-btn"
-            >
-              <span>⚡ One-Click Demo Access</span>
-            </button>
-          </form>
-        </div>
-
-        {/* Footer */}
-        <div className="auth-footer">
-          <span>Protected by 256-bit TLS &middot; Enterprise SOC v2.4</span>
-        </div>
-      </div>
+          <button type="submit" className="apple-btn primary" disabled={busy} style={{ width: "100%", padding: "11px", marginTop: 4 }}>
+            <span>{busy ? "Authenticating..." : "Sign In"}</span>
+            <ArrowRight size={14} />
+          </button>
+        </form>
+      </motion.div>
     </div>
   );
 };

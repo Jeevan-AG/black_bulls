@@ -8,12 +8,12 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background-color: #070a12;
-  background-image: radial-gradient(circle at 50% 15%, #0f172a 0%, #050811 100%);
+  background-color: #a6a6a6;
+  background-image: radial-gradient(circle at 50% 15%, rgba(235, 238, 242, 0.6) 0%, rgba(166, 166, 166, 1) 100%);
   padding: 24px 16px;
   box-sizing: border-box;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  color: #f8fafc;
+  color: #0f172a;
   overflow-x: hidden;
 }
 
@@ -36,37 +36,37 @@
   height: 44px;
   margin: 0 auto 14px auto;
   border-radius: 10px;
-  background: #0f172a;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: #7c3aed;
+  border: 1px solid rgba(0, 0, 0, 0.1);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #38bdf8;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+  color: #ffffff;
+  box-shadow: 0 4px 14px rgba(124, 58, 237, 0.3);
 }
 
 .auth-brand-header h1 {
   font-size: 20px;
   font-weight: 700;
-  color: #ffffff;
+  color: #f8fafc;
   letter-spacing: -0.3px;
   margin: 0 0 6px 0;
 }
 
 .auth-brand-header p {
   font-size: 13px;
-  color: #94a3b8;
+  color: #cbd5e1;
   margin: 0;
   line-height: 1.4;
 }
 
 /* Main Card */
 .auth-card {
-  background: #0d1322;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 12px;
+  background: #2d323e;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
   padding: 26px 22px;
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.25);
   box-sizing: border-box;
   width: 100%;
 }

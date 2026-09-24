@@ -4,31 +4,31 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 :root {
-  --soc-bg: #070a13;
-  --soc-surface: #0e1424;
-  --soc-surface-hover: #141c30;
-  --soc-card: #12192c;
-  --soc-border: rgba(255, 255, 255, 0.08);
-  --soc-border-accent: rgba(99, 102, 241, 0.35);
+  --soc-bg: #a6a6a6;
+  --soc-surface: #2d323e;
+  --soc-surface-hover: #363c4a;
+  --soc-card: #232732;
+  --soc-border: rgba(255, 255, 255, 0.12);
+  --soc-border-accent: rgba(139, 92, 246, 0.35);
   
   --soc-text: #f8fafc;
-  --soc-text-muted: #94a3b8;
-  --soc-text-dim: #64748b;
+  --soc-text-muted: #cbd5e1;
+  --soc-text-dim: #94a3b8;
 
-  --soc-critical: #f43f5e;
-  --soc-critical-bg: rgba(244, 63, 94, 0.12);
-  --soc-warning: #f59e0b;
-  --soc-warning-bg: rgba(245, 158, 11, 0.12);
-  --soc-safe: #10b981;
-  --soc-safe-bg: rgba(16, 185, 129, 0.12);
+  --soc-critical: #f87171;
+  --soc-critical-bg: rgba(239, 68, 68, 0.15);
+  --soc-warning: #fbbf24;
+  --soc-warning-bg: rgba(245, 158, 11, 0.15);
+  --soc-safe: #34d399;
+  --soc-safe-bg: rgba(16, 185, 129, 0.15);
   --soc-blue: #38bdf8;
-  --soc-blue-bg: rgba(56, 189, 248, 0.12);
+  --soc-blue-bg: rgba(56, 189, 248, 0.15);
   --soc-indigo: #818cf8;
 }
 
 .soc-container {
   min-height: 100vh;
-  background: radial-gradient(circle at 50% 0%, #0c1222 0%, #050811 100%);
+  background: radial-gradient(circle at 50% 0%, rgba(140, 145, 155, 0.6) 0%, rgba(166, 166, 166, 1) 100%);
   color: var(--soc-text);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   padding: 24px 32px 64px 32px;

@@ -1,54 +1,138 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import { Search, User, Sliders } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Menu, X, Shield, ShieldAlert, Sliders, Users, Settings, LogOut } from 'lucide-react';
+import LaunchScreen from '../common/LaunchScreen';
 
 const AppShell = ({ children, onLogout }) => {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [showContent, setShowContent] = useState(false);
+
   return (
     <div className="app-shell">
-      <div className="orion-global-bg"></div>
+      {/* Website Launch Splash Animation */}
+      <LaunchScreen onComplete={() => setShowContent(true)} />
+
+      <div className="orion-global-bg" />
       
-      <header className="orion-topnav">
-        <div className="orion-brand">
-          <div className="orion-brand-icon" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--brand-purple)', color: 'white' }}>V</div>
-          VANTIX
-        </div>
+      {/* Main App Container */}
+      <motion.div
+        initial={{ opacity: 0, scale: 0.98 }}
+        animate={{ opacity: showContent ? 1 : 0.8, scale: showContent ? 1 : 0.98 }}
+        transition={{ duration: 0.5, ease: "easeOut" }}
+        style={{ display: "flex", flexDirection: "column", minHeight: "100vh", width: "100%" }}
+      >
+        {/* Apple Frosted Navbar */}
+        <header className="orion-topnav">
+          <div className="orion-topnav-left">
+            <button
+              className="orion-hamburger-btn"
+              onClick={() => setMenuOpen(!menuOpen)}
+              title="Navigation Menu"
+              aria-label="Navigation Menu"
+            >
+              <Menu size={18} />
+            </button>
 
-        <nav className="orion-nav-links">
-          <NavLink to="/" end className={({isActive}) => isActive ? 'active' : ''} data-active={window.location.pathname === '/'}>SOC Overview</NavLink>
-          <NavLink to="/rules" data-active={window.location.pathname.includes('/rules')}>DLP Rules</NavLink>
-          <NavLink to="/settings" data-active={window.location.pathname.includes('/settings')}>Settings</NavLink>
-        </nav>
+            <div className="orion-brand">
+              <div className="orion-brand-icon">V</div>
+              <span>VANTIX</span>
+            </div>
+          </div>
 
-        <div className="orion-actions">
-          <button
-            onClick={onLogout}
-            title="Sign Out of Admin Console"
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-              background: "rgba(239, 68, 68, 0.1)",
-              border: "1px solid rgba(239, 68, 68, 0.25)",
-              color: "#f87171",
-              padding: "6px 14px",
-              borderRadius: "8px",
-              fontSize: "12px",
-              fontWeight: "600",
-              cursor: "pointer",
-              transition: "all 0.2s ease"
-            }}
-            onMouseOver={(e) => { e.currentTarget.style.background = "rgba(239, 68, 68, 0.2)"; }}
-            onMouseOut={(e) => { e.currentTarget.style.background = "rgba(239, 68, 68, 0.1)"; }}
-          >
-            <User size={14} />
-            <span>Logout</span>
-          </button>
-        </div>
-      </header>
+          <div className="orion-actions">
+            <button className="apple-btn" onClick={onLogout} style={{ padding: "6px 14px" }}>
+              <LogOut size={13} color="#f43f5e" />
+              <span style={{ fontSize: 12, fontWeight: 600 }}>Sign Out</span>
+            </button>
+          </div>
+        </header>
 
-      <main className="main-content">
-        {children}
-      </main>
+        {/* Animated Slide-out Apple Drawer */}
+        <AnimatePresence>
+          {menuOpen && (
+            <>
+              <motion.div
+                className="orion-drawer-overlay"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                onClick={() => setMenuOpen(false)}
+              />
+              <motion.aside
+                className="orion-drawer"
+                initial={{ x: "-100%" }}
+                animate={{ x: 0 }}
+                exit={{ x: "-100%" }}
+                transition={{ type: "spring", stiffness: 350, damping: 32 }}
+              >
+                <div className="orion-drawer-header">
+                  <div className="orion-brand">
+                    <div className="orion-brand-icon">V</div>
+                    <span>VANTIX</span>
+                  </div>
+                  <button className="orion-drawer-close" onClick={() => setMenuOpen(false)}>
+                    <X size={16} />
+                  </button>
+                </div>
+
+                <nav className="orion-drawer-nav">
+                  <NavLink
+                    to="/"
+                    end
+                    className={({ isActive }) => (isActive ? 'active' : '')}
+                    onClick={() => setMenuOpen(false)}
+                  >
+                    <Shield size={17} />
+                    <span>Operation Centre</span>
+                  </NavLink>
+
+                  <NavLink
+                    to="/threat-tracking"
+                    className={({ isActive }) => (isActive ? 'active' : '')}
+                    onClick={() => setMenuOpen(false)}
+                  >
+                    <ShieldAlert size={17} />
+                    <span>Threat Tracking</span>
+                  </NavLink>
+
+                  <NavLink
+                    to="/rules"
+                    className={({ isActive }) => (isActive ? 'active' : '')}
+                    onClick={() => setMenuOpen(false)}
+                  >
+                    <Sliders size={17} />
+                    <span>DLP Rules</span>
+                  </NavLink>
+
+                  <NavLink
+                    to="/employees"
+                    className={({ isActive }) => (isActive ? 'active' : '')}
+                    onClick={() => setMenuOpen(false)}
+                  >
+                    <Users size={17} />
+                    <span>Employees</span>
+                  </NavLink>
+
+                  <NavLink
+                    to="/settings"
+                    className={({ isActive }) => (isActive ? 'active' : '')}
+                    onClick={() => setMenuOpen(false)}
+                  >
+                    <Settings size={17} />
+                    <span>Settings</span>
+                  </NavLink>
+                </nav>
+              </motion.aside>
+            </>
+          )}
+        </AnimatePresence>
+
+        <main className="main-content">
+          {children}
+        </main>
+      </motion.div>
     </div>
   );
 };
