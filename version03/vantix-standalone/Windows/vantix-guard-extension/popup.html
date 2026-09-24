@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Vantix Standalone Guard</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="popup-container">
+    <div class="header">
+      <div class="brand">
+        <div class="logo">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2.5">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <span class="title">VANTIX GUARD</span>
+          <span class="version">v2.0 Standalone</span>
+        </div>
+      </div>
+      <div class="status-chip active" id="statusChip">
+        <span class="dot"></span>
+        <span id="statusText">ACTIVE</span>
+      </div>
+    </div>
+
+    <div class="engine-badge">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="10"/>
+        <line x1="2" y1="12" x2="22" y2="12"/>
+      </svg>
+      <span>100% Offline Local Engine (No Server)</span>
+    </div>
+
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-val" id="interceptedCount">0</div>
+        <div class="stat-lbl">Prompts Scanned</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-val alert" id="blockedCount">0</div>
+        <div class="stat-lbl">Hard Blocks</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-val warning" id="redactedCount">0</div>
+        <div class="stat-lbl">PII Redacted</div>
+      </div>
+    </div>
+
+    <div class="policy-card">
+      <div class="policy-header">Quick Security Controls</div>
+      <div class="policy-row">
+        <span>Hard Block Credentials</span>
+        <label class="switch">
+          <input type="checkbox" id="toggleBlock" checked>
+          <span class="slider"></span>
+        </label>
+      </div>
+      <div class="policy-row">
+        <span>Silent Redact PII / IPs</span>
+        <label class="switch">
+          <input type="checkbox" id="toggleRedact" checked>
+          <span class="slider"></span>
+        </label>
+      </div>
+    </div>
+
+    <div class="action-buttons">
+      <button class="btn btn-primary" id="openDashboardBtn">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <rect x="3" y="3" width="7" height="7"/>
+          <rect x="14" y="3" width="7" height="7"/>
+          <rect x="14" y="14" width="7" height="7"/>
+          <rect x="3" y="14" width="7" height="7"/>
+        </svg>
+        Open Integrated Dashboard
+      </button>
+      <button class="btn btn-secondary" id="clearLogsBtn">Clear History</button>
+    </div>
+
+    <div class="footer">
+      <span>Protected Models: ChatGPT, Claude, Gemini, Copilot, DeepSeek</span>
+    </div>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>

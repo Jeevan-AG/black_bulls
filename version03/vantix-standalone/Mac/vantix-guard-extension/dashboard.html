@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vantix AI Guard — Standalone Local SOC Dashboard</title>
+  <link rel="stylesheet" href="dashboard.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="app-layout">
+    <!-- Sidebar Navigation -->
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="logo-shield">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2.5">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          </svg>
+        </div>
+        <div class="brand-info">
+          <h2>VANTIX</h2>
+          <span>STANDALONE SOC</span>
+        </div>
+      </div>
+
+      <div class="status-pill">
+        <span class="status-dot"></span>
+        <span>100% Offline Protection</span>
+      </div>
+
+      <nav class="nav-menu">
+        <button class="nav-item active" data-tab="audit">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          </svg>
+          Audit & Violations
+        </button>
+
+        <button class="nav-item" data-tab="sandbox">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+          </svg>
+          Prompt Sandbox
+        </button>
+
+        <button class="nav-item" data-tab="policy">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+          </svg>
+          Security Policies
+        </button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <span>Vantix Standalone v2.0</span>
+        <span class="subtext">Zero Cloud Exposure</span>
+      </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="content-area">
+
+      <!-- Header Topbar -->
+      <header class="topbar">
+        <div class="topbar-title">
+          <h1 id="pageTitle">Audit & Violations Log</h1>
+          <p id="pageSubtitle">Real-time local threat interception history across web AI platforms.</p>
+        </div>
+
+        <div class="topbar-actions">
+          <button class="btn btn-outline" id="exportLogsBtn">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="7 10 12 15 17 10"/>
+              <line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+            Export Logs (JSON)
+          </button>
+          <button class="btn btn-danger-outline" id="clearAllLogsBtn">Clear History</button>
+        </div>
+      </header>
+
+      <!-- TAB 1: AUDIT & VIOLATIONS -->
+      <section class="tab-page active" id="tab-audit">
+        <!-- Overview Metrics Grid -->
+        <div class="metrics-grid">
+          <div class="metric-card">
+            <div class="metric-header">
+              <span>Total Prompts Scanned</span>
+              <span class="metric-tag info">All Time</span>
+            </div>
+            <div class="metric-val" id="metricTotal">0</div>
+            <div class="metric-sub">Monitored across ChatGPT, Claude, Gemini</div>
+          </div>
+
+          <div class="metric-card">
+            <div class="metric-header">
+              <span>Hard Blocks Triggered</span>
+              <span class="metric-tag alert">Blocked</span>
+            </div>
+            <div class="metric-val alert" id="metricBlocked">0</div>
+            <div class="metric-sub">Credentials & high-risk secrets prevented</div>
+          </div>
+
+          <div class="metric-card">
+            <div class="metric-header">
+              <span>PII / Tokens Redacted</span>
+              <span class="metric-tag warning">Redacted</span>
+            </div>
+            <div class="metric-val warning" id="metricRedacted">0</div>
+            <div class="metric-sub">Substituted with synthetic TEE placeholders</div>
+          </div>
+
+          <div class="metric-card">
+            <div class="metric-header">
+              <span>Device Security Status</span>
+              <span class="metric-tag success">Active</span>
+            </div>
+            <div class="metric-val success">100%</div>
+            <div class="metric-sub">Local 3-Sublayer Engine Active</div>
+          </div>
+        </div>
+
+        <!-- Filter Bar -->
+        <div class="table-controls">
+          <div class="filter-group">
+            <button class="filter-btn active" data-filter="all">All Events</button>
+            <button class="filter-btn" data-filter="hard_block">Hard Blocks</button>
+            <button class="filter-btn" data-filter="silent_redact">Redacted</button>
+          </div>
+          <div class="search-box">
+            <input type="text" id="logSearchInput" placeholder="Search logs by keyword, category, or domain...">
+          </div>
+        </div>
+
+        <!-- Logs Table -->
+        <div class="table-card">
+          <table class="logs-table">
+            <thead>
+              <tr>
+                <th>Timestamp</th>
+                <th>Target Domain</th>
+                <th>Action Taken</th>
+                <th>Risk Score</th>
+                <th>Detected Categories</th>
+                <th>Prompt Snippet</th>
+                <th>Details</th>
+              </tr>
+            </thead>
+            <tbody id="logsTableBody">
+              <!-- Rendered via JS -->
+            </tbody>
+          </table>
+          <div class="empty-state" id="emptyLogsState">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#475569" stroke-width="1.5">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            </svg>
+            <h3>No Security Violations Logged Yet</h3>
+            <p>Your AI interactions are being actively protected locally. Open ChatGPT, Claude, or Gemini and test submitting credentials or PII.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 2: PROMPT SANDBOX -->
+      <section class="tab-page" id="tab-sandbox">
+        <div class="sandbox-container">
+          <div class="sandbox-card input-panel">
+            <div class="panel-header">
+              <h3>Input Prompt Tester</h3>
+              <span>Type or paste any prompt to test local Vantix inspection</span>
+            </div>
+
+            <textarea id="sandboxInput" placeholder="e.g. Please analyze this code with AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY and db connection mongodb://admin:pass123@192.168.1.50:27017/prod"></textarea>
+
+            <div class="sample-prompts">
+              <span class="sample-label">Quick Test Scenarios:</span>
+              <button class="sample-btn" data-sample="aws">AWS Secret Key Leak</button>
+              <button class="sample-btn" data-sample="pii">PII & SSN Leak</button>
+              <button class="sample-btn" data-sample="injection">Prompt Injection Attack</button>
+              <button class="sample-btn" data-sample="clean">Safe Harmless Code</button>
+            </div>
+
+            <button class="btn btn-primary btn-lg" id="runSandboxBtn">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+              </svg>
+              Execute Local TEE Inspection
+            </button>
+          </div>
+
+          <!-- Output Inspection Results -->
+          <div class="sandbox-card output-panel">
+            <div class="panel-header">
+              <h3>TEE Inspection Results</h3>
+              <span id="sandboxLatency">Microsecond execution (<2ms)</span>
+            </div>
+
+            <div id="sandboxResultBox" class="result-placeholder">
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#475569" stroke-width="1.5">
+                <circle cx="12" cy="12" r="10"/>
+                <polygon points="10 8 16 12 10 16 10 8"/>
+              </svg>
+              <p>Click "Execute Local TEE Inspection" to see real-time redaction & risk scoring.</p>
+            </div>
+
+            <div id="sandboxResultsContent" style="display: none;">
+              <div class="result-header-row">
+                <div class="result-badge" id="sandboxActionBadge">HARD BLOCK</div>
+                <div class="risk-meter-box">
+                  <span>Overall Risk:</span>
+                  <strong id="sandboxRiskScore">90/100</strong>
+                </div>
+              </div>
+
+              <div class="detected-tags-box">
+                <label>Detected Categories:</label>
+                <div class="tags-list" id="sandboxCategoriesList"></div>
+              </div>
+
+              <div class="code-preview-block">
+                <label>Sanitized Output Sent to LLM (TEE Redacted):</label>
+                <pre class="code-box" id="sandboxSanitizedCode"></pre>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 3: SECURITY POLICIES -->
+      <section class="tab-page" id="tab-policy">
+        <div class="policy-settings-card">
+          <div class="settings-group">
+            <h3>Enforcement Policy Rules</h3>
+
+            <div class="setting-item">
+              <div class="setting-text">
+                <strong>Hard Block Infrastructure Credentials</strong>
+                <p>Aborts prompt submission immediately if AWS keys, OpenAI keys, RSA private keys, or Database URIs are detected.</p>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="polHardBlock" checked>
+                <span class="slider"></span>
+              </label>
+            </div>
+
+            <div class="setting-item">
+              <div class="setting-text">
+                <strong>Silent Redaction for PII & Internal Network IPs</strong>
+                <p>Replaces emails, phone numbers, SSNs, and 192.168.x.x IPs with synthetic tokens (`<REDACTED_PII_1>`) without blocking productivity.</p>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="polSilentRedact" checked>
+                <span class="slider"></span>
+              </label>
+            </div>
+
+            <div class="setting-item">
+              <div class="setting-text">
+                <strong>Adversarial Prompt Injection Shield</strong>
+                <p>Detects jailbreaks, DAN modes, and system prompt override attacks before they reach web AI models.</p>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="polInjectionShield" checked>
+                <span class="slider"></span>
+              </label>
+            </div>
+
+            <div class="setting-item">
+              <div class="setting-text">
+                <strong>Audio Alert Notification</strong>
+                <p>Plays a subtle alert sound when a hard block policy violation occurs.</p>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="polAlertSound" checked>
+                <span class="slider"></span>
+              </label>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- Detail Modal -->
+  <div class="modal-overlay" id="detailModal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>Violation Detail Inspector</h3>
+        <button class="modal-close" id="modalCloseBtn">&times;</button>
+      </div>
+      <div class="modal-body" id="modalBodyContent">
+        <!-- Rendered via JS -->
+      </div>
+    </div>
+  </div>
+
+  <script src="dashboard.js"></script>
+</body>
+</html>
