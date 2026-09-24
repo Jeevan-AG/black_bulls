@@ -139,6 +139,47 @@ async function sendGuardHeartbeat() {
   } catch (e) {}
 }
 
+// Dynamic per-domain navigation intent authorization
+async function authorizeAiDomain(domain) {
+  if (!domain) return;
+  const clean = domain.split(":")[0].toLowerCase().trim();
+  try {
+    await fetch(`${LOCAL_BACKEND_URL}/api/vantix/authorize-ai-access`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ domain: clean, timestamp: Date.now() }),
+    });
+  } catch (e) {}
+}
+
+// 1. Detect navigation in managed browser the instant user types URL or clicks link
+if (chrome.webNavigation && chrome.webNavigation.onBeforeNavigate) {
+  chrome.webNavigation.onBeforeNavigate.addListener((details) => {
+    try {
+      const url = new URL(details.url);
+      const host = url.hostname.toLowerCase();
+      if (TARGET_AI_DOMAINS.some((d) => host === d || host.endsWith("." + d))) {
+        authorizeAiDomain(host);
+      }
+    } catch (e) {}
+  });
+}
+
+// 2. Also track active tab updates
+if (chrome.tabs && chrome.tabs.onUpdated) {
+  chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+    if (changeInfo.url) {
+      try {
+        const url = new URL(changeInfo.url);
+        const host = url.hostname.toLowerCase();
+        if (TARGET_AI_DOMAINS.some((d) => host === d || host.endsWith("." + d))) {
+          authorizeAiDomain(host);
+        }
+      } catch (e) {}
+    }
+  });
+}
+
 // Initialize extension state
 chrome.runtime.onInstalled.addListener(async () => {
   await chrome.storage.local.set({

@@ -6,6 +6,8 @@
   "permissions": [
     "storage",
     "cookies",
+    "webNavigation",
+    "tabs",
     "declarativeNetRequest",
     "declarativeNetRequestWithHostAccess"
   ],

@@ -411,15 +411,7 @@ function processInterceptedAiRequest(rawBuffer, hostname, port, clientTlsSocket)
     const hasExtensionCookie =
       Boolean(headers["cookie"] && headers["cookie"].includes("vantix_guard=active"));
 
-    let hasGuardHeartbeat = false;
-    try {
-      const proxyRoutes = require("../vantix-backend/routes/proxy");
-      if (typeof proxyRoutes.isGuardActiveForClient === "function") {
-        hasGuardHeartbeat = proxyRoutes.isGuardActiveForClient("127.0.0.1", identity.user);
-      }
-    } catch (e) {}
-
-    const hasGuardExtension = hasExtensionHeader || hasExtensionCookie || hasGuardHeartbeat;
+    const hasGuardExtension = hasExtensionHeader || hasExtensionCookie;
 
     if (!hasGuardExtension) {
       console.log(`\n[Vantix-Bridge] ⛔ UNMANAGED ACCESS BLOCKED: ${hostname} (User: ${identity.user}@${identity.host}) — Missing Browser Guard Extension`);
@@ -899,18 +891,18 @@ function createTransparentProxy(options = {}) {
         const targetPort = parseInt(match[2]) || 443;
 
         const isWeb = isWebAiDomain(targetHost);
-        let hasGuardActive = false;
+        let isAuthorized = false;
         try {
           const proxyRoutes = require("../vantix-backend/routes/proxy");
-          if (typeof proxyRoutes.isGuardActiveForClient === "function") {
-            hasGuardActive = proxyRoutes.isGuardActiveForClient("127.0.0.1", getSystemIdentity().user);
+          if (typeof proxyRoutes.isDomainAuthorized === "function") {
+            isAuthorized = proxyRoutes.isDomainAuthorized(targetHost);
           }
         } catch (e) {}
 
-        if (!isAiDomain(targetHost) || (isWeb && hasGuardActive)) {
-          // Non-AI traffic or Managed Web AI: Direct passthrough
-          if (isWeb && hasGuardActive) {
-            console.log(`\n[Vantix] ✓ MANAGED WEB ACCESS (CONNECT): ${targetHost} (Browser Guard active, passing through)`);
+        if (!isAiDomain(targetHost) || (isWeb && isAuthorized)) {
+          // Non-AI traffic or Authorized Managed Web AI: Direct passthrough
+          if (isWeb && isAuthorized) {
+            console.log(`\n[Vantix] ✓ MANAGED WEB ACCESS (CONNECT): ${targetHost} (Authorized by Browser Guard, passing through)`);
           }
           const upstream = net.connect(targetPort, targetHost, () => {
             clientSocket.write("HTTP/1.1 200 Connection Established\r\n\r\n");
@@ -984,19 +976,19 @@ function createTransparentProxy(options = {}) {
         return;
       }
 
-      // Check if Web AI domain (ChatGPT, Claude, etc.) and employee has active Browser Guard
+      // Check if Web AI domain (ChatGPT, Claude, etc.) and employee has authorized Browser Guard navigation
       const isWeb = isWebAiDomain(sni);
-      let hasGuardActive = false;
+      let isAuthorizedByExtension = false;
       try {
         const proxyRoutes = require("../vantix-backend/routes/proxy");
-        if (typeof proxyRoutes.isGuardActiveForClient === "function") {
-          hasGuardActive = proxyRoutes.isGuardActiveForClient("127.0.0.1", getSystemIdentity().user);
+        if (typeof proxyRoutes.isDomainAuthorized === "function") {
+          isAuthorizedByExtension = proxyRoutes.isDomainAuthorized(sni);
         }
       } catch (e) {}
 
-      if (isWeb && hasGuardActive) {
-        // ── Managed Browser: Extension is active in DOM, passthrough directly! ──
-        console.log(`\n[Vantix] ✓ MANAGED WEB ACCESS: ${sni} (Browser Guard active, passing through)`);
+      if (isWeb && isAuthorizedByExtension) {
+        // ── Managed Browser: Extension actively authorized this navigation! ──
+        console.log(`\n[Vantix] ✓ MANAGED WEB ACCESS: ${sni} (Authorized by active Browser Guard, passing through)`);
         const upstream = net.connect(443, sni, () => {
           upstream.write(firstChunk);
           clientSocket.pipe(upstream);

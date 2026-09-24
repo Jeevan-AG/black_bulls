@@ -303,6 +303,37 @@ function isGuardActiveForClient(ip, user) {
 }
 router.isGuardActiveForClient = isGuardActiveForClient;
 
+// ─── Dynamic Per-Domain Navigation Intent Authorization ──────────────────────
+// Extension explicitly authorizes the exact AI domain it is navigating to.
+// If an unmanaged browser (Incognito / no extension) navigates to ChatGPT,
+// no intent was dispatched -> it is immediately blocked at Layer 1.
+const _authorizedDomains = new Map(); // cleanDomain -> expiresAt timestamp
+
+router.post("/authorize-ai-access", (req, res) => {
+  const domain = req.body?.domain;
+  if (!domain) return res.status(400).json({ error: "domain required" });
+  const clean = domain.split(":")[0].toLowerCase().trim();
+  // Valid for 4 seconds from navigation initiation
+  const expiresAt = Date.now() + 4000;
+  _authorizedDomains.set(clean, expiresAt);
+  res.json({ success: true, domain: clean, expiresAt });
+});
+
+function isDomainAuthorized(domain) {
+  if (!domain) return false;
+  const clean = domain.split(":")[0].toLowerCase().trim();
+  const now = Date.now();
+  for (const [authDomain, expiresAt] of _authorizedDomains.entries()) {
+    if (expiresAt > now) {
+      if (clean === authDomain || clean.endsWith("." + authDomain) || authDomain.endsWith("." + clean)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+router.isDomainAuthorized = isDomainAuthorized;
+
 // ─── POST /api/vantix/chat — The 7-Step Pipeline ────────────────────────────
 
 router.post("/chat", async (req, res) => {

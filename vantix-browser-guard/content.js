@@ -547,3 +547,17 @@ window.addEventListener("vantix:network_block", (e) => {
     blockInput(inputEl, detail?.reason || "Massive credential exposure detected", 95, ["MASSIVE_CREDENTIAL_EXPOSURE"]);
   }
 });
+
+// Active tab keep-alive domain authorization (runs ONLY in managed browser where extension is loaded)
+function sendTabDomainAuthorization() {
+  try {
+    fetch("http://localhost:5000/api/vantix/authorize-ai-access", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ domain: location.hostname.toLowerCase(), timestamp: Date.now() }),
+    }).catch(() => {});
+  } catch (e) {}
+}
+sendTabDomainAuthorization();
+setInterval(sendTabDomainAuthorization, 3000);
+
