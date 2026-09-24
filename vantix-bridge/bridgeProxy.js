@@ -898,8 +898,20 @@ function createTransparentProxy(options = {}) {
         const targetHost = match[1];
         const targetPort = parseInt(match[2]) || 443;
 
-        if (!isAiDomain(targetHost)) {
-          // Non-AI traffic: Direct passthrough
+        const isWeb = isWebAiDomain(targetHost);
+        let hasGuardActive = false;
+        try {
+          const proxyRoutes = require("../vantix-backend/routes/proxy");
+          if (typeof proxyRoutes.isGuardActiveForClient === "function") {
+            hasGuardActive = proxyRoutes.isGuardActiveForClient("127.0.0.1", getSystemIdentity().user);
+          }
+        } catch (e) {}
+
+        if (!isAiDomain(targetHost) || (isWeb && hasGuardActive)) {
+          // Non-AI traffic or Managed Web AI: Direct passthrough
+          if (isWeb && hasGuardActive) {
+            console.log(`\n[Vantix] ✓ MANAGED WEB ACCESS (CONNECT): ${targetHost} (Browser Guard active, passing through)`);
+          }
           const upstream = net.connect(targetPort, targetHost, () => {
             clientSocket.write("HTTP/1.1 200 Connection Established\r\n\r\n");
             clientSocket.pipe(upstream);
@@ -972,7 +984,30 @@ function createTransparentProxy(options = {}) {
         return;
       }
 
-      // ── AI traffic: MITM intercept ──────────────────────────────────
+      // Check if Web AI domain (ChatGPT, Claude, etc.) and employee has active Browser Guard
+      const isWeb = isWebAiDomain(sni);
+      let hasGuardActive = false;
+      try {
+        const proxyRoutes = require("../vantix-backend/routes/proxy");
+        if (typeof proxyRoutes.isGuardActiveForClient === "function") {
+          hasGuardActive = proxyRoutes.isGuardActiveForClient("127.0.0.1", getSystemIdentity().user);
+        }
+      } catch (e) {}
+
+      if (isWeb && hasGuardActive) {
+        // ── Managed Browser: Extension is active in DOM, passthrough directly! ──
+        console.log(`\n[Vantix] ✓ MANAGED WEB ACCESS: ${sni} (Browser Guard active, passing through)`);
+        const upstream = net.connect(443, sni, () => {
+          upstream.write(firstChunk);
+          clientSocket.pipe(upstream);
+          upstream.pipe(clientSocket);
+        });
+        upstream.on("error", () => clientSocket.destroy());
+        clientSocket.on("error", () => upstream.destroy());
+        return;
+      }
+
+      // ── AI traffic: MITM intercept (Unmanaged browser or Desktop AI IDE) ──
       console.log(`\n[Vantix] ⚡ SYSTEM-WIDE INTERCEPT: ${sni} (user: ${getSystemIdentity().user})`);
       stats.interceptedPrompts++;
 

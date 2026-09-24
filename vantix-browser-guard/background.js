@@ -56,10 +56,10 @@ async function fetchSystemIdentity() {
 
 const TARGET_AI_DOMAINS = [
   "chatgpt.com",
+  "chat.openai.com",
   "openai.com",
   "claude.ai",
   "anthropic.com",
-  "google.com",
   "gemini.google.com",
   "perplexity.ai",
   "deepseek.com",
