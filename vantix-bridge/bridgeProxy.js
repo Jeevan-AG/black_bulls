@@ -609,7 +609,7 @@ function processInterceptedAiRequest(rawBuffer, hostname, port, clientTlsSocket)
   let tokenTable = new Map();
 
   if (detection.detections.length > 0) {
-    tokenTable = tee.createTokenTable(sessionId, detection.detections);
+    tokenTable = tee.createTokenTable(sessionId, detection.detections, promptText);
     sanitizedPrompt = tee.sanitizePrompt(promptText, tokenTable);
     console.log(`[Vantix-Bridge] 🛡 TEE Sanitized (${detection.detections.length} sensitive tokens redacted seamlessly)`);
     stats.redactedTokens += detection.detections.length;

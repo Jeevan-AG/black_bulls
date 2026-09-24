@@ -135,9 +135,9 @@ const INDUSTRIAL_PATTERNS = {
   // Credentials
   NATURAL_LANGUAGE_CREDENTIAL: {
     patterns: [
-      /(?:(?:my|the|our|test|sample)\s+)?(?:aws|openai|anthropic|api|secret|access|private)\s*(?:access\s*)?key\s*(?:is|[:=])\s*['"]?([^\s"'.,;]{4,})['"]?/gi,
-      /(?:(?:my|the|our|test|sample)\s+)?(?:password|token|secret|credential|api_key)\s*(?:is|[:=])\s*['"]?([^\s"'.,;]{4,})['"]?/gi,
-      /\b(?:aws_key|secret_key|api_key|access_key)\s*(?:is|[:=])\s*['"]?([^\s"'.,;]{4,})['"]?/gi,
+      /(?:(?:my|the|our|test|sample|here\s+is\s+(?:my|the))\s+)?(?:aws|openai|anthropic|api|secret|access|private)\s*(?:access\s*)?key\s*(?:is|[:=]|\s+)\s*['"]?([^\s"'.,;]{4,})['"]?/gi,
+      /(?:(?:my|the|our|test|sample|here\s+is\s+(?:my|the))\s+)?(?:password|token|secret|credential|api_key)\s*(?:is|[:=]|\s+)\s*['"]?([^\s"'.,;]{4,})['"]?/gi,
+      /\b(?:aws_key|secret_key|api_key|access_key)\s*(?:is|[:=]|\s+)\s*['"]?([^\s"'.,;]{4,})['"]?/gi,
     ],
     category: "CREDENTIAL",
     label: "Exposed Credential",
@@ -223,9 +223,9 @@ const INDUSTRIAL_PATTERNS = {
   },
   PHONE: {
     patterns: [
-      /(?:\+?\d{1,3}[\s-]?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}\b/g,
+      /(?:\+?\d{1,3}[\s-]?)?\(?\d{3}\)?[\s.-]\d{3}[\s.-]\d{4}\b/g,
       /(?<!\d)(?:\+91[\s-]?)?[6-9]\d{9}(?!\d)/g,
-      /(?:\+\d{1,3}[\s-]?)?\d{2,4}[\s.-]?\d{3,4}[\s.-]?\d{3,4}\b/g,
+      /(?:\+\d{1,3}[\s-]?)?\d{2,4}[\s.-]\d{3,4}[\s.-]\d{3,4}\b/g,
     ],
     category: "PII",
     label: "Phone Number",
@@ -591,21 +591,87 @@ function analyzePrompt(text) {
 
 
 // ─── Semantic Category Mapping ───────────────────────────────────────────────
-// Maps categories to their semantic placeholder tags for the TEE enclave.
+// Maps categories and patterns to their exact, accurate semantic placeholder tags.
+
+const PATTERN_PLACEHOLDERS = {
+  PHONE: "PHONE_NUMBER",
+  EMAIL: "EMAIL_ADDRESS",
+  AADHAAR: "AADHAAR_NUMBER",
+  PAN: "PAN_NUMBER",
+  SSN: "SSN_NUMBER",
+  CREDIT_CARD: "CREDIT_DEBIT_CARD",
+  IBAN: "BANK_ACCOUNT_IBAN",
+  PASSWORD_SECRET: "PASSWORD",
+  PRIVATE_KEY: "PRIVATE_KEY",
+  CONNECTION_STRING: "DB_CONNECTION_STRING",
+  JWT_TOKEN: "JWT_AUTH_TOKEN",
+  REGISTER_ADDR: "REGISTER_ADDR",
+  DNP3_IDENTIFIER: "DNP3_IDENTIFIER",
+  OPC_UA: "OPC_UA_NODE",
+  NETWORK_ADDR: "IP_ADDRESS",
+  ELECTRICAL_PARAM: "ELECTRICAL_PARAM",
+  PRESSURE_PARAM: "PRESSURE_PARAM",
+  TEMPERATURE_PARAM: "TEMPERATURE_PARAM",
+  DEVICE_TYPE: "DEVICE_TYPE",
+  FIRMWARE_VERSION: "FIRMWARE_VERSION",
+  SERIAL_NUMBER: "SERIAL_NUMBER",
+  LOCATION: "LOCATION",
+  GPS_COORD: "GPS_COORDINATES",
+  PERSONAL_IDENTIFIER: "PERSONAL_NAME",
+};
 
 const CATEGORY_PLACEHOLDERS = {
   REGISTER_ADDR:    "REGISTER_ADDR",
   ELECTRICAL_PARAM: "ELECTRICAL_PARAM",
   DEVICE_TYPE:      "DEVICE_TYPE",
   LOCATION:         "LOCATION",
-  NETWORK_ADDR:     "NETWORK_ADDR",
-  CREDENTIAL:       "CREDENTIAL",
-  CRITICAL_PII:     "PII_VALUE",
-  PII:              "PII_VALUE",
-  FINANCIAL:        "FINANCIAL_RECORD",
+  NETWORK_ADDR:     "IP_ADDRESS",
+  CREDENTIAL:       "API_KEY",
+  CRITICAL_PII:     "AADHAAR_NUMBER",
+  PII:              "PERSONAL_DATA",
+  FINANCIAL:        "CREDIT_DEBIT_CARD",
   PROMPT_INJECTION: "PROMPT_INJECTION_FLAG",
   SENSOR_DATA:      "SENSOR_DATA",
 };
+
+function resolvePlaceholderForDetection(det, fullText = "") {
+  if (!det) return "CONFIDENTIAL_DATA";
+
+  // Dynamic context for natural language credentials
+  if (det.patternName === "NATURAL_LANGUAGE_CREDENTIAL") {
+    const start = Math.max(0, (det.start || 0) - 50);
+    const end = Math.min((fullText || "").length, (det.end || 0) + 25);
+    const ctx = (fullText || "").slice(start, end).toLowerCase();
+
+    if (ctx.includes("aws")) return "AWS_KEY";
+    if (ctx.includes("openai")) return "OPENAI_API_KEY";
+    if (ctx.includes("anthropic") || ctx.includes("claude")) return "ANTHROPIC_API_KEY";
+    if (ctx.includes("password") || ctx.includes("passwd")) return "PASSWORD";
+    if (ctx.includes("token")) return "AUTH_TOKEN";
+    if (ctx.includes("secret")) return "SECRET_KEY";
+    if (ctx.includes("api")) return "API_KEY";
+    return "API_KEY";
+  }
+
+  if (det.patternName === "API_KEY") {
+    const val = det.value || "";
+    if (val.startsWith("AKIA")) return "AWS_ACCESS_KEY";
+    if (val.startsWith("sk-proj-") || val.startsWith("sk-")) return "OPENAI_API_KEY";
+    if (val.startsWith("ghp_")) return "GITHUB_TOKEN";
+    if (val.startsWith("AIza")) return "GOOGLE_API_KEY";
+    return "API_KEY";
+  }
+
+  if (PATTERN_PLACEHOLDERS[det.patternName]) {
+    return PATTERN_PLACEHOLDERS[det.patternName];
+  }
+
+  if (CATEGORY_PLACEHOLDERS[det.category]) {
+    return CATEGORY_PLACEHOLDERS[det.category];
+  }
+
+  return det.category || "CONFIDENTIAL_DATA";
+}
 
 
 module.exports = {
@@ -614,4 +680,6 @@ module.exports = {
   INDUSTRIAL_CONTEXT_CLUSTERS,
   COMBINATION_MATRIX,
   CATEGORY_PLACEHOLDERS,
+  PATTERN_PLACEHOLDERS,
+  resolvePlaceholderForDetection,
 };

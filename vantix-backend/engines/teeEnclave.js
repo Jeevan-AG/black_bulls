@@ -13,7 +13,7 @@
 "use strict";
 
 const crypto = require("crypto");
-const { CATEGORY_PLACEHOLDERS } = require("./industrialDetector");
+const { CATEGORY_PLACEHOLDERS, resolvePlaceholderForDetection } = require("./industrialDetector");
 
 // ─── Enclave State ───────────────────────────────────────────────────────────
 // Per-session token tables — Map<sessionId, { tokenMap, createdAt }>
@@ -57,9 +57,9 @@ function getSigningKey() {
  * @param {object[]} detections — Array from analyzePrompt().detections
  * @returns {Map<string, string>} realValue → placeholder mapping
  */
-function createTokenTable(sessionId, detections) {
+function createTokenTable(sessionId, detections, originalPrompt = "") {
   const tokenMap = new Map(); // realValue → placeholder
-  const categoryCounts = {};  // category → count (for numbering)
+  const placeholderCounts = {}; // placeholderBase → count (for numbering)
 
   // Sort detections by position (start index) so numbering is predictable
   const sorted = [...detections].sort((a, b) => a.start - b.start);
@@ -67,14 +67,16 @@ function createTokenTable(sessionId, detections) {
   for (const det of sorted) {
     if (tokenMap.has(det.value)) continue; // Already mapped
 
-    const placeholderBase = CATEGORY_PLACEHOLDERS[det.category] || det.category;
+    const placeholderBase = typeof resolvePlaceholderForDetection === "function"
+      ? resolvePlaceholderForDetection(det, originalPrompt)
+      : (CATEGORY_PLACEHOLDERS[det.category] || det.category);
 
-    // Count occurrences of this category
-    if (!categoryCounts[det.category]) categoryCounts[det.category] = 0;
-    categoryCounts[det.category]++;
+    // Count occurrences of this placeholder
+    if (!placeholderCounts[placeholderBase]) placeholderCounts[placeholderBase] = 0;
+    placeholderCounts[placeholderBase]++;
 
     // Only number if there are multiple values in the same category
-    const count = categoryCounts[det.category];
+    const count = placeholderCounts[placeholderBase];
     const placeholder = `[${placeholderBase}${count > 1 ? `_${count}` : ""}]`;
 
     tokenMap.set(det.value, placeholder);

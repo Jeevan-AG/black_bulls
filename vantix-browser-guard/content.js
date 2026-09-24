@@ -59,18 +59,48 @@ function getInputText(el) {
   return el.innerText || el.textContent || "";
 }
 
-// ─── Helper: Set Text on Input Element (Triggering React/Vue State) ───────────
+// ─── Helper: Set Text on Input Element (Triggering React/Vue/ProseMirror State) ─
 function setInputText(el, newText) {
   if (!el) return;
 
+  try {
+    el.focus();
+  } catch (e) {}
+
   if (el.tagName === "TEXTAREA" || el.tagName === "INPUT") {
-    el.value = newText;
+    try {
+      const nativeSetter =
+        Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value")?.set ||
+        Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set;
+      if (nativeSetter) {
+        nativeSetter.call(el, newText);
+      } else {
+        el.value = newText;
+      }
+    } catch (e) {
+      el.value = newText;
+    }
     el.dispatchEvent(new Event("input", { bubbles: true }));
     el.dispatchEvent(new Event("change", { bubbles: true }));
   } else if (el.isContentEditable) {
-    el.innerText = newText;
-    el.dispatchEvent(new Event("input", { bubbles: true }));
-    el.dispatchEvent(new Event("change", { bubbles: true }));
+    try {
+      const selection = window.getSelection();
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      selection.removeAllRanges();
+      selection.addRange(range);
+
+      const success = document.execCommand("insertText", false, newText);
+      if (!success) {
+        el.innerText = newText;
+        el.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: newText }));
+        el.dispatchEvent(new Event("change", { bubbles: true }));
+      }
+    } catch (err) {
+      el.innerText = newText;
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+      el.dispatchEvent(new Event("change", { bubbles: true }));
+    }
   }
 }
 
@@ -316,13 +346,15 @@ async function handlePromptSubmission(e) {
 
         // ── Case 2: Silent Redaction (<=3 credentials / PII) ───────────────
         if (isRedacted && res.sanitizedPrompt && res.sanitizedPrompt !== rawPrompt) {
-          console.log("[Vantix Guard] ⚡ SILENT REDACTION applied.");
+          console.log("[Vantix Guard] ⚡ SILENT REDACTION applied:", res.sanitizedPrompt);
           unblockInput(inputEl);
           setInputText(inputEl, res.sanitizedPrompt);
           showRedactPill(categories.length || 1);
 
           inputEl.__vantix_sanitized = true;
-          triggerRealSubmit(inputEl);
+          setTimeout(() => {
+            triggerRealSubmit(inputEl);
+          }, 60);
           return;
         }
 
@@ -486,3 +518,32 @@ if (document.readyState === "loading") {
 } else {
   checkAndAutoRecover();
 }
+
+// ─── Zero-Leak In-Page Interceptor Support ────────────────────────────────────
+function injectMainWorldInterceptor() {
+  if (document.getElementById("vantix-main-interceptor")) return;
+  try {
+    const s = document.createElement("script");
+    s.id = "vantix-main-interceptor";
+    s.src = chrome.runtime.getURL("pageInterceptor.js");
+    (document.head || document.documentElement).appendChild(s);
+  } catch (e) {}
+}
+injectMainWorldInterceptor();
+
+// Listen for network-level in-flight redactions from pageInterceptor.js
+window.addEventListener("vantix:network_redact", (e) => {
+  const detail = e.detail;
+  if (detail && detail.redactedCount) {
+    showRedactPill(detail.redactedCount);
+  }
+});
+
+// Listen for network-level hard blocks from pageInterceptor.js
+window.addEventListener("vantix:network_block", (e) => {
+  const detail = e.detail;
+  const inputEl = findPromptInput();
+  if (inputEl) {
+    blockInput(inputEl, detail?.reason || "Massive credential exposure detected", 95, ["MASSIVE_CREDENTIAL_EXPOSURE"]);
+  }
+});

@@ -393,7 +393,7 @@ router.post("/chat", async (req, res) => {
     }
 
     if (action === "silent_redact" && detection.detections.length > 0) {
-      tokenMap = tee.createTokenTable(sessionId, detection.detections);
+      tokenMap = tee.createTokenTable(sessionId, detection.detections, prompt);
       sanitizedPrompt = tee.sanitizePrompt(prompt, tokenMap);
     }
 
@@ -575,7 +575,7 @@ router.post(["/v1/chat/completions", "/chat/completions"], async (req, res) => {
 
     // ── Step 3: TEE Redaction ───────────────────────────────────────────────
     if (action === "silent_redact" && detection.detections.length > 0) {
-      tokenMap = tee.createTokenTable(sessionId, detection.detections);
+      tokenMap = tee.createTokenTable(sessionId, detection.detections, prompt);
       sanitizedPrompt = tee.sanitizePrompt(prompt, tokenMap);
     }
 
@@ -1000,7 +1000,7 @@ router.post("/simulate-leak", async (req, res) => {
   if (action === "hard_block") {
     sanitizedPrompt = "[BLOCKED — Prompt contained live credentials / confidential parameters]";
   } else if (action === "silent_redact") {
-    const tokenMap = tee.createTokenTable(`sim-${Date.now()}`, detection.detections);
+    const tokenMap = tee.createTokenTable(`sim-${Date.now()}`, detection.detections, prompt);
     sanitizedPrompt = tee.sanitizePrompt(prompt, tokenMap);
   }
 
