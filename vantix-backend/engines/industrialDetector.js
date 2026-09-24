@@ -138,7 +138,6 @@ const INDUSTRIAL_PATTERNS = {
       /(?:(?:my|the|our|test|sample)\s+)?(?:aws|openai|anthropic|api|secret|access|private)\s*(?:access\s*)?key\s*(?:is|[:=])\s*['"]?([^\s"'.,;]{4,})['"]?/gi,
       /(?:(?:my|the|our|test|sample)\s+)?(?:password|token|secret|credential|api_key)\s*(?:is|[:=])\s*['"]?([^\s"'.,;]{4,})['"]?/gi,
       /\b(?:aws_key|secret_key|api_key|access_key)\s*(?:is|[:=])\s*['"]?([^\s"'.,;]{4,})['"]?/gi,
-      /\baws\s*key\s*(?:is|[:=])\s*['"]?([^\s"'.,;]{4,})['"]?/gi,
     ],
     category: "CREDENTIAL",
     label: "Exposed Credential",
@@ -391,7 +390,7 @@ function analyzePrompt(text) {
   }
 
   // ── Sublayer A: Pattern matching ──────────────────────────────────────────
-  const detections = [];
+  const rawDetections = [];
   const seen = new Set();
 
   for (const [patternName, config] of Object.entries(INDUSTRIAL_PATTERNS)) {
@@ -424,22 +423,49 @@ function analyzePrompt(text) {
           }
         }
 
+        let value = match[0];
+        let valStart = match.index;
+        let valEnd = match.index + value.length;
+
+        // If pattern is a credential assignment with capture group, extract the actual secret token
+        if (config.category === "CREDENTIAL" && match[1] && match[1].length >= 4) {
+          const captured = match[1];
+          const offsetInMatch = match[0].indexOf(captured);
+          if (offsetInMatch !== -1) {
+            value = captured;
+            valStart = match.index + offsetInMatch;
+            valEnd = valStart + captured.length;
+          }
+        }
+
         const key = `${config.category}:${value}`;
         if (!seen.has(key)) {
           seen.add(key);
-          detections.push({
+          rawDetections.push({
             patternName,
             category: config.category,
             label: config.label,
             value,
-            start: match.index,
-            end: match.index + value.length,
+            start: valStart,
+            end: valEnd,
             isolationRisk: config.baseRisk,
           });
         }
       }
     }
   }
+
+  // Deduplicate overlapping detections: keep longer span or higher risk
+  const deduped = [];
+  rawDetections.sort((a, b) => (b.end - b.start) - (a.end - a.start) || b.isolationRisk - a.isolationRisk);
+  for (const det of rawDetections) {
+    const overlaps = deduped.some((existing) => (det.start >= existing.start && det.end <= existing.end));
+    if (!overlaps) {
+      deduped.push(det);
+    }
+  }
+  deduped.sort((a, b) => a.start - b.start);
+  const detections = deduped;
 
   // ── Sublayer B: Contextual NLP scoring ────────────────────────────────────
   const lowerText = text.toLowerCase();
