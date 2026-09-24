@@ -26,11 +26,37 @@ const { analyzePrompt } = require("../engines/industrialDetector");
 const tee = require("../engines/teeEnclave");
 const sessionGraph = require("../engines/sessionGraph");
 const ws = require("../engines/wsServer");
+const fs = require("fs");
+const path = require("path");
 const AuditLog = require("../models/AuditLog");
 const mongoose = require("mongoose");
 
-// Fast in-memory audit ring buffer (survives offline DB during live demos)
+const DATA_DIR = path.join(__dirname, "../data");
+const AUDIT_FILE = path.join(DATA_DIR, "audit_logs.json");
+
+if (!fs.existsSync(DATA_DIR)) {
+  try { fs.mkdirSync(DATA_DIR, { recursive: true }); } catch (e) {}
+}
+
+// Persistent audit log ring buffer (loaded from disk on startup)
 let _inMemoryAuditLogs = [];
+try {
+  if (fs.existsSync(AUDIT_FILE)) {
+    const raw = fs.readFileSync(AUDIT_FILE, "utf8");
+    _inMemoryAuditLogs = JSON.parse(raw);
+    console.log(`[Vantix-Storage] ✓ Loaded ${_inMemoryAuditLogs.length} persisted audit logs from disk`);
+  }
+} catch (e) {
+  _inMemoryAuditLogs = [];
+}
+
+function persistAuditLogs() {
+  try {
+    fs.writeFileSync(AUDIT_FILE, JSON.stringify(_inMemoryAuditLogs.slice(0, 1000), null, 2), "utf8");
+  } catch (e) {
+    console.error("[Vantix-Storage] Failed to persist audit logs:", e.message);
+  }
+}
 
 function extractClientIp(req) {
   if (!req) return "127.0.0.1";
@@ -114,7 +140,8 @@ function recordAndBroadcast({
   };
 
   _inMemoryAuditLogs.unshift(logRecord);
-  if (_inMemoryAuditLogs.length > 250) _inMemoryAuditLogs.pop();
+  if (_inMemoryAuditLogs.length > 500) _inMemoryAuditLogs.pop();
+  persistAuditLogs();
 
   if (mongoose.connection.readyState === 1) {
     AuditLog.create(logRecord).catch(() => {});
@@ -660,6 +687,16 @@ router.post("/reset", (req, res) => {
 
 
 // ─── GET /api/vantix/audit-logs — Retrieve signed audit records ─────────────
+router.get("/audit-logs", (req, res) => {
+  const limit = parseInt(req.query.limit) || 100;
+  const logs = _inMemoryAuditLogs.slice(0, limit);
+  res.json({
+    success: true,
+    count: logs.length,
+    total: _inMemoryAuditLogs.length,
+    logs,
+  });
+});
 
 // ─── GET /api/vantix/flagged-employees — Dynamic Flagged Directory ──────────
 router.get("/flagged-employees", (req, res) => {

@@ -97,6 +97,11 @@ function getCertForHost(hostname) {
     // Clean up CSR
     if (fs.existsSync(hostCsrPath)) fs.unlinkSync(hostCsrPath);
 
+    try {
+      fs.chmodSync(hostKeyPath, 0o644);
+      fs.chmodSync(hostCrtPath, 0o644);
+    } catch (e) {}
+
     const creds = {
       key: fs.readFileSync(hostKeyPath),
       cert: fs.readFileSync(hostCrtPath),

@@ -9,6 +9,7 @@ const http = require("http");
 const https = require("https");
 const net = require("net");
 const tls = require("tls");
+const stream = require("stream");
 const url = require("url");
 const os = require("os");
 const path = require("path");
@@ -23,15 +24,55 @@ const sessionGraph = require("../vantix-backend/engines/sessionGraph");
 
 // Target AI API domains to intercept (all other web traffic passes through untouched)
 const AI_DOMAINS = [
+  // OpenAI
   "api.openai.com",
+  // Anthropic
   "api.anthropic.com",
+  // Google Gemini / Vertex
   "generativelanguage.googleapis.com",
+  // Groq
   "api.groq.com",
+  // Together AI
   "api.together.xyz",
+  // Mistral & Codestral
   "api.mistral.ai",
+  "codestral.mistral.ai",
+  // Cohere
   "api.cohere.com",
+  "api.cohere.ai",
+  // DeepSeek
   "api.deepseek.com",
+  // Perplexity
   "api.perplexity.ai",
+  // OpenRouter & Voyage & HuggingFace
+  "openrouter.ai",
+  "api.openrouter.ai",
+  "api.voyageai.com",
+  "api-inference.huggingface.co",
+  // Desktop IDEs & AI Coding Agents
+  // Kiro / Amazon Q Developer / CodeWhisperer
+  "q.us-east-1.amazonaws.com",
+  "q.eu-central-1.amazonaws.com",
+  "q-fips.us-gov-east-1.amazonaws.com",
+  "q-fips.us-gov-west-1.amazonaws.com",
+  "codewhisperer.us-east-1.amazonaws.com",
+  "codewhispererstreamingservice.us-east-1.amazonaws.com",
+  "app.kiro.dev",
+  "api.kiro.dev",
+  "kiro.dev",
+  // Cursor
+  "api.cursor.sh",
+  "api2.cursor.sh",
+  "repo42.cursor.sh",
+  // Windsurf / Codeium
+  "api.codeium.com",
+  "windsurf.codeium.com",
+  // GitHub Copilot
+  "api.githubcopilot.com",
+  "copilot-proxy.githubusercontent.com",
+  // Supermaven & Tabnine
+  "api.supermaven.com",
+  "api.tabnine.com",
 ];
 
 const WEB_AI_DOMAINS = [
@@ -65,12 +106,42 @@ let stats = {
  * Checks if a hostname matches any monitored AI platform.
  */
 function isAiDomain(host) {
+  if (!host) return false;
   const cleanHost = host.split(":")[0].toLowerCase();
-  return AI_DOMAINS.some((domain) => cleanHost === domain || cleanHost.endsWith("." + domain)) ||
-         WEB_AI_DOMAINS.some((domain) => cleanHost === domain || cleanHost.endsWith("." + domain));
+  
+  if (AI_DOMAINS.some((domain) => cleanHost === domain || cleanHost.endsWith("." + domain)) ||
+      WEB_AI_DOMAINS.some((domain) => cleanHost === domain || cleanHost.endsWith("." + domain))) {
+    return true;
+  }
+
+  // AWS AI services (Amazon Q, CodeWhisperer, Bedrock)
+  if (cleanHost.endsWith(".amazonaws.com")) {
+    if (
+      cleanHost.startsWith("q.") ||
+      cleanHost.startsWith("q-fips.") ||
+      cleanHost.includes(".q.") ||
+      cleanHost.includes("codewhisperer") ||
+      cleanHost.includes("bedrock")
+    ) {
+      return true;
+    }
+  }
+
+  // Any Kiro, Cursor, Codeium subdomains
+  if (
+    cleanHost.endsWith(".kiro.dev") ||
+    cleanHost.endsWith(".kiro.aws.dev") ||
+    cleanHost.endsWith(".cursor.sh") ||
+    cleanHost.endsWith(".codeium.com")
+  ) {
+    return true;
+  }
+
+  return false;
 }
 
 function isWebAiDomain(host) {
+  if (!host) return false;
   const cleanHost = host.split(":")[0].toLowerCase();
   return WEB_AI_DOMAINS.some((domain) => cleanHost === domain || cleanHost.endsWith("." + domain));
 }
@@ -173,34 +244,137 @@ function createBridgeServer(options = {}) {
 }
 
 /**
+ * Universal extractor and injector for AI prompt payloads across all providers:
+ * OpenAI, Anthropic, Kiro / Amazon Q, Google Gemini, Bedrock, Mistral, Cohere, LangChain.
+ */
+function extractPromptFromJson(json) {
+  if (!json || typeof json !== "object") return { text: "", replace: null };
+
+  // 1. OpenAI / Anthropic format: messages: [{ role, content }]
+  if (Array.isArray(json.messages) && json.messages.length > 0) {
+    const lastMsg = json.messages[json.messages.length - 1];
+    if (typeof lastMsg.content === "string") {
+      return {
+        text: lastMsg.content,
+        replace: (sanitized) => { lastMsg.content = sanitized; }
+      };
+    } else if (Array.isArray(lastMsg.content)) {
+      const textPart = lastMsg.content.find(p => p && (p.type === "text" || typeof p.text === "string"));
+      if (textPart && typeof textPart.text === "string") {
+        return {
+          text: textPart.text,
+          replace: (sanitized) => { textPart.text = sanitized; }
+        };
+      }
+    }
+  }
+
+  // 2. Kiro / Amazon Q Developer format: conversationState.currentMessage.userInputMessage.content
+  if (json.conversationState?.currentMessage?.userInputMessage?.content) {
+    const uim = json.conversationState.currentMessage.userInputMessage;
+    if (typeof uim.content === "string") {
+      return {
+        text: uim.content,
+        replace: (sanitized) => { uim.content = sanitized; }
+      };
+    }
+  }
+
+  // 3. Direct message object
+  if (json.message && typeof json.message === "object") {
+    if (typeof json.message.content === "string") {
+      return {
+        text: json.message.content,
+        replace: (sanitized) => { json.message.content = sanitized; }
+      };
+    } else if (Array.isArray(json.message.content)) {
+      const textPart = json.message.content.find(p => p && (p.type === "text" || typeof p.text === "string"));
+      if (textPart && typeof textPart.text === "string") {
+        return {
+          text: textPart.text,
+          replace: (sanitized) => { textPart.text = sanitized; }
+        };
+      }
+    }
+  }
+
+  // 4. Direct prompt: { prompt: "..." }
+  if (typeof json.prompt === "string") {
+    return {
+      text: json.prompt,
+      replace: (sanitized) => { json.prompt = sanitized; }
+    };
+  }
+
+  // 5. Google Gemini format: contents: [{ role: "user", parts: [{ text: "..." }] }]
+  if (Array.isArray(json.contents) && json.contents.length > 0) {
+    const lastContent = json.contents[json.contents.length - 1];
+    if (Array.isArray(lastContent.parts)) {
+      const textPart = lastContent.parts.find(p => p && typeof p.text === "string");
+      if (textPart) {
+        return {
+          text: textPart.text,
+          replace: (sanitized) => { textPart.text = sanitized; }
+        };
+      }
+    }
+  }
+
+  // 6. Common SDK fields: inputText, input, query, utterance
+  for (const field of ["inputText", "input", "query", "utterance"]) {
+    if (typeof json[field] === "string") {
+      return {
+        text: json[field],
+        replace: (sanitized) => { json[field] = sanitized; }
+      };
+    }
+  }
+
+  // 7. Recursive fallback: find largest string payload in JSON
+  let targetObj = null;
+  let targetKey = null;
+  let longestStr = "";
+  function walk(obj) {
+    if (!obj || typeof obj !== "object") return;
+    for (const [k, v] of Object.entries(obj)) {
+      if (typeof v === "string" && v.length > longestStr.length) {
+        longestStr = v;
+        targetObj = obj;
+        targetKey = k;
+      } else if (typeof v === "object") {
+        walk(v);
+      }
+    }
+  }
+  walk(json);
+  if (targetObj && targetKey && longestStr.length > 0) {
+    return {
+      text: longestStr,
+      replace: (sanitized) => { targetObj[targetKey] = sanitized; }
+    };
+  }
+
+  return { text: "", replace: null };
+}
+
+/**
  * Processes decrypted AI request, applies 7-step pipeline, forwards, and restores.
  */
 function processInterceptedAiRequest(rawBuffer, hostname, port, clientTlsSocket) {
   const identity = getSystemIdentity();
   const rawStr = rawBuffer.toString("utf8");
   const headerEnd = rawStr.indexOf("\r\n\r\n");
+  if (headerEnd === -1) {
+    forwardRawToUpstream(rawBuffer, hostname, port, clientTlsSocket);
+    return;
+  }
+
   const headerPart = rawStr.slice(0, headerEnd);
   const bodyPart = rawStr.slice(headerEnd + 4);
 
   // Parse HTTP method and path
   const firstLine = headerPart.split("\r\n")[0];
   const [method, reqPath] = firstLine.split(" ");
-
-  // Extract prompt text from JSON payload
-  let promptText = "";
-  let parsedJson = null;
-
-  try {
-    parsedJson = JSON.parse(bodyPart);
-    if (Array.isArray(parsedJson.messages)) {
-      const lastMsg = parsedJson.messages[parsedJson.messages.length - 1];
-      promptText = typeof lastMsg.content === "string" ? lastMsg.content : JSON.stringify(lastMsg.content);
-    } else if (parsedJson.prompt) {
-      promptText = parsedJson.prompt;
-    }
-  } catch (e) {
-    // Non-JSON or streaming chunk, pass forward directly
-  }
 
   const cleanHost = hostname.split(":")[0].toLowerCase();
   const isWeb = isWebAiDomain(cleanHost);
@@ -272,19 +446,115 @@ function processInterceptedAiRequest(rawBuffer, hostname, port, clientTlsSocket)
     return;
   }
 
+  // Universal Prompt Extraction
+  let parsedJson = null;
+  let promptText = "";
+  let promptReplacer = null;
+
+  try {
+    parsedJson = JSON.parse(bodyPart);
+    const extracted = extractPromptFromJson(parsedJson);
+    promptText = extracted.text;
+    promptReplacer = extracted.replace;
+  } catch (e) {
+    // Non-JSON or streaming chunk, analyze raw body
+  }
+
+  if (!promptText && bodyPart && bodyPart.trim().length > 0) {
+    promptText = bodyPart.trim();
+  }
+
   if (!promptText) {
     // Not a prompt payload — forward directly to upstream
     forwardRawToUpstream(rawBuffer, hostname, port, clientTlsSocket);
     return;
   }
 
-  console.log(`[Vantix-Bridge] User: [${identity.user}@${identity.host}]`);
-  console.log(`[Vantix-Bridge] Intercepted Prompt: "${promptText.slice(0, 80)}..."`);
+  console.log(`\n[Vantix-Bridge] ⚡ INTERCEPTED AI REQUEST: [${hostname}] User: [${identity.user}@${identity.host}]`);
+  console.log(`[Vantix-Bridge] Prompt: "${promptText.slice(0, 90)}..."`);
 
   // Run 3-Sublayer Detection Engine
   const detection = analyzePrompt(promptText);
   const sessionId = `bridge-${Date.now()}`;
+  stats.interceptedPrompts++;
 
+  const isCredentialOrCritical = detection.overallRisk >= 70 ||
+    detection.detections.some(d => d.category === "CREDENTIAL" || d.severity === "CRITICAL");
+
+  // ── RULE 1: HARD BLOCK ON EXPOSED CREDENTIALS OR CRITICAL ATTACKS ─────────
+  if (isCredentialOrCritical) {
+    console.log(`[Vantix-Bridge] ⛔ EXPOSED CREDENTIAL HARD-BLOCKED (${detection.detections.map(d => d.label || d.category).join(", ")})`);
+    
+    let sessionResult = { coverageMap: {}, riskScore: detection.overallRisk, promptCount: 1, anomalyTriggered: true, anomalyReport: "" };
+    try {
+      sessionResult = sessionGraph.updateSessionGraph(identity.user, identity.email, detection);
+    } catch (e) {}
+
+    const blockMsg = `[VANTIX AI FIREWALL] Request blocked: Sensitive credential detected (${detection.detections.map(d => d.label || d.category).join(", ")}). Outbound transmission halted by enterprise DLP policy.`;
+
+    try {
+      ws.broadcastDetection({
+        originalPrompt: promptText,
+        sanitizedPrompt: "[HARD_BLOCKED_BY_FIREWALL]",
+        restoredResponse: "",
+        riskScore: detection.overallRisk,
+        detections: detection.detections,
+        combinations: detection.combinations,
+        contextScore: detection.contextScore,
+        actionTaken: "hard_block",
+        sessionCoverage: sessionResult.coverageMap || {},
+        sessionRiskScore: sessionResult.riskScore || detection.overallRisk,
+        promptCount: sessionResult.promptCount || 1,
+        anomalyTriggered: true,
+        anomalyReport: `CRITICAL SECURITY BLOCK: Employee attempted to send exposed credentials to ${hostname}. Connection terminated by Layer 1 Firewall.`,
+        user: identity.user,
+        host: identity.host,
+        interceptSource: "network-layer-bridge",
+        timestamp: new Date().toISOString(),
+      });
+
+      fetch("https://vantix-backend-7gcw.onrender.com/api/vantix/chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Vantix-User": identity.user,
+          "X-Vantix-Host": identity.host,
+          "X-Vantix-Source": "network-layer-bridge",
+        },
+        body: JSON.stringify({
+          prompt: promptText,
+          userId: identity.user,
+          user: identity.user,
+          host: identity.host,
+          sessionId: `bridge-block-${Date.now()}`,
+        }),
+      }).catch(() => {});
+    } catch (e) {}
+
+    const errorJson = JSON.stringify({
+      error: {
+        message: blockMsg,
+        type: "vantix_security_violation",
+        code: "CREDENTIAL_EXPOSURE_BLOCKED",
+        param: null,
+      },
+      message: blockMsg,
+    });
+
+    const res = [
+      "HTTP/1.1 403 Forbidden",
+      "Content-Type: application/json; charset=utf-8",
+      `Content-Length: ${Buffer.byteLength(errorJson)}`,
+      "Connection: close",
+      "\r\n",
+    ].join("\r\n") + errorJson;
+
+    clientTlsSocket.write(res);
+    clientTlsSocket.end();
+    return;
+  }
+
+  // ── RULE 2: TEE SILENT REDACTION FOR PII & CONFIDENTIAL DATA ──────────────
   let sanitizedPrompt = promptText;
   let tokenTable = new Map();
 
@@ -293,16 +563,18 @@ function processInterceptedAiRequest(rawBuffer, hostname, port, clientTlsSocket)
     sanitizedPrompt = tee.sanitizePrompt(promptText, tokenTable);
     console.log(`[Vantix-Bridge] 🛡 TEE Sanitized (${detection.detections.length} sensitive tokens redacted)`);
     stats.redactedTokens += detection.detections.length;
+
+    if (promptReplacer) {
+      promptReplacer(sanitizedPrompt);
+    }
   }
 
-  // Update request JSON with sanitized prompt
-  if (parsedJson && parsedJson.messages) {
-    parsedJson.messages[parsedJson.messages.length - 1].content = sanitizedPrompt;
-  } else if (parsedJson && parsedJson.prompt) {
-    parsedJson.prompt = sanitizedPrompt;
+  let modifiedBody = bodyPart;
+  if (parsedJson) {
+    modifiedBody = JSON.stringify(parsedJson);
+  } else if (sanitizedPrompt !== promptText) {
+    modifiedBody = sanitizedPrompt;
   }
-
-  const modifiedBody = JSON.stringify(parsedJson);
 
   // Forward to real AI endpoint over genuine HTTPS
   const upstreamReq = https.request(
@@ -405,8 +677,6 @@ function processInterceptedAiRequest(rawBuffer, hostname, port, clientTlsSocket)
     clientTlsSocket.end();
   });
 
-  upstreamReq.write(modifiedBody);
-  upstreamReq.end();
 }
 
 function forwardRawToUpstream(rawBuffer, hostname, port, clientTlsSocket) {
@@ -644,8 +914,19 @@ function createTransparentProxy(options = {}) {
       console.log(`\n[Vantix] ⚡ SYSTEM-WIDE INTERCEPT: ${sni} (user: ${getSystemIdentity().user})`);
       stats.interceptedPrompts++;
 
-      // Put ClientHello back for TLS server to process
-      clientSocket.unshift(firstChunk);
+      // Create a duplex bridge to replay firstChunk and forward all stream events
+      const duplex = new stream.Duplex({
+        read(size) {},
+        write(chunk, encoding, callback) {
+          clientSocket.write(chunk, encoding, callback);
+        },
+      });
+
+      clientSocket.on("data", (c) => duplex.push(c));
+      clientSocket.on("end", () => duplex.push(null));
+      clientSocket.on("error", (e) => duplex.emit("error", e));
+
+      duplex.push(firstChunk);
 
       const hostCert = getCertForHost(sni);
       const tlsServer = new tls.Server({
@@ -654,7 +935,7 @@ function createTransparentProxy(options = {}) {
         ALPNProtocols: ["http/1.1"],
       });
 
-      tlsServer.emit("connection", clientSocket);
+      tlsServer.emit("connection", duplex);
 
       tlsServer.on("secureConnection", (tlsSocket) => {
         let buffer = Buffer.alloc(0);
@@ -672,7 +953,9 @@ function createTransparentProxy(options = {}) {
             if (received < expected) return; // Keep buffering
           }
 
-          processInterceptedAiRequest(buffer, sni, 443, tlsSocket);
+          const currentReq = buffer;
+          buffer = Buffer.alloc(0);
+          processInterceptedAiRequest(currentReq, sni, 443, tlsSocket);
         });
       });
 

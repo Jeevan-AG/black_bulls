@@ -71,6 +71,20 @@ install_ca() {
       fi
     done
   fi
+
+  # Configure System-Wide CA Trust for Node.js (Electron/Kiro/Cursor/VSCode), Python, and AWS SDK
+  cat <<'EOF' > /etc/profile.d/vantix_ca.sh
+export NODE_EXTRA_CA_CERTS=/usr/local/share/ca-certificates/vantix-ca.crt
+export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
+export REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
+export AWS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
+EOF
+  chmod 644 /etc/profile.d/vantix_ca.sh 2>/dev/null || true
+  export NODE_EXTRA_CA_CERTS=/usr/local/share/ca-certificates/vantix-ca.crt
+  export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
+  export REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
+  export AWS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
+  echo "  [CA] Electron / Node / Python / AWS CA Environment: CONFIGURED ✓"
 }
 
 # ─── Helper: Setup Managed Browser Policies (Chrome, Brave, Edge) ───────────
@@ -89,7 +103,11 @@ setup_browser_policies() {
     "*.openai.com",
     "*.claude.ai",
     "*.anthropic.com",
-    "*.google.com"
+    "*.google.com",
+    "*.deepseek.com",
+    "*.perplexity.ai",
+    "*.kiro.dev",
+    "*.amazonaws.com"
   ]
 }
 EOF
@@ -143,6 +161,7 @@ case "${1:-}" in
     # Step 1: Install CA certificate
     echo "  Step 1/4: Certificate Authority & Browser Trust Stores"
     install_ca
+    chmod -R 777 "$BRIDGE_DIR/ca" 2>/dev/null || true
     echo ""
 
     # Step 2: Kill any previous instance

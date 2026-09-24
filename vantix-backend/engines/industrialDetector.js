@@ -133,6 +133,17 @@ const INDUSTRIAL_PATTERNS = {
   },
 
   // Credentials
+  NATURAL_LANGUAGE_CREDENTIAL: {
+    patterns: [
+      /(?:(?:my|the|our|test|sample)\s+)?(?:aws|openai|anthropic|api|secret|access|private)\s*(?:access\s*)?key\s*(?:is|[:=])\s*['"]?([^\s"'.,;]{4,})['"]?/gi,
+      /(?:(?:my|the|our|test|sample)\s+)?(?:password|token|secret|credential|api_key)\s*(?:is|[:=])\s*['"]?([^\s"'.,;]{4,})['"]?/gi,
+      /\b(?:aws_key|secret_key|api_key|access_key)\s*(?:is|[:=])\s*['"]?([^\s"'.,;]{4,})['"]?/gi,
+      /\baws\s*key\s*(?:is|[:=])\s*['"]?([^\s"'.,;]{4,})['"]?/gi,
+    ],
+    category: "CREDENTIAL",
+    label: "Exposed Credential",
+    baseRisk: 90,
+  },
   API_KEY: {
     patterns: [
       /\b(?:sk-[A-Za-z0-9_\-]{20,})/g,                   // OpenAI legacy, Anthropic
