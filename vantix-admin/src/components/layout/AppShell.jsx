@@ -2,24 +2,16 @@ import React, { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Menu, X, Shield, ShieldAlert, Sliders, Users, Settings, LogOut } from 'lucide-react';
-import LaunchScreen from '../common/LaunchScreen';
 
 const AppShell = ({ children, onLogout }) => {
   const [menuOpen, setMenuOpen] = useState(false);
-  const [showContent, setShowContent] = useState(false);
 
   return (
     <div className="app-shell">
-      {/* Website Launch Splash Animation */}
-      <LaunchScreen onComplete={() => setShowContent(true)} />
-
       <div className="orion-global-bg" />
       
       {/* Main App Container */}
-      <motion.div
-        initial={{ opacity: 0, scale: 0.98 }}
-        animate={{ opacity: showContent ? 1 : 0.8, scale: showContent ? 1 : 0.98 }}
-        transition={{ duration: 0.5, ease: "easeOut" }}
+      <div
         style={{ display: "flex", flexDirection: "column", minHeight: "100vh", width: "100%" }}
       >
         {/* Apple Frosted Navbar */}
@@ -132,7 +124,7 @@ const AppShell = ({ children, onLogout }) => {
         <main className="main-content">
           {children}
         </main>
-      </motion.div>
+      </div>
     </div>
   );
 };
