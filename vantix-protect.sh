@@ -64,12 +64,15 @@ install_ca() {
     certutil -d sql:"$REAL_HOME/.pki/nssdb" -A -t "C,," -n "Vantix Enterprise CA" -i "$CA_CERT" 2>/dev/null || true
     echo "  [CA] Chrome / Chromium / Brave NSS DB: TRUSTED ✓"
 
-    # Also install into Firefox profiles if present
-    for ff_profile in "$REAL_HOME"/.mozilla/firefox/*.default*; do
-      if [ -d "$ff_profile" ]; then
-        certutil -d sql:"$ff_profile" -A -t "C,," -n "Vantix Enterprise CA" -i "$CA_CERT" 2>/dev/null || true
-      fi
-    done
+    # Also install into ALL Firefox profiles (Firefox uses its own cert store)
+    local FF_INSTALLED=0
+    while IFS= read -r -d '' ff_profile; do
+      ff_dir="$(dirname "$ff_profile")"
+      certutil -d sql:"$ff_dir" -A -t "C,," -n "Vantix Enterprise CA" -i "$CA_CERT" 2>/dev/null && FF_INSTALLED=$((FF_INSTALLED+1))
+    done < <(find "$REAL_HOME/.mozilla/firefox" -name "cert9.db" -print0 2>/dev/null)
+    if [ "$FF_INSTALLED" -gt 0 ]; then
+      echo "  [CA] Firefox NSS DB ($FF_INSTALLED profiles): TRUSTED ✓"
+    fi
   fi
 }
 

@@ -23,6 +23,8 @@ const Groq = require("groq-sdk");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 
 const { analyzePrompt } = require("../engines/industrialDetector");
+const { scoreDetections } = require("../engines/contextScoring");
+const behaviorTracker = require("../engines/behaviorTracker");
 const tee = require("../engines/teeEnclave");
 const sessionGraph = require("../engines/sessionGraph");
 const ws = require("../engines/wsServer");
@@ -275,6 +277,8 @@ function recordAndBroadcast({
   interceptedAt,
   aiPlatform,
   req,
+  contextScoringResult,
+  behaviorResult,
 }) {
   const os = require("os");
   const SERVER_IDENTITIES = ["render", "nobody", "www-data", "node", "ubuntu", "ec2-user"];
@@ -327,6 +331,16 @@ function recordAndBroadcast({
     aiPlatform: aiPlatform || "chatgpt.com",
     cryptoSignature: signature,
     timestamp: interceptedAt || new Date().toISOString(),
+    // ── Smart Context Scoring metadata ──
+    contextVerdict: contextScoringResult?.contextVerdict || null,
+    overallContextScore: contextScoringResult?.overallContextScore || null,
+    benignDetectionsFiltered: contextScoringResult?.benignDetections?.length || 0,
+    // ── Behavioral Risk metadata ──
+    userDisabled: behaviorResult?.behavior?.disabled || false,
+    userFlagged: behaviorResult?.behavior?.flagged || false,
+    behaviorEnforcement: behaviorResult?.enforcement || null,
+    cumulativeViolations: behaviorResult?.behavior?.totalViolations || 0,
+    incidentSeverity: behaviorResult ? behaviorTracker.classifyIncidentSeverity(detection.overallRisk, detection.detections) : null,
   };
 
   _inMemoryAuditLogs.unshift(logRecord);
@@ -335,6 +349,17 @@ function recordAndBroadcast({
 
   if (mongoose.connection.readyState === 1) {
     AuditLog.create(logRecord).catch(() => {});
+  }
+
+  // ── Behavioral Risk Tracking — record violation ──
+  let finalBehaviorResult = behaviorResult;
+  if (!finalBehaviorResult && detection.overallRisk > 0) {
+    finalBehaviorResult = behaviorTracker.recordViolation(
+      rawUser,
+      detection.overallRisk,
+      detection.detections,
+      action
+    );
   }
 
   const sessionResult = sessionGraph.updateSessionGraph(rawUser, logRecord.userEmail, detection);
@@ -363,9 +388,18 @@ function recordAndBroadcast({
     endpointIp: logRecord.endpointIp,
     aiPlatform: logRecord.aiPlatform,
     timestamp: logRecord.timestamp,
+    // ── Context Scoring & Behavior telemetry for dashboard ──
+    contextVerdict: logRecord.contextVerdict,
+    overallContextScore: logRecord.overallContextScore,
+    benignDetectionsFiltered: logRecord.benignDetectionsFiltered,
+    userDisabled: finalBehaviorResult?.behavior?.disabled || false,
+    userFlagged: finalBehaviorResult?.behavior?.flagged || false,
+    behaviorEnforcement: finalBehaviorResult?.enforcement || null,
+    cumulativeViolations: finalBehaviorResult?.behavior?.totalViolations || 0,
+    incidentSeverity: logRecord.incidentSeverity,
   });
 
-  return { logRecord, sessionResult };
+  return { logRecord, sessionResult, behaviorResult: finalBehaviorResult };
 }
 
 // ─── AI Client Initialization ────────────────────────────────────────────────
@@ -571,7 +605,54 @@ router.post("/inspect", async (req, res) => {
 
   try {
     const interceptedAt = new Date().toISOString();
+
+    // ── Behavioral Risk Check: Is this user disabled? ───────────────────────
+    if (behaviorTracker.isUserDisabled(resolvedUser)) {
+      const userBehavior = behaviorTracker.getUserBehaviorReport(resolvedUser);
+      return res.json({
+        success: true,
+        blocked: true,
+        action: "user_disabled",
+        message: `⛔ Your AI access has been suspended due to repeated security policy violations. Contact your administrator to restore access.`,
+        disabledReason: userBehavior.disabledReason,
+        cumulativeViolations: userBehavior.totalViolations,
+        riskScore: 100,
+        sanitizedPrompt: prompt,
+        processingTime: Date.now() - startTime,
+        meta: {
+          action: "user_disabled",
+          riskScore: 100,
+          detectionsCount: 0,
+          combinationsCount: 0,
+          userDisabled: true,
+          cumulativeViolations: userBehavior.totalViolations,
+        },
+      });
+    }
+
     const detection = analyzePrompt(prompt);
+
+    // ── Smart Context Scoring: Filter benign detections ─────────────────────
+    let contextScoringResult = null;
+    if (detection.detections && detection.detections.length > 0) {
+      contextScoringResult = scoreDetections(prompt, detection.detections);
+
+      // Replace detections with only genuine ones (benign are filtered out)
+      if (contextScoringResult.genuineDetections.length < detection.detections.length) {
+        detection.detections = contextScoringResult.genuineDetections;
+        detection.categoriesFound = [...new Set(detection.detections.map((d) => d.category))];
+
+        // Recalculate risk if all detections were benign
+        if (detection.detections.length === 0) {
+          detection.overallRisk = 0;
+        } else {
+          // Adjust risk based on context score
+          const contextMultiplier = contextScoringResult.overallContextScore / 100;
+          detection.overallRisk = Math.min(100, Math.round(detection.overallRisk * Math.max(contextMultiplier, 0.5)));
+        }
+      }
+    }
+
     const action = decideAction(detection.overallRisk, detection.detections);
     let sanitizedPrompt = prompt;
     let tokenMap = new Map();
@@ -588,6 +669,14 @@ router.post("/inspect", async (req, res) => {
       };
       const signature = tee.signAuditEntry(auditEntry);
 
+      // Record behavioral violation for hard blocks
+      const behaviorResult = behaviorTracker.recordViolation(
+        resolvedUser,
+        detection.overallRisk,
+        detection.detections,
+        "hard_block"
+      );
+
       const { logRecord, sessionResult } = recordAndBroadcast({
         resolvedUser,
         userEmail,
@@ -601,6 +690,8 @@ router.post("/inspect", async (req, res) => {
         interceptedAt,
         aiPlatform: req.headers["x-vantix-app"] || req.body.app || "chatgpt.com",
         req,
+        contextScoringResult,
+        behaviorResult,
       });
 
       return res.json({
@@ -619,6 +710,9 @@ router.post("/inspect", async (req, res) => {
           sessionRiskScore: sessionResult.riskScore,
           anomalyTriggered: sessionResult.anomalyTriggered,
           categoriesRedacted: detection.categoriesFound || Array.from(new Set(detection.detections.map(d => d.category))),
+          userDisabled: behaviorResult?.behavior?.disabled || false,
+          behaviorEnforcement: behaviorResult?.enforcement || null,
+          cumulativeViolations: behaviorResult?.behavior?.totalViolations || 0,
         },
       });
     }
@@ -639,6 +733,11 @@ router.post("/inspect", async (req, res) => {
     };
     const signature = tee.signAuditEntry(auditEntry);
 
+    // Record behavioral violation for redactions/monitors
+    const behaviorResult = (action === "silent_redact" || action === "monitor")
+      ? behaviorTracker.recordViolation(resolvedUser, detection.overallRisk, detection.detections, action)
+      : null;
+
     const { logRecord, sessionResult } = recordAndBroadcast({
       resolvedUser,
       userEmail,
@@ -652,6 +751,8 @@ router.post("/inspect", async (req, res) => {
       interceptedAt,
       aiPlatform: req.headers["x-vantix-app"] || req.body.app || "chatgpt.com",
       req,
+      contextScoringResult,
+      behaviorResult,
     });
 
     const tokenMapping = Array.from(tokenMap.entries()).map(([realVal, placeholder]) => ({
@@ -674,6 +775,11 @@ router.post("/inspect", async (req, res) => {
         sessionRiskScore: sessionResult.riskScore,
         anomalyTriggered: sessionResult.anomalyTriggered,
         categoriesRedacted: detection.categoriesFound,
+        contextVerdict: contextScoringResult?.contextVerdict || null,
+        benignFiltered: contextScoringResult?.benignDetections?.length || 0,
+        userDisabled: behaviorResult?.behavior?.disabled || false,
+        behaviorEnforcement: behaviorResult?.enforcement || null,
+        cumulativeViolations: behaviorResult?.behavior?.totalViolations || 0,
       },
     });
   } catch (err) {
@@ -715,8 +821,46 @@ router.post("/chat", async (req, res) => {
     // ── Step 1: Intercept ───────────────────────────────────────────────────
     const interceptedAt = new Date().toISOString();
 
+    // ── Behavioral Risk Check: Is this user disabled? ───────────────────────
+    if (behaviorTracker.isUserDisabled(resolvedUser)) {
+      const userBehavior = behaviorTracker.getUserBehaviorReport(resolvedUser);
+      return res.json({
+        success: false,
+        blocked: true,
+        response: `⛔ Your AI access has been suspended due to repeated security policy violations (${userBehavior.totalViolations} incidents). Contact your administrator.`,
+        message: userBehavior.disabledReason,
+        riskScore: 100,
+        processingTime: Date.now() - startTime,
+        meta: {
+          action: "user_disabled",
+          riskScore: 100,
+          userDisabled: true,
+          cumulativeViolations: userBehavior.totalViolations,
+        },
+      });
+    }
+
     // ── Step 2: Detect ──────────────────────────────────────────────────────
     const detection = analyzePrompt(prompt);
+
+    // ── Smart Context Scoring: Filter benign detections ─────────────────────
+    let contextScoringResult = null;
+    if (detection.detections && detection.detections.length > 0) {
+      contextScoringResult = scoreDetections(prompt, detection.detections);
+
+      // Replace detections with only genuine ones
+      if (contextScoringResult.genuineDetections.length < detection.detections.length) {
+        detection.detections = contextScoringResult.genuineDetections;
+        detection.categoriesFound = [...new Set(detection.detections.map((d) => d.category))];
+
+        if (detection.detections.length === 0) {
+          detection.overallRisk = 0;
+        } else {
+          const contextMultiplier = contextScoringResult.overallContextScore / 100;
+          detection.overallRisk = Math.min(100, Math.round(detection.overallRisk * Math.max(contextMultiplier, 0.5)));
+        }
+      }
+    }
 
     // ── Step 3: Redact (inside TEE enclave) ─────────────────────────────────
     const action = decideAction(detection.overallRisk, detection.detections);
@@ -736,6 +880,10 @@ router.post("/chat", async (req, res) => {
       };
       const signature = tee.signAuditEntry(auditEntry);
 
+      const behaviorResult = behaviorTracker.recordViolation(
+        resolvedUser, detection.overallRisk, detection.detections, "hard_block"
+      );
+
       const { logRecord, sessionResult } = recordAndBroadcast({
         resolvedUser,
         userEmail,
@@ -749,6 +897,8 @@ router.post("/chat", async (req, res) => {
         interceptedAt,
         aiPlatform: req.headers["x-vantix-app"] || req.body.app || "chatgpt.com",
         req,
+        contextScoringResult,
+        behaviorResult,
       });
 
       return res.json({
@@ -766,6 +916,9 @@ router.post("/chat", async (req, res) => {
           sessionRiskScore: sessionResult.riskScore,
           anomalyTriggered: sessionResult.anomalyTriggered,
           categoriesRedacted: detection.categoriesFound || Array.from(new Set(detection.detections.map(d => d.category))),
+          userDisabled: behaviorResult?.behavior?.disabled || false,
+          behaviorEnforcement: behaviorResult?.enforcement || null,
+          cumulativeViolations: behaviorResult?.behavior?.totalViolations || 0,
         },
       });
     }
@@ -823,6 +976,11 @@ router.post("/chat", async (req, res) => {
     };
     const signature = tee.signAuditEntry(auditEntry);
 
+    // Record behavioral violation for redactions/monitors
+    const behaviorResult = (action === "silent_redact" || action === "monitor")
+      ? behaviorTracker.recordViolation(resolvedUser, detection.overallRisk, detection.detections, action)
+      : null;
+
     const { logRecord, sessionResult } = recordAndBroadcast({
       resolvedUser,
       userEmail,
@@ -836,6 +994,8 @@ router.post("/chat", async (req, res) => {
       interceptedAt,
       aiPlatform: req.headers["x-vantix-app"] || req.body.app || "chatgpt.com",
       req,
+      contextScoringResult,
+      behaviorResult,
     });
 
     // ── Step 7: Return restored response ────────────────────────────────────
@@ -854,6 +1014,11 @@ router.post("/chat", async (req, res) => {
         sessionRiskScore: sessionResult.riskScore,
         anomalyTriggered: sessionResult.anomalyTriggered,
         categoriesRedacted: detection.categoriesFound || Array.from(new Set(detection.detections.map(d => d.category))),
+        contextVerdict: contextScoringResult?.contextVerdict || null,
+        benignFiltered: contextScoringResult?.benignDetections?.length || 0,
+        userDisabled: behaviorResult?.behavior?.disabled || false,
+        behaviorEnforcement: behaviorResult?.enforcement || null,
+        cumulativeViolations: behaviorResult?.behavior?.totalViolations || 0,
       },
     });
 
@@ -901,8 +1066,40 @@ router.post(["/v1/chat/completions", "/chat/completions"], async (req, res) => {
   try {
     const interceptedAt = new Date().toISOString();
 
+    // ── Behavioral Risk Check ────────────────────────────────────────────────
+    if (behaviorTracker.isUserDisabled(resolvedUser)) {
+      return res.status(403).json({
+        id: `chatcmpl-disabled-${Date.now()}`,
+        object: "chat.completion",
+        created: Math.floor(Date.now() / 1000),
+        model: req.body.model || "gpt-4o",
+        choices: [{
+          index: 0,
+          message: { role: "assistant", content: "⛔ Your AI access has been suspended due to repeated security policy violations. Contact your administrator." },
+          finish_reason: "stop",
+        }],
+      });
+    }
+
     // ── Step 2: 3-Sublayer Detection ─────────────────────────────────────────
     const detection = analyzePrompt(prompt);
+
+    // ── Smart Context Scoring ────────────────────────────────────────────────
+    let contextScoringResult = null;
+    if (detection.detections && detection.detections.length > 0) {
+      contextScoringResult = scoreDetections(prompt, detection.detections);
+      if (contextScoringResult.genuineDetections.length < detection.detections.length) {
+        detection.detections = contextScoringResult.genuineDetections;
+        detection.categoriesFound = [...new Set(detection.detections.map((d) => d.category))];
+        if (detection.detections.length === 0) {
+          detection.overallRisk = 0;
+        } else {
+          const contextMultiplier = contextScoringResult.overallContextScore / 100;
+          detection.overallRisk = Math.min(100, Math.round(detection.overallRisk * Math.max(contextMultiplier, 0.5)));
+        }
+      }
+    }
+
     const action = decideAction(detection.overallRisk, detection.detections);
 
     let tokenMap = new Map();
@@ -1087,24 +1284,6 @@ router.get("/session-graph", (req, res) => {
     anomalyReport: graphData.anomalyReport,
     coverageMap: graphData.coverageMap,
   });
-});
-
-
-// ─── POST /api/vantix/reset — Reset session for demo replay ─────────────────
-
-router.post("/reset", (req, res) => {
-  const userId = req.body.userId || "demo-engineer";
-  sessionGraph.resetSessionGraph(userId);
-  _inMemoryAuditLogs.length = 0;
-  console.log(`[Proxy] Session graph & audit buffer reset for ${userId}`);
-
-  ws.broadcast({
-    type: "reset",
-    timestamp: new Date().toISOString(),
-    message: "Session graph reset — demo ready",
-  });
-
-  res.json({ success: true, message: "Session reset" });
 });
 
 
@@ -1425,6 +1604,13 @@ router.post("/employee/:userId/action", (req, res) => {
 
   console.log(`[Admin Action] Policy action "${action}" applied to employee ${userId}`);
 
+  // Integrate with behavior tracker for disable/re-enable actions
+  if (action === "disable" || action === "suspend") {
+    behaviorTracker.adminDisableUser(userId, "admin", `Manually ${action}d by administrator`);
+  } else if (action === "re-enable" || action === "enable" || action === "unblock") {
+    behaviorTracker.adminReEnableUser(userId, "admin", "Administrator re-enabled access");
+  }
+
   ws.broadcast({
     type: "employee_action",
     userId,
@@ -1436,6 +1622,90 @@ router.post("/employee/:userId/action", (req, res) => {
     success: true,
     message: `Action "${action}" successfully executed for employee ${userId}`,
   });
+});
+
+
+// ─── GET /api/vantix/behavior-report — User Behavior Dashboard Data ─────────
+router.get("/behavior-report", (req, res) => {
+  const userId = req.query.userId;
+  if (userId) {
+    const report = behaviorTracker.getUserBehaviorReport(userId);
+    return res.json({ success: true, report });
+  }
+  const allBehaviors = behaviorTracker.getAllUserBehaviors();
+  res.json({
+    success: true,
+    users: allBehaviors,
+    totalTracked: allBehaviors.length,
+    disabledCount: allBehaviors.filter((u) => u.disabled).length,
+    flaggedCount: allBehaviors.filter((u) => u.flagged).length,
+  });
+});
+
+
+// ─── POST /api/vantix/behavior-action — Admin Behavior Enforcement ──────────
+router.post("/behavior-action", (req, res) => {
+  const { userId, action: behaviorAction, reason } = req.body;
+
+  if (!userId || !behaviorAction) {
+    return res.status(400).json({
+      success: false,
+      error: "userId and action are required",
+    });
+  }
+
+  let result;
+  switch (behaviorAction) {
+    case "disable":
+      result = behaviorTracker.adminDisableUser(userId, "admin", reason || "Manually disabled");
+      break;
+    case "re-enable":
+    case "enable":
+      result = behaviorTracker.adminReEnableUser(userId, "admin", reason || "Admin re-enabled");
+      break;
+    case "reset":
+      behaviorTracker.resetUserBehavior(userId);
+      result = { userId, reset: true };
+      break;
+    default:
+      return res.status(400).json({
+        success: false,
+        error: `Unknown action: ${behaviorAction}. Valid: disable, re-enable, reset`,
+      });
+  }
+
+  ws.broadcast({
+    type: "behavior_action",
+    userId,
+    action: behaviorAction,
+    timestamp: new Date().toISOString(),
+  });
+
+  res.json({
+    success: true,
+    message: `Behavior action "${behaviorAction}" applied to ${userId}`,
+    behavior: result,
+  });
+});
+
+
+// ─── POST /api/vantix/reset — Reset session for demo replay ─────────────────
+// (also resets behavior tracking)
+
+router.post("/reset", (req, res) => {
+  const userId = req.body.userId || "demo-engineer";
+  sessionGraph.resetSessionGraph(userId);
+  behaviorTracker.resetUserBehavior(userId);
+  _inMemoryAuditLogs.length = 0;
+  console.log(`[Proxy] Session graph, behavior & audit buffer reset for ${userId}`);
+
+  ws.broadcast({
+    type: "reset",
+    timestamp: new Date().toISOString(),
+    message: "Session graph reset — demo ready",
+  });
+
+  res.json({ success: true, message: "Session reset" });
 });
 
 

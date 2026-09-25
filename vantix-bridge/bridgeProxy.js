@@ -19,6 +19,8 @@ const { getCertForHost, getOrCreateRootCa } = require("./certManager");
 
 // Import detection & TEE engines directly for ultra-low latency (<5ms)
 const { analyzePrompt } = require("../vantix-backend/engines/industrialDetector");
+const { scoreDetections } = require("../vantix-backend/engines/contextScoring");
+const behaviorTracker = require("../vantix-backend/engines/behaviorTracker");
 const tee = require("../vantix-backend/engines/teeEnclave");
 const ws = require("../vantix-backend/engines/wsServer");
 const sessionGraph = require("../vantix-backend/engines/sessionGraph");
@@ -33,9 +35,13 @@ const AI_DOMAINS = [
   "api.openai.com",
   // Anthropic
   "api.anthropic.com",
-  // Google Gemini / Vertex (IDE developer endpoints excluded)
+  // Google Gemini / Vertex / CloudCode / Antigravity endpoints
   "generativelanguage.googleapis.com",
   "aiplatform.googleapis.com",
+  "cloudcode-pa.googleapis.com",
+  "daily-cloudcode-pa.googleapis.com",
+  "cloudaicompanion.googleapis.com",
+  "businessaicode.googleapis.com",
   // Groq
   "api.groq.com",
   // Together AI
@@ -59,6 +65,7 @@ const AI_DOMAINS = [
   // Kiro / Amazon Q Developer / CodeWhisperer / Bedrock
   "q.us-east-1.amazonaws.com",
   "q.eu-central-1.amazonaws.com",
+  "q.us-west-2.amazonaws.com",
   "q-fips.us-gov-east-1.amazonaws.com",
   "q-fips.us-gov-west-1.amazonaws.com",
   "codewhisperer.us-east-1.amazonaws.com",
@@ -129,11 +136,20 @@ process.on("unhandledRejection", (err) => {
 
 function getPlatformDisplayName(hostname) {
   const h = (hostname || "").toLowerCase();
-  if (h.includes("amazonaws.com") || h.includes("kiro")) {
+  if (h.includes("amazonaws.com") || h.includes("kiro") || h.includes("amazonq") || h.includes("codewhisperer") || h.includes("bedrock")) {
     return "Kiro (Amazon Q Developer)";
   }
   if (h.includes("cursor")) {
     return "Cursor AI";
+  }
+  if (
+    h.includes("cloudcode") ||
+    h.includes("cloudaicompanion") ||
+    h.includes("businessaicode") ||
+    h.includes("generativelanguage") ||
+    h.includes("aiplatform")
+  ) {
+    return "Antigravity (Google Gemini)";
   }
   if (h.includes("codeium") || h.includes("windsurf")) {
     return "Windsurf AI";
@@ -147,7 +163,7 @@ function getPlatformDisplayName(hostname) {
   if (h.includes("claude") || h.includes("anthropic")) {
     return h.includes("api.") ? "Anthropic API" : "Claude";
   }
-  if (h.includes("gemini") || h.includes("generativelanguage")) {
+  if (h.includes("gemini")) {
     return "Gemini API";
   }
   if (h.includes("deepseek")) {
@@ -165,17 +181,6 @@ function getPlatformDisplayName(hostname) {
 function isAiDomain(host) {
   if (!host) return false;
   const cleanHost = host.split(":")[0].toLowerCase();
-  
-  // NEVER intercept Antigravity IDE / CloudCode developer assistant endpoints
-  if (
-    cleanHost.includes("cloudcode") ||
-    cleanHost.includes("businessaicode") ||
-    cleanHost.includes("cloudaicompanion") ||
-    cleanHost === "daily-cloudcode-pa.googleapis.com" ||
-    cleanHost === "cloudcode-pa.googleapis.com"
-  ) {
-    return false;
-  }
 
   // NEVER intercept non-AI internal services: authentication, telemetry, crash reporting, updates
   if (
@@ -191,42 +196,41 @@ function isAiDomain(host) {
   ) {
     return false;
   }
-  
-  if (AI_DOMAINS.some((domain) => cleanHost === domain || cleanHost.endsWith("." + domain)) ||
-      WEB_AI_DOMAINS.some((domain) => cleanHost === domain || cleanHost.endsWith("." + domain))) {
+
+  // Antigravity & Google Cloud AI
+  if (
+    cleanHost.includes("cloudcode") ||
+    cleanHost.includes("businessaicode") ||
+    cleanHost.includes("cloudaicompanion") ||
+    cleanHost.includes("generativelanguage") ||
+    cleanHost.includes("aiplatform")
+  ) {
     return true;
   }
 
-  // AWS AI services (Amazon Q, CodeWhisperer, Bedrock)
-  if (cleanHost.endsWith(".amazonaws.com")) {
-    if (
-      cleanHost.startsWith("q.") ||
-      cleanHost.startsWith("q-fips.") ||
-      cleanHost.includes(".q.") ||
-      cleanHost.includes("codewhisperer") ||
-      cleanHost.includes("bedrock")
-    ) {
-      return true;
-    }
-  }
-
-  // Google AI API endpoints (explicitly excluding IDE developer tools)
-  if (cleanHost.endsWith(".googleapis.com")) {
-    if (
-      cleanHost.includes("generativelanguage") ||
-      cleanHost.includes("aiplatform")
-    ) {
-      return true;
-    }
+  // Kiro / Amazon Q Developer / Bedrock / CodeWhisperer
+  if (
+    cleanHost.includes("kiro") ||
+    cleanHost.includes("amazonq") ||
+    cleanHost.includes("codewhisperer") ||
+    cleanHost.includes("bedrock") ||
+    (cleanHost.endsWith(".amazonaws.com") && (cleanHost.startsWith("q.") || cleanHost.startsWith("q-fips.") || cleanHost.includes(".q.")))
+  ) {
+    return true;
   }
 
   // Cursor endpoints
   if (
+    cleanHost.includes("cursor") ||
     cleanHost.endsWith(".cursor.sh") ||
     cleanHost.endsWith(".cursor.com") ||
-    cleanHost === "cursor.sh" ||
-    cleanHost === "cursor.com"
+    cleanHost.endsWith(".cursorapi.com")
   ) {
+    return true;
+  }
+
+  if (AI_DOMAINS.some((domain) => cleanHost === domain || cleanHost.endsWith("." + domain)) ||
+      WEB_AI_DOMAINS.some((domain) => cleanHost === domain || cleanHost.endsWith("." + domain))) {
     return true;
   }
 
@@ -627,12 +631,12 @@ function createBridgeServer(options = {}) {
 
 /**
  * Universal extractor and injector for AI prompt payloads across all providers:
- * OpenAI, Anthropic, Kiro / Amazon Q, Google Gemini, Bedrock, Mistral, Cohere, LangChain.
+ * OpenAI, Anthropic, Kiro / Amazon Q Developer, Google Gemini, Bedrock, Mistral, Cohere, Cursor, Antigravity.
  */
 function extractPromptFromJson(json) {
   if (!json || typeof json !== "object") return { text: "", replace: null };
 
-  // 1. OpenAI / Anthropic format: messages: [{ role, content }]
+  // 1. OpenAI / Anthropic / Cursor format: messages: [{ role, content }]
   if (Array.isArray(json.messages) && json.messages.length > 0) {
     const lastMsg = json.messages[json.messages.length - 1];
     if (typeof lastMsg.content === "string") {
@@ -706,7 +710,7 @@ function extractPromptFromJson(json) {
     };
   }
 
-  // 5. Google Gemini format: contents: [{ role: "user", parts: [{ text: "..." }] }]
+  // 5. Google Gemini / Antigravity format: contents: [{ role: "user", parts: [{ text: "..." }] }]
   if (Array.isArray(json.contents) && json.contents.length > 0) {
     const lastContent = json.contents[json.contents.length - 1];
     if (Array.isArray(lastContent.parts)) {
@@ -720,8 +724,8 @@ function extractPromptFromJson(json) {
     }
   }
 
-  // 6. Common SDK fields: inputText, input, query, utterance
-  for (const field of ["inputText", "input", "query", "utterance"]) {
+  // 6. Common SDK fields: inputText, input, query, utterance, userQuery
+  for (const field of ["inputText", "input", "query", "utterance", "userQuery", "user_message"]) {
     if (typeof json[field] === "string") {
       return {
         text: json[field],
@@ -755,6 +759,63 @@ function extractPromptFromJson(json) {
   }
 
   return { text: "", replace: null };
+}
+
+/**
+ * Recursively extracts all readable text fields from any JSON payload
+ * for comprehensive multi-layer risk and context analysis.
+ */
+function extractAllTextFromJson(json) {
+  const texts = [];
+  function walk(obj) {
+    if (!obj) return;
+    if (typeof obj === "string") {
+      if ((obj.startsWith("{") && obj.endsWith("}")) || (obj.startsWith("[") && obj.endsWith("]"))) {
+        try {
+          const nested = JSON.parse(obj);
+          walk(nested);
+          return;
+        } catch (e) {}
+      }
+      if (obj.trim().length > 0) {
+        texts.push(obj);
+      }
+    } else if (Array.isArray(obj)) {
+      for (const item of obj) walk(item);
+    } else if (typeof obj === "object") {
+      for (const val of Object.values(obj)) walk(val);
+    }
+  }
+  walk(json);
+  return texts.join("\n");
+}
+
+/**
+ * Recursively walks and sanitizes EVERY string value inside any JSON structure,
+ * including nested stringified JSONs (e.g. AWS Bedrock payload bodies or Kiro sub-objects).
+ */
+function sanitizeJsonDeep(obj, tokenTable) {
+  if (typeof obj === "string") {
+    if ((obj.startsWith("{") && obj.endsWith("}")) || (obj.startsWith("[") && obj.endsWith("]"))) {
+      try {
+        const nested = JSON.parse(obj);
+        const sanitizedNested = sanitizeJsonDeep(nested, tokenTable);
+        return JSON.stringify(sanitizedNested);
+      } catch (e) {}
+    }
+    return tee.sanitizePrompt(obj, tokenTable);
+  }
+  if (Array.isArray(obj)) {
+    return obj.map((item) => sanitizeJsonDeep(item, tokenTable));
+  }
+  if (obj && typeof obj === "object" && obj !== null) {
+    const copy = {};
+    for (const [key, val] of Object.entries(obj)) {
+      copy[key] = sanitizeJsonDeep(val, tokenTable);
+    }
+    return copy;
+  }
+  return obj;
 }
 
 /**
@@ -1157,6 +1218,59 @@ function processInterceptedAiRequest(rawBuffer, hostname, port, clientTlsSocket,
     return;
   }
 
+  // ── Behavioral Check: Is this user disabled due to repeated security policy violations? ──
+  if (behaviorTracker.isUserDisabled(identity.user)) {
+    const userBehavior = behaviorTracker.getUserBehaviorReport(identity.user);
+    console.log(`[Vantix-Bridge] ⛔ USER ACCESS SUSPENDED: User ${identity.user} has exceeded security violation threshold (${userBehavior.totalViolations} violations)`);
+
+    const blockMsg = `[VANTIX AI FIREWALL] Access suspended: Your account has been disabled due to repeated security policy violations (${userBehavior.totalViolations} severe incidents). Please contact your administrator.`;
+
+    try {
+      recordProxyIncident({
+        identity,
+        hostname,
+        promptText: "[SUSPENDED USER ACCESS ATTEMPT]",
+        sanitizedPrompt: "[USER_SUSPENDED]",
+        restoredResponse: `🚫 SUSPENDED — ${blockMsg}`,
+        action: "hard_block",
+        detection: {
+          overallRisk: 100,
+          detections: [{ category: "USER_SUSPENDED", value: identity.user, label: "Suspended User Access Attempt", isolationRisk: 100, severity: "CRITICAL" }],
+          combinations: [],
+          contextScore: 100,
+          categoriesFound: ["USER_SUSPENDED"],
+        },
+      });
+    } catch (e) {}
+
+    const errorJson = JSON.stringify({
+      error: {
+        message: blockMsg,
+        type: "vantix_security_violation",
+        code: "USER_ACCESS_SUSPENDED",
+      },
+      message: blockMsg,
+    });
+
+    const res = [
+      "HTTP/1.1 403 Forbidden",
+      "Content-Type: application/json; charset=utf-8",
+      `Content-Length: ${Buffer.byteLength(errorJson)}`,
+      "Connection: close",
+      "\r\n",
+    ].join("\r\n") + errorJson;
+
+    try {
+      clientTlsSocket.removeAllListeners("data");
+      if (!clientTlsSocket.destroyed && clientTlsSocket.writable) {
+        clientTlsSocket.write(res);
+        clientTlsSocket.end();
+      }
+    } catch (err) {}
+    if (typeof onFinished === "function") onFinished();
+    return;
+  }
+
   const reqHeaders = parseHeaders(headerPart);
   const isChunkedReq = /chunked/i.test(reqHeaders["transfer-encoding"] || "");
   const isAwsChunkedReq = /aws-chunked/i.test(reqHeaders["content-encoding"] || "");
@@ -1166,16 +1280,21 @@ function processInterceptedAiRequest(rawBuffer, hostname, port, clientTlsSocket,
     bodyPart = decoded.toString("utf8");
   }
 
-  // Universal Prompt Extraction
+  // Universal Prompt Extraction & Deep JSON parsing
   let parsedJson = null;
   let promptText = "";
+  let fullExtractedText = "";
 
   try {
     parsedJson = JSON.parse(bodyPart);
     const extracted = extractPromptFromJson(parsedJson);
     promptText = extracted.text;
+    fullExtractedText = extractAllTextFromJson(parsedJson);
   } catch (e) {}
 
+  if (!promptText && fullExtractedText) {
+    promptText = fullExtractedText;
+  }
   if (!promptText && bodyPart && bodyPart.trim().length > 0) {
     promptText = bodyPart.trim();
   }
@@ -1188,13 +1307,31 @@ function processInterceptedAiRequest(rawBuffer, hostname, port, clientTlsSocket,
   console.log(`\n[Vantix-Bridge] ⚡ INTERCEPTED AI REQUEST: [${hostname}] User: [${identity.user}@${identity.host}]`);
   console.log(`[Vantix-Bridge] Prompt: "${promptText.slice(0, 90).replace(/\n/g, " ")}..."`);
 
-  // Run 3-Sublayer Detection Engine on prompt text and full body
-  let detection = analyzePrompt(promptText);
-  if ((!detection.detections || detection.detections.length === 0) && bodyPart && bodyPart !== promptText) {
+  // Run 3-Sublayer Detection Engine on prompt text and full extracted payload
+  const textToAnalyze = fullExtractedText || promptText || bodyPart;
+  let detection = analyzePrompt(textToAnalyze);
+  if ((!detection.detections || detection.detections.length === 0) && bodyPart && bodyPart !== textToAnalyze) {
     const bodyDetection = analyzePrompt(bodyPart);
     if (bodyDetection.detections && bodyDetection.detections.length > 0) {
       detection = bodyDetection;
     }
+  }
+
+  // Apply Smart Context Scoring Layer: Filter out benign/dummy data and score context
+  if (detection.detections && detection.detections.length > 0) {
+    try {
+      const contextScoringResult = scoreDetections(textToAnalyze, detection.detections);
+      if (contextScoringResult.genuineDetections.length < detection.detections.length) {
+        detection.detections = contextScoringResult.genuineDetections;
+        detection.categoriesFound = [...new Set(detection.detections.map((d) => d.category))];
+        if (detection.detections.length === 0) {
+          detection.overallRisk = 0;
+        } else {
+          const contextMultiplier = contextScoringResult.overallContextScore / 100;
+          detection.overallRisk = Math.min(100, Math.round(detection.overallRisk * Math.max(contextMultiplier, 0.5)));
+        }
+      }
+    } catch (e) {}
   }
 
   const sessionId = `bridge-${Date.now()}`;
@@ -1227,6 +1364,11 @@ function processInterceptedAiRequest(rawBuffer, hostname, port, clientTlsSocket,
   // ── RULE 1: HARD BLOCK ON SENSITIVE CREDENTIAL DUMPS (>3 API KEYS/SECRETS) OR SEVERE INJECTIONS ──
   if (shouldHardBlock) {
     console.log(`[Vantix-Bridge] ⛔ SENSITIVE CREDENTIAL DUMP HARD-BLOCKED (${credentialCount} secrets detected)`);
+
+    // Track behavioral violation
+    try {
+      behaviorTracker.recordViolation(identity.user, detection.overallRisk, detection.detections, "hard_block");
+    } catch (e) {}
 
     const blockMsg = isSevereInjection
       ? `[VANTIX AI FIREWALL] Request blocked: High-severity prompt injection exploit detected. Outbound transmission halted by enterprise security policy.`
@@ -1274,24 +1416,31 @@ function processInterceptedAiRequest(rawBuffer, hostname, port, clientTlsSocket,
   }
 
   // ── RULE 2: TEE SILENT REDACTION FOR CREDENTIALS (<=3), PII & CONFIDENTIAL DATA ──
-  const tokenTable = tee.createTokenTable(sessionId, detection.detections, bodyPart);
-  let sanitizedBody = tee.sanitizePrompt(bodyPart, tokenTable);
-  let sanitizedPromptSnippet = tee.sanitizePrompt(promptText, tokenTable);
+  const tokenTable = tee.createTokenTable(sessionId, detection.detections, textToAnalyze);
 
+  // Deeply sanitize every string field across the entire JSON payload tree
+  let sanitizedBody = "";
   if (parsedJson) {
     try {
-      const extracted = extractPromptFromJson(parsedJson);
-      if (extracted && extracted.text && typeof extracted.replace === "function") {
-        const sanitizedExtracted = tee.sanitizePrompt(extracted.text, tokenTable);
-        extracted.replace(sanitizedExtracted);
-        sanitizedBody = JSON.stringify(parsedJson);
-      }
-    } catch (e) {}
+      const sanitizedObj = sanitizeJsonDeep(parsedJson, tokenTable);
+      sanitizedBody = JSON.stringify(sanitizedObj);
+    } catch (e) {
+      sanitizedBody = tee.sanitizePrompt(bodyPart, tokenTable);
+    }
+  } else {
+    sanitizedBody = tee.sanitizePrompt(bodyPart, tokenTable);
   }
+
+  let sanitizedPromptSnippet = tee.sanitizePrompt(promptText, tokenTable);
 
   console.log(`[Vantix-Bridge] 🛡 TEE Sanitized (${detection.detections.length} sensitive tokens redacted seamlessly)`);
   console.log(`[Vantix-Bridge] 📤 Outbound Prompt sent to ${hostname}: "${sanitizedPromptSnippet.slice(0, 120)}..."`);
   stats.redactedTokens += detection.detections.length;
+
+  // Track behavioral violation for audit
+  try {
+    behaviorTracker.recordViolation(identity.user, detection.overallRisk, detection.detections, "silent_redact");
+  } catch (e) {}
 
   // Build clean outgoing headers for upstream
   const outgoingHeaders = parseHeaders(headerPart);
