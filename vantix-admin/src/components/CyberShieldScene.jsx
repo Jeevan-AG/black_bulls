@@ -8,12 +8,12 @@ export const CyberShieldScene = () => {
     const currentMount = mountRef.current;
     if (!currentMount) return;
 
-    // ── Scene & Camera ───────────────────────────────────────────────────────
+    // ── Scene, Camera & Renderer ─────────────────────────────────────────────
     const scene = new THREE.Scene();
     const width = currentMount.clientWidth;
     const height = currentMount.clientHeight;
 
-    const camera = new THREE.PerspectiveCamera(36, width / height, 0.1, 1000);
+    const camera = new THREE.PerspectiveCamera(38, width / height, 0.1, 1000);
     camera.position.set(0, 0, 8.2);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -21,7 +21,7 @@ export const CyberShieldScene = () => {
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.shadowMap.enabled = true;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.45;
+    renderer.toneMappingExposure = 1.5;
     currentMount.appendChild(renderer.domElement);
 
     // Root Group
@@ -29,138 +29,162 @@ export const CyberShieldScene = () => {
     scene.add(rootGroup);
 
     // ── Materials ────────────────────────────────────────────────────────────
-    const neonCrimsonMat = new THREE.MeshBasicMaterial({
+    const neonCrimson = new THREE.MeshBasicMaterial({
       color: 0xff1e38,
       transparent: true,
       opacity: 0.98,
     });
 
-    const faintCrimsonMat = new THREE.MeshBasicMaterial({
-      color: 0xd9162e,
+    const stealthArmor = new THREE.MeshStandardMaterial({
+      color: 0x07090d,
+      metalness: 0.95,
+      roughness: 0.2,
+      envMapIntensity: 2.0,
+    });
+
+    const hexInnerWireMat = new THREE.MeshBasicMaterial({
+      color: 0xff1e38,
+      wireframe: true,
       transparent: true,
-      opacity: 0.75,
+      opacity: 0.35,
     });
 
-    const stealthArmorMat = new THREE.MeshStandardMaterial({
-      color: 0x080a0e,
-      metalness: 0.92,
-      roughness: 0.25,
-      envMapIntensity: 1.5,
-    });
+    // ── 1. Cyber Shield Geometry ─────────────────────────────────────────────
+    const shieldGroup = new THREE.Group();
+    rootGroup.add(shieldGroup);
 
-    // ── 1. Exact Shield Shape (Matching ID Badge Photo) ─────────────────────
     const shieldShape = new THREE.Shape();
-    shieldShape.moveTo(0, 1.38); // Top center peak
-    shieldShape.quadraticCurveTo(0.65, 1.25, 1.18, 1.15); // Top right slope to shoulder
-    shieldShape.quadraticCurveTo(1.22, 0.40, 1.05, -0.15); // Upper right waist
-    shieldShape.quadraticCurveTo(0.85, -0.75, 0, -1.55); // Lower curve to sharp bottom point
-    shieldShape.quadraticCurveTo(-0.85, -0.75, -1.05, -0.15); // Bottom point up to left waist
-    shieldShape.quadraticCurveTo(-1.22, 0.40, -1.18, 1.15); // Left waist to top left shoulder
-    shieldShape.quadraticCurveTo(-0.65, 1.25, 0, 1.38); // Top left slope back to center peak
+    shieldShape.moveTo(0, 1.42); // Top center peak
+    shieldShape.quadraticCurveTo(0.65, 1.25, 1.18, 1.15); // Top right shoulder
+    shieldShape.quadraticCurveTo(1.22, 0.40, 1.05, -0.15); // Upper waist
+    shieldShape.quadraticCurveTo(0.85, -0.75, 0, -1.55); // Bottom sharp point
+    shieldShape.quadraticCurveTo(-0.85, -0.75, -1.05, -0.15); // Left waist
+    shieldShape.quadraticCurveTo(-1.22, 0.40, -1.18, 1.15); // Left shoulder
+    shieldShape.quadraticCurveTo(-0.65, 1.25, 0, 1.42); // Back to top peak
 
     // Extruded Stealth Obsidian Shield Body
     const extrudeSettings = {
       steps: 1,
-      depth: 0.07,
+      depth: 0.12,
       bevelEnabled: true,
-      bevelThickness: 0.04,
-      bevelSize: 0.04,
+      bevelThickness: 0.05,
+      bevelSize: 0.05,
       bevelSegments: 5,
     };
     const shieldGeo = new THREE.ExtrudeGeometry(shieldShape, extrudeSettings);
     shieldGeo.center();
-    const shieldMesh = new THREE.Mesh(shieldGeo, stealthArmorMat);
-    rootGroup.add(shieldMesh);
+    const shieldMesh = new THREE.Mesh(shieldGeo, stealthArmor);
+    shieldGroup.add(shieldMesh);
 
-    // Glowing Neon Crimson Shield Border Line
-    const shieldPoints = shieldShape.getPoints(90);
+    // Glowing Neon Crimson Outer Shield Rim
+    const shieldPoints = shieldShape.getPoints(100);
     const lineGeo = new THREE.BufferGeometry().setFromPoints(shieldPoints);
     const lineMat = new THREE.LineBasicMaterial({ color: 0xff1e38, linewidth: 3 });
     const shieldOutline = new THREE.LineLoop(lineGeo, lineMat);
-    shieldOutline.position.z = 0.08;
-    rootGroup.add(shieldOutline);
+    shieldOutline.position.z = 0.11;
+    shieldGroup.add(shieldOutline);
+
+    // Inner Secondary Glowing Contour
+    const innerPoints = shieldShape.getPoints(100).map((p) => new THREE.Vector2(p.x * 0.85, p.y * 0.85));
+    const innerLineGeo = new THREE.BufferGeometry().setFromPoints(innerPoints);
+    const innerLineMat = new THREE.LineBasicMaterial({ color: 0xff3b56, transparent: true, opacity: 0.4 });
+    const innerShieldOutline = new THREE.LineLoop(innerLineGeo, innerLineMat);
+    innerShieldOutline.position.z = 0.115;
+    shieldGroup.add(innerShieldOutline);
 
     // ── 2. Solid Glowing Red Padlock in Center ──────────────────────────────
     const padlockGroup = new THREE.Group();
-    padlockGroup.position.set(0, -0.06, 0.11);
-    rootGroup.add(padlockGroup);
+    padlockGroup.position.set(0, -0.06, 0.14);
+    shieldGroup.add(padlockGroup);
 
-    // Padlock Base (Solid Red Rounded Rectangle)
+    // Padlock Base (Rounded Rectangle)
     const lockBodyGeo = new THREE.BoxGeometry(0.58, 0.46, 0.08);
-    const lockBody = new THREE.Mesh(lockBodyGeo, neonCrimsonMat);
+    const lockBody = new THREE.Mesh(lockBodyGeo, neonCrimson);
     lockBody.position.y = -0.16;
     padlockGroup.add(lockBody);
 
-    // Padlock Upper Arch Shackle (Clean Loop)
+    // Padlock Upper Arch Shackle
     const shackleGeo = new THREE.TorusGeometry(0.21, 0.046, 16, 36, Math.PI);
-    const shackle = new THREE.Mesh(shackleGeo, neonCrimsonMat);
+    const shackle = new THREE.Mesh(shackleGeo, neonCrimson);
     shackle.position.set(0, 0.07, 0);
     padlockGroup.add(shackle);
 
-    // Dark Keyhole Cutout (Circle + Vertical Keyway Slot)
+    // Dark Keyhole Cutout
     const keyholeTopGeo = new THREE.CylinderGeometry(0.046, 0.046, 0.1, 16);
-    const keyholeTop = new THREE.Mesh(keyholeTopGeo, stealthArmorMat);
+    const keyholeTop = new THREE.Mesh(keyholeTopGeo, stealthArmor);
     keyholeTop.rotation.x = Math.PI / 2;
     keyholeTop.position.set(0, -0.12, 0.02);
     padlockGroup.add(keyholeTop);
 
     const keyholeStemGeo = new THREE.BoxGeometry(0.038, 0.12, 0.1);
-    const keyholeStem = new THREE.Mesh(keyholeStemGeo, stealthArmorMat);
+    const keyholeStem = new THREE.Mesh(keyholeStemGeo, stealthArmor);
     keyholeStem.position.set(0, -0.22, 0.02);
     padlockGroup.add(keyholeStem);
 
-    // ── 3. Concentric Orbital HUD Circles ────────────────────────────────────
-    const hudGroup = new THREE.Group();
-    hudGroup.position.z = -0.04;
-    rootGroup.add(hudGroup);
+    // ── 3. Revolving 3D Hexagonal Energy Shield (Inner Layer Only) ───────────
+    const hexContainerGroup = new THREE.Group();
+    rootGroup.add(hexContainerGroup);
 
-    // Outer Segmented Arc Ring (R = 2.45, Rotating)
-    const segmentedRingGroup = new THREE.Group();
-    const numSegments = 42;
-    for (let i = 0; i < numSegments; i++) {
-      if (i % 7 === 0 || i % 7 === 1) continue;
-      const angle = (i / numSegments) * Math.PI * 2;
-      const r = 2.45;
-      const tickGeo = new THREE.PlaneGeometry(0.045, 0.18);
-      const tick = new THREE.Mesh(tickGeo, neonCrimsonMat);
-      tick.position.set(Math.cos(angle) * r, Math.sin(angle) * r, 0);
-      tick.rotation.z = angle + Math.PI / 2;
-      segmentedRingGroup.add(tick);
+    // Inner Hexagonal Wireframe Matrix
+    const hexInnerGeo = new THREE.IcosahedronGeometry(2.2, 2);
+    const hexInner = new THREE.Mesh(hexInnerGeo, hexInnerWireMat);
+    hexContainerGroup.add(hexInner);
+
+    // Glowing Node Vertices on Hexagonal Junctions
+    const nodeGeo = new THREE.SphereGeometry(0.035, 12, 12);
+    const hexVertices = hexInnerGeo.attributes.position;
+    for (let i = 0; i < hexVertices.count; i += 3) {
+      const vx = hexVertices.getX(i);
+      const vy = hexVertices.getY(i);
+      const vz = hexVertices.getZ(i);
+      const nodeMesh = new THREE.Mesh(nodeGeo, neonCrimson);
+      nodeMesh.position.set(vx, vy, vz);
+      hexInner.add(nodeMesh);
     }
-    hudGroup.add(segmentedRingGroup);
 
-    // Continuous Precision Outer Ring (R = 2.70)
-    const outerRingGeo = new THREE.RingGeometry(2.69, 2.71, 100);
-    const outerRing = new THREE.Mesh(outerRingGeo, neonCrimsonMat);
-    hudGroup.add(outerRing);
+    // ── 4. Ambient Data Defense Particles ────────────────────────────────────
+    const particleCount = 45;
+    const particlePositions = new Float32Array(particleCount * 3);
+    const particleMeta = [];
 
-    // Inner Faint Continuous Ring (R = 2.15)
-    const innerRingGeo = new THREE.RingGeometry(2.145, 2.155, 100);
-    const innerRing = new THREE.Mesh(innerRingGeo, faintCrimsonMat);
-    hudGroup.add(innerRing);
-
-    // Inner Fine Tech Ticks (R = 1.95, Counter-rotating)
-    const innerTickGroup = new THREE.Group();
-    for (let i = 0; i < 36; i += 2) {
-      const angle = (i / 36) * Math.PI * 2;
-      const r = 1.95;
-      const tGeo = new THREE.PlaneGeometry(0.025, 0.07);
-      const tMesh = new THREE.Mesh(tGeo, faintCrimsonMat);
-      tMesh.position.set(Math.cos(angle) * r, Math.sin(angle) * r, 0);
-      tMesh.rotation.z = angle + Math.PI / 2;
-      innerTickGroup.add(tMesh);
+    for (let i = 0; i < particleCount; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const rad = 1.6 + Math.random() * 1.2;
+      particlePositions[i * 3] = Math.cos(angle) * rad;
+      particlePositions[i * 3 + 1] = Math.sin(angle) * rad;
+      particlePositions[i * 3 + 2] = (Math.random() - 0.5) * 1.5;
+      particleMeta.push({
+        angle,
+        rad,
+        speed: 0.15 + Math.random() * 0.3,
+        z: particlePositions[i * 3 + 2],
+      });
     }
-    hudGroup.add(innerTickGroup);
 
-    // ── 4. Lighting Setup ────────────────────────────────────────────────────
-    const pointLight = new THREE.PointLight(0xff1e38, 5.0, 30);
-    pointLight.position.set(0, 0, 4.0);
-    scene.add(pointLight);
+    const particleGeo = new THREE.BufferGeometry();
+    particleGeo.setAttribute("position", new THREE.BufferAttribute(particlePositions, 3));
+    const particleMat = new THREE.PointsMaterial({
+      color: 0xff3b56,
+      size: 0.045,
+      transparent: true,
+      opacity: 0.75,
+    });
+    const particles = new THREE.Points(particleGeo, particleMat);
+    rootGroup.add(particles);
 
-    const ambientLight = new THREE.AmbientLight(0x1a1a1e, 1.5);
+    // ── 5. Lighting Setup ────────────────────────────────────────────────────
+    const keyPointLight = new THREE.PointLight(0xff1e38, 5.5, 30);
+    keyPointLight.position.set(0, 0, 4.0);
+    scene.add(keyPointLight);
+
+    const rimLight = new THREE.DirectionalLight(0xff3352, 2.0);
+    rimLight.position.set(4, 5, 3);
+    scene.add(rimLight);
+
+    const ambientLight = new THREE.AmbientLight(0x101216, 1.2);
     scene.add(ambientLight);
 
-    // ── 5. Mouse Interaction & Animation Loop ────────────────────────────────
+    // ── 6. Mouse Interaction & Animation Loop ────────────────────────────────
     let mouseX = 0;
     let mouseY = 0;
     let targetX = 0;
@@ -170,8 +194,8 @@ export const CyberShieldScene = () => {
       const rect = currentMount.getBoundingClientRect();
       const x = (e.clientX - rect.left) / rect.width - 0.5;
       const y = (e.clientY - rect.top) / rect.height - 0.5;
-      targetX = x * 0.35;
-      targetY = y * 0.35;
+      targetX = x * 0.45;
+      targetY = y * 0.45;
     };
 
     window.addEventListener("mousemove", handleMouseMove);
@@ -187,16 +211,27 @@ export const CyberShieldScene = () => {
       mouseX += (targetX - mouseX) * 0.05;
       mouseY += (targetY - mouseY) * 0.05;
 
-      rootGroup.rotation.y = mouseX * 0.45;
-      rootGroup.rotation.x = -mouseY * 0.45;
+      rootGroup.rotation.y = mouseX * 0.5;
+      rootGroup.rotation.x = -mouseY * 0.5;
 
-      // Revolving concentric circles
-      segmentedRingGroup.rotation.z = -t * 0.22;
-      innerTickGroup.rotation.z = t * 0.16;
+      // Revolving Inner Hexagonal Energy Shield
+      hexInner.rotation.y = -t * 0.25;
+      hexInner.rotation.x = Math.sin(t * 0.2) * 0.15;
+      hexInner.rotation.z = t * 0.12;
 
-      // Smooth breathing glow
-      const pulse = 1.0 + Math.sin(t * 2.4) * 0.015;
+      // Particle orbit animation
+      const posAttr = particleGeo.attributes.position;
+      for (let i = 0; i < particleCount; i++) {
+        const p = particleMeta[i];
+        p.angle += p.speed * 0.01;
+        posAttr.setXYZ(i, Math.cos(p.angle) * p.rad, Math.sin(p.angle) * p.rad, p.z + Math.sin(t + i) * 0.08);
+      }
+      posAttr.needsUpdate = true;
+
+      // Breathing pulse on padlock core & glow
+      const pulse = 1.0 + Math.sin(t * 2.4) * 0.02;
       padlockGroup.scale.set(pulse, pulse, 1);
+      keyPointLight.intensity = 5.0 + Math.sin(t * 3.0) * 1.2;
 
       renderer.render(scene, camera);
     };
@@ -224,12 +259,14 @@ export const CyberShieldScene = () => {
       renderer.dispose();
       shieldGeo.dispose();
       lineGeo.dispose();
+      innerLineGeo.dispose();
       lockBodyGeo.dispose();
       shackleGeo.dispose();
       keyholeTopGeo.dispose();
       keyholeStemGeo.dispose();
-      outerRingGeo.dispose();
-      innerRingGeo.dispose();
+      hexInnerGeo.dispose();
+      nodeGeo.dispose();
+      particleGeo.dispose();
     };
   }, []);
 

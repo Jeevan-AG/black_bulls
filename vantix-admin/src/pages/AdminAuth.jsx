@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../utils/api";
-import { Mail, Lock, Eye, EyeOff, AlertCircle, Sparkles, X, Shield } from "lucide-react";
+import { Shield, Mail, Lock, Eye, EyeOff, AlertCircle, Sparkles, ArrowRight, Activity, Terminal } from "lucide-react";
 import CyberShieldScene from "../components/CyberShieldScene";
 import "./AdminAuth.css";
 
@@ -11,7 +11,6 @@ const AdminAuth = () => {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [showAuthModal, setShowAuthModal] = useState(false);
 
   const navigate = useNavigate();
 
@@ -72,103 +71,58 @@ const AdminAuth = () => {
   };
 
   return (
-    <div className="cyber-landing-viewport red-industrial-theme">
-      {/* Background Red Ambient Glow & Circuit Grid */}
-      <div className="red-ambient-glow" />
-      <div className="red-diagonal-hazard" />
+    <div className="cyber-auth-viewport">
+      {/* Dynamic Cyber Grid & Radial Ambient Core Glow */}
+      <div className="cyber-perspective-grid" />
+      <div className="cyber-auth-ambient-glow" />
 
-      {/* Top Header Navigation (No underlines, clean text) */}
-      <header className="cyber-header">
-        <div className="cyber-logo-group" onClick={() => navigate("/")}>
-          <div className="red-badge-icon">
-            <span className="finix-x">X</span>
+      {/* Top Header */}
+      <header className="cyber-auth-header">
+        <div className="cyber-auth-logo" onClick={() => navigate("/")}>
+          <div className="cyber-auth-logo-icon">
+            <Shield size={20} />
           </div>
-          <span className="cyber-brand-name">
-            FINIX <span className="brand-badge-num">26</span>
-          </span>
+          <div className="brand-text-col">
+            <span className="cyber-auth-brand-name">VANTIX</span>
+            <span className="cyber-auth-brand-sub">DEFENSE PLATFORM</span>
+          </div>
         </div>
 
-        <nav className="cyber-nav-links">
-          <span className="cyber-nav-item">INDUSTRIAL SECURITY</span>
-          <span className="cyber-nav-item">ARCHITECTURE</span>
-          <span className="cyber-nav-item">THREAT INTELLIGENCE</span>
-          <span className="cyber-nav-item">COMPLIANCE</span>
-        </nav>
+        <div className="cyber-header-status-badge">
+          <span className="status-live-dot" />
+          <span className="status-text">AI DLP FIREWALL &bull; ONLINE</span>
+        </div>
       </header>
 
-      {/* Main Hero Container */}
-      <main className="cyber-hero-grid">
-        {/* Left Column: Hero Title & Controls */}
-        <section className="cyber-hero-left">
-          <div className="cyber-title-wrapper">
-            <h1 className="cyber-hero-headline">
-              <span>INDUSTRIAL</span>
-              <span className="text-crimson-gradient">SECURITY</span>
-            </h1>
-            <p className="cyber-hero-description">
-              Zero-trust perimeter protection with real-time AI payload inspection, 
-              hardware isolation, and active defense against industrial cyber threats.
-            </p>
-          </div>
+      {/* Main Split Grid */}
+      <main className="cyber-auth-grid">
+        {/* Left Column: Ultra High-Tech Login Card */}
+        <section className="cyber-auth-card-panel">
+          <div className="cyber-auth-card">
+            {/* Tech Corner Accents */}
+            <div className="card-corner-bracket top-left" />
+            <div className="card-corner-bracket top-right" />
+            <div className="card-corner-bracket bottom-left" />
+            <div className="card-corner-bracket bottom-right" />
 
-          <div className="cyber-hero-actions">
-            <button
-              className="cyber-btn-explore red-explore-btn"
-              onClick={handleDirectDemoAccess}
-              id="explore-btn"
-            >
-              ACCESS CONSOLE
-            </button>
-            <button
-              className="cyber-btn-contact red-contact-btn"
-              onClick={() => setShowAuthModal(true)}
-              id="contact-btn"
-            >
-              ADMIN SIGN IN
-            </button>
-          </div>
-        </section>
-
-        {/* Right Column: 3D Red Cyber Shield & Concentric HUD Circles */}
-        <section className="cyber-hero-right">
-          <div className="cyber-3d-wrapper">
-            <CyberShieldScene />
-          </div>
-        </section>
-      </main>
-
-      {/* Sleek Admin Sign In Modal */}
-      {showAuthModal && (
-        <div className="cyber-modal-overlay" onClick={() => setShowAuthModal(false)}>
-          <div
-            className="cyber-modal-card red-modal-card"
-            onClick={(e) => e.stopPropagation()}
-            role="dialog"
-            aria-modal="true"
-          >
-            <button
-              className="cyber-modal-close"
-              onClick={() => setShowAuthModal(false)}
-              aria-label="Close modal"
-            >
-              <X size={18} />
-            </button>
-
-            <div className="cyber-modal-header">
-              <div className="red-badge-glow">
-                <Shield size={20} />
+            {/* Header */}
+            <div className="cyber-auth-card-header">
+              <div className="auth-chip-label">
+                <Terminal size={12} />
+                <span>COMMAND PORTAL AUTHENTICATION</span>
               </div>
-              <h2>Industrial SOC Authentication</h2>
-              <p>Enter administrator credentials to unlock the command interface</p>
+              <h1>Sign In</h1>
+              <p>Enter enterprise credentials to access the SOC command terminal</p>
             </div>
 
-            <form className="cyber-modal-form" onSubmit={handleAdminLogin}>
-              <div className="cyber-form-group">
-                <label htmlFor="modal-email">Administrator Email</label>
-                <div className="cyber-input-wrapper">
-                  <Mail size={16} className="cyber-input-icon" />
+            <form className="cyber-auth-form" onSubmit={handleAdminLogin}>
+              {/* Email Input */}
+              <div className="cyber-auth-field">
+                <label htmlFor="admin-email">Administrator Email</label>
+                <div className="cyber-auth-input-wrapper">
+                  <Mail size={16} className="cyber-auth-input-icon" />
                   <input
-                    id="modal-email"
+                    id="admin-email"
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
@@ -176,15 +130,17 @@ const AdminAuth = () => {
                     required
                     autoComplete="email"
                   />
+                  <span className="input-active-glow" />
                 </div>
               </div>
 
-              <div className="cyber-form-group">
-                <label htmlFor="modal-password">Password</label>
-                <div className="cyber-input-wrapper">
-                  <Lock size={16} className="cyber-input-icon" />
+              {/* Password Input */}
+              <div className="cyber-auth-field">
+                <label htmlFor="admin-password">Password</label>
+                <div className="cyber-auth-input-wrapper">
+                  <Lock size={16} className="cyber-auth-input-icon" />
                   <input
-                    id="modal-password"
+                    id="admin-password"
                     type={showPassword ? "text" : "password"}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
@@ -194,48 +150,68 @@ const AdminAuth = () => {
                   />
                   <button
                     type="button"
-                    className="password-reveal-btn"
+                    className="password-toggle-btn"
                     onClick={() => setShowPassword(!showPassword)}
                     aria-label={showPassword ? "Hide password" : "Show password"}
                   >
                     {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
+                  <span className="input-active-glow" />
                 </div>
               </div>
 
+              {/* Error Message */}
               {error && (
-                <div className="cyber-error-alert">
-                  <AlertCircle size={16} />
+                <div className="cyber-auth-error-alert" role="alert">
+                  <AlertCircle size={15} style={{ flexShrink: 0 }} />
                   <span>{error}</span>
                 </div>
               )}
 
+              {/* Primary Submit Button */}
               <button
                 type="submit"
                 disabled={busy}
-                className="cyber-submit-btn red-submit-btn"
-                id="submit-login-modal"
+                className="cyber-auth-submit-btn"
+                id="admin-login-submit"
               >
-                {busy ? "Authorizing..." : "Unlock Industrial SOC"}
+                <span>{busy ? "Authorizing Token..." : "Authenticate Command Access"}</span>
+                <ArrowRight size={16} className="btn-arrow-icon" />
               </button>
 
-              <div className="cyber-modal-divider">
-                <span>OR EVALUATE</span>
+              {/* Divider */}
+              <div className="cyber-auth-divider">
+                <span>EVALUATION MODE</span>
               </div>
 
+              {/* One-Click Direct Demo Access */}
               <button
                 type="button"
                 onClick={handleDirectDemoAccess}
-                className="cyber-demo-direct-btn"
-                id="modal-demo-access-btn"
+                className="cyber-auth-demo-btn"
+                id="admin-login-demo-btn"
               >
-                <Sparkles size={16} />
+                <Sparkles size={16} className="demo-sparkle-icon" />
                 <span>One-Click Instant Demo Access</span>
               </button>
             </form>
+
+            <div className="cyber-auth-card-footer">
+              <span className="footer-shield-badge">
+                <Shield size={12} />
+                <span>AES-256 TLS &bull; Zero-Trust Protocol</span>
+              </span>
+            </div>
           </div>
-        </div>
-      )}
+        </section>
+
+        {/* Right Column: 3D Holographic Cyber Defense Shield */}
+        <section className="cyber-auth-scene-panel">
+          <div className="cyber-auth-3d-wrapper">
+            <CyberShieldScene />
+          </div>
+        </section>
+      </main>
     </div>
   );
 };
