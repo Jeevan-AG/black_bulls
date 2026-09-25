@@ -82,6 +82,184 @@ function extractClientIp(req) {
   return ip;
 }
 
+function cleanPromptText(text) {
+  if (!text || typeof text !== "string") return "";
+  let clean = text;
+
+  const contextTags = [
+    "EnvironmentContext",
+    "CurrentFile",
+    "WorkspaceContext",
+    "EditorContext",
+    "ProjectContext",
+    "Context",
+    "system",
+    "workspace_info",
+    "user_context"
+  ];
+
+  for (const tag of contextTags) {
+    const fullTagRegex = new RegExp(`<${tag}[^>]*>[\\s\\S]*?<\\/${tag}>`, "gi");
+    clean = clean.replace(fullTagRegex, "");
+
+    const openTagIdx = clean.search(new RegExp(`<${tag}[^>]*>`, "i"));
+    if (openTagIdx !== -1) {
+      clean = clean.slice(0, openTagIdx);
+    }
+  }
+
+  clean = clean.replace(/```(?:system_information|environment|context)[\s\S]*?```/gi, "");
+  clean = clean.replace(/^User(?:\s+Query|\s+Question|\s+Prompt)?:\s*/i, "");
+
+  return clean.trim() || text.trim();
+}
+
+function cleanAiResponseText(raw) {
+  if (!raw || typeof raw !== "string") return "";
+
+  const sseChunks = [];
+  const sseLines = raw.split("\n");
+  for (const line of sseLines) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith("data:") && trimmed.length > 5) {
+      const dataStr = trimmed.slice(5).trim();
+      if (dataStr === "[DONE]") continue;
+      try {
+        const obj = JSON.parse(dataStr);
+        const delta =
+          obj.choices?.[0]?.delta?.content ||
+          obj.choices?.[0]?.delta?.text ||
+          obj.choices?.[0]?.message?.content ||
+          obj.choices?.[0]?.text;
+        if (typeof delta === "string") {
+          sseChunks.push(delta);
+          continue;
+        }
+        if (obj.delta?.text) {
+          sseChunks.push(obj.delta.text);
+          continue;
+        }
+        if (obj.delta?.content) {
+          sseChunks.push(obj.delta.content);
+          continue;
+        }
+        if (obj.candidates?.[0]?.content?.parts?.[0]?.text) {
+          sseChunks.push(obj.candidates[0].content.parts[0].text);
+          continue;
+        }
+      } catch (e) {}
+    }
+  }
+  if (sseChunks.length > 0) return sseChunks.join("").trim();
+
+  let extracted = "";
+  let idx = 0;
+  while (idx < raw.length) {
+    const startObj = raw.indexOf("{", idx);
+    if (startObj === -1) break;
+
+    let depth = 0;
+    let endObj = -1;
+    let inString = false;
+    let escape = false;
+
+    for (let i = startObj; i < raw.length; i++) {
+      const ch = raw[i];
+      if (escape) {
+        escape = false;
+        continue;
+      }
+      if (ch === "\\") {
+        escape = true;
+        continue;
+      }
+      if (ch === '"') {
+        inString = !inString;
+        continue;
+      }
+      if (!inString) {
+        if (ch === "{") depth++;
+        else if (ch === "}") {
+          depth--;
+          if (depth === 0) {
+            endObj = i;
+            break;
+          }
+        }
+      }
+    }
+
+    if (endObj !== -1) {
+      const jsonStr = raw.slice(startObj, endObj + 1);
+      try {
+        const obj = JSON.parse(jsonStr);
+        if (obj.assistantResponseEvent?.content) {
+          extracted += obj.assistantResponseEvent.content;
+        } else if (obj.content && typeof obj.content === "string") {
+          extracted += obj.content;
+        } else if (obj.text && typeof obj.text === "string") {
+          extracted += obj.text;
+        } else if (obj.delta?.content) {
+          extracted += obj.delta.content;
+        } else if (obj.delta?.text) {
+          extracted += obj.delta.text;
+        } else if (obj.choices?.[0]?.delta?.content) {
+          extracted += obj.choices[0].delta.content;
+        } else if (obj.choices?.[0]?.message?.content) {
+          extracted += obj.choices[0].message.content;
+        } else if (obj.candidates?.[0]?.content?.parts?.[0]?.text) {
+          extracted += obj.candidates[0].content.parts[0].text;
+        } else if (obj.response && typeof obj.response === "string") {
+          extracted += obj.response;
+        } else if (obj.message && typeof obj.message === "string") {
+          extracted += obj.message;
+        }
+      } catch (e) {
+        const mContent = jsonStr.match(/"content":\s*"((?:[^"\\]|\\.)*)"/);
+        if (mContent) {
+          try { extracted += JSON.parse(`"${mContent[1]}"`); } catch (e2) { extracted += mContent[1]; }
+        } else {
+          const mText = jsonStr.match(/"text":\s*"((?:[^"\\]|\\.)*)"/);
+          if (mText) {
+            try { extracted += JSON.parse(`"${mText[1]}"`); } catch (e3) { extracted += mText[1]; }
+          }
+        }
+      }
+      idx = endObj + 1;
+    } else {
+      idx = startObj + 1;
+    }
+  }
+
+  if (extracted.trim().length > 0) return extracted.trim();
+
+  try {
+    const obj = JSON.parse(raw);
+    const text =
+      obj.assistantResponseEvent?.content ||
+      obj.choices?.[0]?.message?.content ||
+      obj.choices?.[0]?.delta?.content ||
+      obj.candidates?.[0]?.content?.parts?.[0]?.text ||
+      obj.response ||
+      obj.content ||
+      obj.text;
+    if (typeof text === "string" && text.trim().length > 0) return text.trim();
+  } catch (e) {}
+
+  let clean = raw
+    .replace(/[\x00-\x1F\x7F-\x9F]/g, " ")
+    .replace(/:event-type\s*\w+/gi, "")
+    .replace(/:content-type\s*[\w\/-]+/gi, "")
+    .replace(/:message-type\s*\w+/gi, "")
+    .replace(/assistantResponseEvent/gi, "")
+    .replace(/\{"modelId":[^}]+\}/g, "")
+    .replace(/\{"conversationId":[^}]+\}/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return clean || raw;
+}
+
 // ─── Centralized Record & Telemetry Broadcaster ──────────────────────────────
 function recordAndBroadcast({
   resolvedUser,
@@ -123,6 +301,10 @@ function recordAndBroadcast({
   const userNameFormatted = `${rawUser} (${rawHost})`;
   const actualIp = (typeof endpointIp === "string" && endpointIp && endpointIp !== "127.0.0.1" ? endpointIp.split(",")[0].trim() : null) || extractClientIp(req);
 
+  const cleanPrompt = cleanPromptText(prompt);
+  const cleanSanitized = cleanPromptText(sanitizedPrompt || prompt);
+  const cleanResponse = cleanAiResponseText(restoredResponse || "");
+
   const logRecord = {
     id: `audit-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
     orgId: req?.orgId || "acme-corp",
@@ -132,10 +314,10 @@ function recordAndBroadcast({
     department: "Engineering & Cloud",
     endpointHost: rawHost,
     endpointIp: actualIp,
-    originalPrompt: prompt,
-    sanitizedPrompt: sanitizedPrompt || "[SANITIZED]",
-    restoredResponse: restoredResponse || "",
-    promptSnippet: prompt.slice(0, 200),
+    originalPrompt: cleanPrompt,
+    sanitizedPrompt: cleanSanitized,
+    restoredResponse: cleanResponse,
+    promptSnippet: cleanPrompt.slice(0, 200),
     actionTaken: action,
     riskScore: detection.overallRisk,
     categoriesRedacted: detection.categoriesFound || Array.from(new Set((detection.detections || []).map(d => d.category))),

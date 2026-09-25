@@ -1,5 +1,83 @@
 [
   {
+    "id": "audit-1790316937460-yy21p",
+    "orgId": "acme-corp",
+    "userId": "mohammed",
+    "userEmail": "mohammed@acme.com",
+    "userName": "mohammed (mohammed-Latitude-5400)",
+    "department": "Engineering & Cloud",
+    "endpointHost": "mohammed-Latitude-5400",
+    "endpointIp": "10.246.205.1",
+    "originalPrompt": "e my phone number 6785367486 to my aws id 76948323",
+    "sanitizedPrompt": "e my phone number [PHONE_NUMBER] to my aws id [AWS_KEY]",
+    "restoredResponse": "PROMPT_INSPECTED_AND_SANITIZED",
+    "promptSnippet": "e my phone number 6785367486 to my aws id 76948323",
+    "actionTaken": "silent_redact",
+    "riskScore": 100,
+    "categoriesRedacted": [
+      "PII",
+      "CREDENTIAL"
+    ],
+    "detections": [
+      {
+        "patternName": "PHONE",
+        "category": "PII",
+        "label": "Phone Number",
+        "value": "6785367486",
+        "start": 18,
+        "end": 28,
+        "isolationRisk": 45
+      },
+      {
+        "patternName": "NATURAL_LANGUAGE_CREDENTIAL",
+        "category": "CREDENTIAL",
+        "label": "Exposed Credential",
+        "value": "76948323",
+        "start": 42,
+        "end": 50,
+        "isolationRisk": 90
+      }
+    ],
+    "detectionCount": 2,
+    "combinationCount": 1,
+    "aiPlatform": "chatgpt.com",
+    "cryptoSignature": "a2e81b3bb6792e25394e7fd636a46b12010158719a7d11ca587fe13cec372b86",
+    "timestamp": "2026-09-25T06:15:37.416Z"
+  },
+  {
+    "id": "audit-1790316800901-su9rx",
+    "orgId": "acme-corp",
+    "userId": "mohammed",
+    "userEmail": "mohammed@mohammedlatitude5400.corp",
+    "userName": "mohammed (mohammed-Latitude-5400)",
+    "department": "Engineering & Cloud",
+    "endpointHost": "mohammed-Latitude-5400",
+    "endpointIp": "127.0.0.1",
+    "originalPrompt": "[UNMANAGED ACCESS BLOCKED] User attempted to open chatgpt.com without Vantix Browser Guard",
+    "sanitizedPrompt": "[POLICY_VIOLATION_BLOCKED]",
+    "restoredResponse": "🚫 UNMANAGED ACCESS BLOCKED — Please enable Vantix Browser Guard",
+    "promptSnippet": "[UNMANAGED ACCESS BLOCKED] User attempted to open chatgpt.com without Vantix Browser Guard",
+    "actionTaken": "hard_block",
+    "riskScore": 90,
+    "categoriesRedacted": [
+      "UNMANAGED_AI_ACCESS"
+    ],
+    "detections": [
+      {
+        "category": "UNMANAGED_AI_ACCESS",
+        "value": "chatgpt.com",
+        "label": "Unmanaged Web AI Access",
+        "isolationRisk": 90,
+        "severity": "CRITICAL"
+      }
+    ],
+    "detectionCount": 1,
+    "combinationCount": 0,
+    "aiPlatform": "chatgpt.com",
+    "cryptoSignature": "fb767c76aefa6590866b55bf5657b4501fee31f41c43fd0f6d6868e64c3c5ed7",
+    "timestamp": "2026-09-25T06:13:20.899Z"
+  },
+  {
     "id": "audit-1790310976783-xnn48",
     "orgId": "acme-corp",
     "userId": "mohammed",

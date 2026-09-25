@@ -695,6 +695,17 @@ function scheduleUnredact() {
   });
 }
 
+function isUserMessageNode(node) {
+  if (!node) return false;
+  const el = node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement;
+  if (!el) return false;
+  return Boolean(
+    el.closest(
+      '[data-message-author-role="user"], [data-testid*="user" i], .user-message, .user-turn, [data-is-user="true"], [data-author="user"], div[class*="userMessage" i], div[class*="UserMessage" i], textarea, input, [contenteditable="true"], form'
+    )
+  );
+}
+
 function runUnredaction() {
   if (_activeTokenMap.size === 0) return;
 
@@ -710,7 +721,7 @@ function runUnredaction() {
 
   // Chat message containers across ChatGPT, Claude, Gemini, and LLM web clients
   const candidates = document.querySelectorAll(
-    '[data-message-author-role], .markdown, .prose, .font-claude-message, message-content, [data-testid*="conversation-turn"], [class*="message-content"], [class*="turn-content"], [class*="chat-message"], div[class*="ChatMessage"]'
+    '[data-message-author-role="assistant"], .markdown, .prose, .font-claude-message, message-content, [data-testid*="conversation-turn"], [class*="message-content"], [class*="turn-content"], [class*="chat-message"], div[class*="ChatMessage"], model-response, .model-turn'
   );
 
   const targets = candidates.length > 0 ? Array.from(candidates) : [document.body];
@@ -721,6 +732,10 @@ function runUnredaction() {
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
       acceptNode(node) {
         if (!node.nodeValue || node.nodeValue.indexOf("[") === -1) {
+          return NodeFilter.FILTER_REJECT;
+        }
+        // Do NOT un-redact user message turns or input elements so user prompt visibly shows placeholders
+        if (isUserMessageNode(node)) {
           return NodeFilter.FILTER_REJECT;
         }
         return NodeFilter.FILTER_ACCEPT;
