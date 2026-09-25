@@ -26,11 +26,239 @@ const { analyzePrompt } = require("../engines/industrialDetector");
 const tee = require("../engines/teeEnclave");
 const sessionGraph = require("../engines/sessionGraph");
 const ws = require("../engines/wsServer");
+const fs = require("fs");
+const path = require("path");
 const AuditLog = require("../models/AuditLog");
 const mongoose = require("mongoose");
 
-// Fast in-memory audit ring buffer (survives offline DB during live demos)
+const DATA_DIR = path.join(__dirname, "../data");
+const AUDIT_FILE = path.join(DATA_DIR, "audit_logs.json");
+
+if (!fs.existsSync(DATA_DIR)) {
+  try { fs.mkdirSync(DATA_DIR, { recursive: true }); } catch (e) {}
+}
+
+// Persistent audit log ring buffer (loaded from disk on startup)
 let _inMemoryAuditLogs = [];
+try {
+  if (fs.existsSync(AUDIT_FILE)) {
+    const raw = fs.readFileSync(AUDIT_FILE, "utf8");
+    _inMemoryAuditLogs = JSON.parse(raw);
+    console.log(`[Vantix-Storage] ✓ Loaded ${_inMemoryAuditLogs.length} persisted audit logs from disk`);
+  }
+} catch (e) {
+  _inMemoryAuditLogs = [];
+}
+
+function persistAuditLogs() {
+  try {
+    fs.writeFileSync(AUDIT_FILE, JSON.stringify(_inMemoryAuditLogs.slice(0, 1000), null, 2), "utf8");
+  } catch (e) {
+    console.error("[Vantix-Storage] Failed to persist audit logs:", e.message);
+  }
+}
+
+function extractClientIp(req) {
+  if (!req) return "127.0.0.1";
+  let ip = req.headers?.["x-forwarded-for"]?.split(",")[0]?.trim() || 
+           req.headers?.["x-real-ip"] || 
+           req.socket?.remoteAddress || 
+           req.connection?.remoteAddress || 
+           req.ip || 
+           "";
+  if (ip.startsWith("::ffff:")) ip = ip.slice(7);
+  if (ip === "::1" || ip === "127.0.0.1" || !ip) {
+    const os = require("os");
+    const interfaces = os.networkInterfaces();
+    for (const name of Object.keys(interfaces)) {
+      for (const iface of interfaces[name] || []) {
+        if (iface.family === "IPv4" && !iface.internal) {
+          return iface.address;
+        }
+      }
+    }
+    return "127.0.0.1";
+  }
+  return ip;
+}
+
+function cleanPromptText(text) {
+  if (!text || typeof text !== "string") return "";
+  let clean = text;
+
+  const contextTags = [
+    "EnvironmentContext",
+    "CurrentFile",
+    "WorkspaceContext",
+    "EditorContext",
+    "ProjectContext",
+    "Context",
+    "system",
+    "workspace_info",
+    "user_context"
+  ];
+
+  for (const tag of contextTags) {
+    const fullTagRegex = new RegExp(`<${tag}[^>]*>[\\s\\S]*?<\\/${tag}>`, "gi");
+    clean = clean.replace(fullTagRegex, "");
+
+    const openTagIdx = clean.search(new RegExp(`<${tag}[^>]*>`, "i"));
+    if (openTagIdx !== -1) {
+      clean = clean.slice(0, openTagIdx);
+    }
+  }
+
+  clean = clean.replace(/```(?:system_information|environment|context)[\s\S]*?```/gi, "");
+  clean = clean.replace(/^User(?:\s+Query|\s+Question|\s+Prompt)?:\s*/i, "");
+
+  return clean.trim() || text.trim();
+}
+
+function cleanAiResponseText(raw) {
+  if (!raw || typeof raw !== "string") return "";
+
+  const sseChunks = [];
+  const sseLines = raw.split("\n");
+  for (const line of sseLines) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith("data:") && trimmed.length > 5) {
+      const dataStr = trimmed.slice(5).trim();
+      if (dataStr === "[DONE]") continue;
+      try {
+        const obj = JSON.parse(dataStr);
+        const delta =
+          obj.choices?.[0]?.delta?.content ||
+          obj.choices?.[0]?.delta?.text ||
+          obj.choices?.[0]?.message?.content ||
+          obj.choices?.[0]?.text;
+        if (typeof delta === "string") {
+          sseChunks.push(delta);
+          continue;
+        }
+        if (obj.delta?.text) {
+          sseChunks.push(obj.delta.text);
+          continue;
+        }
+        if (obj.delta?.content) {
+          sseChunks.push(obj.delta.content);
+          continue;
+        }
+        if (obj.candidates?.[0]?.content?.parts?.[0]?.text) {
+          sseChunks.push(obj.candidates[0].content.parts[0].text);
+          continue;
+        }
+      } catch (e) {}
+    }
+  }
+  if (sseChunks.length > 0) return sseChunks.join("").trim();
+
+  let extracted = "";
+  let idx = 0;
+  while (idx < raw.length) {
+    const startObj = raw.indexOf("{", idx);
+    if (startObj === -1) break;
+
+    let depth = 0;
+    let endObj = -1;
+    let inString = false;
+    let escape = false;
+
+    for (let i = startObj; i < raw.length; i++) {
+      const ch = raw[i];
+      if (escape) {
+        escape = false;
+        continue;
+      }
+      if (ch === "\\") {
+        escape = true;
+        continue;
+      }
+      if (ch === '"') {
+        inString = !inString;
+        continue;
+      }
+      if (!inString) {
+        if (ch === "{") depth++;
+        else if (ch === "}") {
+          depth--;
+          if (depth === 0) {
+            endObj = i;
+            break;
+          }
+        }
+      }
+    }
+
+    if (endObj !== -1) {
+      const jsonStr = raw.slice(startObj, endObj + 1);
+      try {
+        const obj = JSON.parse(jsonStr);
+        if (obj.assistantResponseEvent?.content) {
+          extracted += obj.assistantResponseEvent.content;
+        } else if (obj.content && typeof obj.content === "string") {
+          extracted += obj.content;
+        } else if (obj.text && typeof obj.text === "string") {
+          extracted += obj.text;
+        } else if (obj.delta?.content) {
+          extracted += obj.delta.content;
+        } else if (obj.delta?.text) {
+          extracted += obj.delta.text;
+        } else if (obj.choices?.[0]?.delta?.content) {
+          extracted += obj.choices[0].delta.content;
+        } else if (obj.choices?.[0]?.message?.content) {
+          extracted += obj.choices[0].message.content;
+        } else if (obj.candidates?.[0]?.content?.parts?.[0]?.text) {
+          extracted += obj.candidates[0].content.parts[0].text;
+        } else if (obj.response && typeof obj.response === "string") {
+          extracted += obj.response;
+        } else if (obj.message && typeof obj.message === "string") {
+          extracted += obj.message;
+        }
+      } catch (e) {
+        const mContent = jsonStr.match(/"content":\s*"((?:[^"\\]|\\.)*)"/);
+        if (mContent) {
+          try { extracted += JSON.parse(`"${mContent[1]}"`); } catch (e2) { extracted += mContent[1]; }
+        } else {
+          const mText = jsonStr.match(/"text":\s*"((?:[^"\\]|\\.)*)"/);
+          if (mText) {
+            try { extracted += JSON.parse(`"${mText[1]}"`); } catch (e3) { extracted += mText[1]; }
+          }
+        }
+      }
+      idx = endObj + 1;
+    } else {
+      idx = startObj + 1;
+    }
+  }
+
+  if (extracted.trim().length > 0) return extracted.trim();
+
+  try {
+    const obj = JSON.parse(raw);
+    const text =
+      obj.assistantResponseEvent?.content ||
+      obj.choices?.[0]?.message?.content ||
+      obj.choices?.[0]?.delta?.content ||
+      obj.candidates?.[0]?.content?.parts?.[0]?.text ||
+      obj.response ||
+      obj.content ||
+      obj.text;
+    if (typeof text === "string" && text.trim().length > 0) return text.trim();
+  } catch (e) {}
+
+  let clean = raw
+    .replace(/[\x00-\x1F\x7F-\x9F]/g, " ")
+    .replace(/:event-type\s*\w+/gi, "")
+    .replace(/:content-type\s*[\w\/-]+/gi, "")
+    .replace(/:message-type\s*\w+/gi, "")
+    .replace(/assistantResponseEvent/gi, "")
+    .replace(/\{"modelId":[^}]+\}/g, "")
+    .replace(/\{"conversationId":[^}]+\}/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return clean || raw;
+}
 
 // ─── Centralized Record & Telemetry Broadcaster ──────────────────────────────
 function recordAndBroadcast({
@@ -49,22 +277,33 @@ function recordAndBroadcast({
   req,
 }) {
   const os = require("os");
-  // Cloud server identities that should never appear as end-user names
-  const SERVER_IDENTITIES = ["render", "root", "nobody", "www-data", "node", "ubuntu", "ec2-user"];
+  const SERVER_IDENTITIES = ["render", "nobody", "www-data", "node", "ubuntu", "ec2-user"];
 
-  let fallbackUser = "unknown-user";
-  let fallbackHost = "unknown-host";
+  let fallbackUser = process.env.SUDO_USER || "employee";
+  let fallbackHost = os.hostname() || "workstation";
   try {
-    const osUser = process.env.USER || process.env.USERNAME || (os.userInfo && os.userInfo().username) || "";
+    const osUser = process.env.SUDO_USER || process.env.USERNAME || process.env.USER || (os.userInfo && os.userInfo().username) || "";
+    if (osUser && !SERVER_IDENTITIES.includes(osUser.toLowerCase()) && osUser.toLowerCase() !== "root") {
+      fallbackUser = osUser;
+    } else if (process.env.SUDO_USER) {
+      fallbackUser = process.env.SUDO_USER;
+    }
     const osHost = os.hostname() || "";
-    // Only use OS identity if it's NOT a cloud server identity
-    if (osUser && !SERVER_IDENTITIES.includes(osUser.toLowerCase())) fallbackUser = osUser;
     if (osHost && !osHost.startsWith("srv-")) fallbackHost = osHost;
   } catch (e) {}
 
-  const rawUser = (resolvedUser && resolvedUser !== "employee" && !SERVER_IDENTITIES.includes(resolvedUser.toLowerCase()) ? resolvedUser : fallbackUser).trim();
+  let rawUser = resolvedUser;
+  if (!rawUser || rawUser === "employee" || SERVER_IDENTITIES.includes(rawUser.toLowerCase()) || rawUser.toLowerCase() === "root") {
+    rawUser = fallbackUser;
+  }
+  rawUser = rawUser.trim();
   const rawHost = (resolvedHost && resolvedHost !== "browser-endpoint" && !resolvedHost.startsWith("srv-") ? resolvedHost : fallbackHost).trim();
   const userNameFormatted = `${rawUser} (${rawHost})`;
+  const actualIp = (typeof endpointIp === "string" && endpointIp && endpointIp !== "127.0.0.1" ? endpointIp.split(",")[0].trim() : null) || extractClientIp(req);
+
+  const cleanPrompt = cleanPromptText(prompt);
+  const cleanSanitized = cleanPromptText(sanitizedPrompt || prompt);
+  const cleanResponse = cleanAiResponseText(restoredResponse || "");
 
   const logRecord = {
     id: `audit-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
@@ -74,11 +313,11 @@ function recordAndBroadcast({
     userName: userNameFormatted,
     department: "Engineering & Cloud",
     endpointHost: rawHost,
-    endpointIp: (typeof endpointIp === "string" && endpointIp ? endpointIp.split(",")[0].trim() : null) || (req && (req.headers["x-forwarded-for"]?.split(",")[0]?.trim() || req.ip || req.connection?.remoteAddress)) || "127.0.0.1",
-    originalPrompt: prompt,
-    sanitizedPrompt: sanitizedPrompt || "[SANITIZED]",
-    restoredResponse: restoredResponse || "",
-    promptSnippet: prompt.slice(0, 200),
+    endpointIp: actualIp,
+    originalPrompt: cleanPrompt,
+    sanitizedPrompt: cleanSanitized,
+    restoredResponse: cleanResponse,
+    promptSnippet: cleanPrompt.slice(0, 200),
     actionTaken: action,
     riskScore: detection.overallRisk,
     categoriesRedacted: detection.categoriesFound || Array.from(new Set((detection.detections || []).map(d => d.category))),
@@ -91,7 +330,8 @@ function recordAndBroadcast({
   };
 
   _inMemoryAuditLogs.unshift(logRecord);
-  if (_inMemoryAuditLogs.length > 250) _inMemoryAuditLogs.pop();
+  if (_inMemoryAuditLogs.length > 500) _inMemoryAuditLogs.pop();
+  persistAuditLogs();
 
   if (mongoose.connection.readyState === 1) {
     AuditLog.create(logRecord).catch(() => {});
@@ -152,21 +392,35 @@ function getGeminiModel() {
 // ─── Action Decision Engine ──────────────────────────────────────────────────
 
 function decideAction(overallRisk, detections) {
-  // If overallRisk is 0 or no detections, always pass
-  if (!overallRisk || overallRisk === 0 || !detections || detections.length === 0) {
+  if (!detections || detections.length === 0) {
     return "pass";
   }
 
-  // Check for critical hard-block items (live credentials, private keys, financial cards, SSN)
-  const hasCriticalSecrets = detections.some(
-    (d) =>
-      (d.category === "CREDENTIAL" && d.isolationRisk >= 85) ||
-      (d.category === "FINANCIAL" && d.isolationRisk >= 80) ||
-      (d.category === "PII" && d.isolationRisk >= 80)
+  // Count distinct high-severity credentials / API keys / secrets
+  const credentialDetections = detections.filter(
+    (d) => d.category === "CREDENTIAL" || d.category === "PRIVATE_KEY" || d.category === "SECRET"
+  );
+  const credentialCount = credentialDetections.length;
+
+  const isSevereInjection = detections.some(
+    (d) => d.category === "PROMPT_INJECTION" && d.isolationRisk >= 95
   );
 
-  if (hasCriticalSecrets && overallRisk >= 85) return "hard_block";
-  if (overallRisk >= 35) return "silent_redact";
+  // Policy: Hard block ONLY if massive sensitive info dump (>3 credentials / API keys) or severe prompt injection exploit
+  if (credentialCount > 3 || isSevereInjection) {
+    return "hard_block";
+  }
+
+  // Otherwise, silently redact credentials (<=3) and normal PII (email, phone, name, IP, etc.)
+  if (
+    overallRisk >= 15 ||
+    detections.some((d) =>
+      ["CREDENTIAL", "PII", "CRITICAL_PII", "REGISTER_ADDR", "FINANCIAL", "NETWORK_ADDR", "UNMANAGED_AI_ACCESS"].includes(d.category)
+    )
+  ) {
+    return "silent_redact";
+  }
+
   if (overallRisk > 10) return "monitor";
   return "pass";
 }
@@ -185,17 +439,21 @@ router.get("/health", (req, res) => {
 
 router.get("/system-identity", (req, res) => {
   const os = require("os");
-  const SERVER_IDENTITIES = ["render", "root", "nobody", "www-data", "node", "ubuntu", "ec2-user"];
-  let user = "mohammed";
-  let host = "mohammed-Latitude-5400";
+  const SERVER_IDENTITIES = ["render", "nobody", "www-data", "node", "ubuntu", "ec2-user"];
+  let user = process.env.SUDO_USER || "employee";
+  let host = os.hostname() || "workstation";
   try {
-    const osUser = process.env.USER || process.env.USERNAME || (os.userInfo && os.userInfo().username) || "";
+    const osUser = process.env.SUDO_USER || process.env.USERNAME || process.env.USER || (os.userInfo && os.userInfo().username) || "";
+    if (osUser && !SERVER_IDENTITIES.includes(osUser.toLowerCase()) && osUser.toLowerCase() !== "root") {
+      user = osUser;
+    } else if (process.env.SUDO_USER) {
+      user = process.env.SUDO_USER;
+    }
     const osHost = os.hostname() || "";
-    if (osUser && !SERVER_IDENTITIES.includes(osUser.toLowerCase())) user = osUser;
     if (osHost && !osHost.startsWith("srv-")) host = osHost;
   } catch (e) {}
 
-  const clientIp = req.headers["x-forwarded-for"]?.split(",")[0]?.trim() || req.ip || req.connection?.remoteAddress || "127.0.0.1";
+  const clientIp = extractClientIp(req);
 
   res.json({
     success: true,
@@ -207,17 +465,93 @@ router.get("/system-identity", (req, res) => {
   });
 });
 
-// ─── POST /api/vantix/chat — The 7-Step Pipeline ────────────────────────────
+// ─── Browser Guard Extension Heartbeat & Verification ────────────────────────
+const _activeGuardClients = new Map(); // key -> lastSeenTimestamp
 
-router.post("/chat", async (req, res) => {
+router.post("/guard-heartbeat", (req, res) => {
+  const ip = extractClientIp(req);
+  const user = req.body?.user || "employee";
+  const now = Date.now();
+  _activeGuardClients.set(ip, now);
+  _activeGuardClients.set("127.0.0.1", now);
+  _activeGuardClients.set("::1", now);
+  _activeGuardClients.set("::ffff:127.0.0.1", now);
+  _activeGuardClients.set(user.toLowerCase(), now);
+  res.json({ success: true, registered: true, timestamp: now });
+});
+
+router.get("/guard-status", (req, res) => {
+  const ip = extractClientIp(req);
+  const user = req.query?.user || "employee";
+  const now = Date.now();
+  const lastSeen = _activeGuardClients.get(ip) || _activeGuardClients.get("127.0.0.1") || _activeGuardClients.get(user.toLowerCase()) || 0;
+  const isGuardActive = (now - lastSeen) < 90_000;
+  res.json({ success: true, isGuardActive, lastSeen });
+});
+
+function isGuardActiveForClient(ip, user) {
+  const now = Date.now();
+  const lastSeen =
+    _activeGuardClients.get(ip) ||
+    _activeGuardClients.get("127.0.0.1") ||
+    _activeGuardClients.get("::1") ||
+    _activeGuardClients.get(user ? user.toLowerCase() : "") ||
+    0;
+  return (now - lastSeen) < 90_000;
+}
+router.isGuardActiveForClient = isGuardActiveForClient;
+
+// ─── Dynamic Per-Domain Navigation Intent Authorization ──────────────────────
+// Extension explicitly authorizes the exact AI domain it is navigating to.
+// Consumable token bucket: tokens are decremented on connection, and expire in 1.5s max.
+// Unmanaged browsers (Incognito / no extension) NEVER dispatch this intent -> blocked immediately.
+const _authorizedNavigations = new Map(); // cleanDomain -> { expiresAt, tokens }
+
+router.post("/authorize-ai-access", (req, res) => {
+  const domain = req.body?.domain;
+  if (!domain) return res.status(400).json({ error: "domain required" });
+  const clean = domain.split(":")[0].toLowerCase().trim();
+  // Short-lived token bucket (1.5 seconds) with 8 connection tokens for initial handshake burst
+  const expiresAt = Date.now() + 1500;
+  _authorizedNavigations.set(clean, {
+    expiresAt,
+    tokens: 8,
+  });
+  res.json({ success: true, domain: clean, expiresAt });
+});
+
+function isDomainAuthorized(domain) {
+  if (!domain) return false;
+  const clean = domain.split(":")[0].toLowerCase().trim();
+  const now = Date.now();
+  for (const [authDomain, auth] of _authorizedNavigations.entries()) {
+    if (auth.expiresAt > now && auth.tokens > 0) {
+      if (clean === authDomain || clean.endsWith("." + authDomain) || authDomain.endsWith("." + clean)) {
+        auth.tokens--;
+        if (auth.tokens <= 0) {
+          _authorizedNavigations.delete(authDomain);
+        }
+        return true;
+      }
+    } else if (auth.expiresAt <= now) {
+      _authorizedNavigations.delete(authDomain);
+    }
+  }
+  return false;
+}
+router.isDomainAuthorized = isDomainAuthorized;
+
+// ─── POST /api/vantix/inspect — Ultra-Fast (<5ms) TEE Prompt Inspection ──────
+router.post("/inspect", async (req, res) => {
   const startTime = Date.now();
   const SERVER_IDENTITIES = ["render", "root", "nobody", "www-data", "node", "ubuntu", "ec2-user"];
-  let fallbackUser = "mohammed";
-  let fallbackHost = "mohammed-Latitude-5400";
+  const os = require("os");
+  let fallbackUser = "employee";
+  let fallbackHost = os.hostname() || "workstation";
   try {
-    const osUser = process.env.USER || process.env.USERNAME || (os.userInfo && os.userInfo().username) || "";
-    const osHost = os.hostname() || "";
+    const osUser = process.env.USERNAME || process.env.USER || (os.userInfo && os.userInfo().username) || "";
     if (osUser && !SERVER_IDENTITIES.includes(osUser.toLowerCase())) fallbackUser = osUser;
+    const osHost = os.hostname() || "";
     if (osHost && !osHost.startsWith("srv-")) fallbackHost = osHost;
   } catch (e) {}
 
@@ -229,6 +563,148 @@ router.post("/chat", async (req, res) => {
   if (!resolvedHost || resolvedHost === "browser-endpoint" || resolvedHost.startsWith("srv-")) {
     resolvedHost = fallbackHost;
   }
+  const { prompt, sessionId = `session-${resolvedUser}-${Date.now()}`, userId = resolvedUser, userEmail = `${resolvedUser}@acme.com` } = req.body;
+
+  if (!prompt || typeof prompt !== "string") {
+    return res.status(400).json({ success: false, error: "prompt is required" });
+  }
+
+  try {
+    const interceptedAt = new Date().toISOString();
+    const detection = analyzePrompt(prompt);
+    const action = decideAction(detection.overallRisk, detection.detections);
+    let sanitizedPrompt = prompt;
+    let tokenMap = new Map();
+
+    if (action === "hard_block") {
+      const auditEntry = {
+        timestamp: interceptedAt,
+        userId: resolvedUser,
+        orgId: req.orgId || "demo",
+        riskScore: detection.overallRisk,
+        actionTaken: "hard_block",
+        categoriesRedacted: detection.categoriesFound,
+        aiPlatform: req.headers["x-vantix-app"] || req.body.app || "chatgpt.com",
+      };
+      const signature = tee.signAuditEntry(auditEntry);
+
+      const { logRecord, sessionResult } = recordAndBroadcast({
+        resolvedUser,
+        userEmail,
+        resolvedHost,
+        prompt,
+        sanitizedPrompt: "[BLOCKED — Prompt contained live credentials / confidential parameters]",
+        restoredResponse: "🚫 BLOCKED BY ENTERPRISE POLICY (Credentials detected)",
+        action: "hard_block",
+        detection,
+        signature,
+        interceptedAt,
+        aiPlatform: req.headers["x-vantix-app"] || req.body.app || "chatgpt.com",
+        req,
+      });
+
+      return res.json({
+        success: true,
+        blocked: true,
+        action: "hard_block",
+        message: "This prompt contains live credentials and has been blocked by your organization's security policy.",
+        riskScore: detection.overallRisk,
+        sanitizedPrompt: prompt,
+        processingTime: Date.now() - startTime,
+        meta: {
+          action: "hard_block",
+          riskScore: detection.overallRisk,
+          detectionsCount: detection.detections.length,
+          combinationsCount: detection.combinations.length,
+          sessionRiskScore: sessionResult.riskScore,
+          anomalyTriggered: sessionResult.anomalyTriggered,
+          categoriesRedacted: detection.categoriesFound || Array.from(new Set(detection.detections.map(d => d.category))),
+        },
+      });
+    }
+
+    if (action === "silent_redact" && detection.detections.length > 0) {
+      tokenMap = tee.createTokenTable(sessionId, detection.detections, prompt);
+      sanitizedPrompt = tee.sanitizePrompt(prompt, tokenMap);
+    }
+
+    const auditEntry = {
+      timestamp: interceptedAt,
+      userId,
+      orgId: req.orgId || "demo",
+      riskScore: detection.overallRisk,
+      actionTaken: action,
+      categoriesRedacted: detection.categoriesFound,
+      aiPlatform: req.headers["x-vantix-app"] || req.body.app || "chatgpt.com",
+    };
+    const signature = tee.signAuditEntry(auditEntry);
+
+    const { logRecord, sessionResult } = recordAndBroadcast({
+      resolvedUser,
+      userEmail,
+      resolvedHost,
+      prompt,
+      sanitizedPrompt,
+      restoredResponse: "PROMPT_INSPECTED_AND_SANITIZED",
+      action,
+      detection,
+      signature,
+      interceptedAt,
+      aiPlatform: req.headers["x-vantix-app"] || req.body.app || "chatgpt.com",
+      req,
+    });
+
+    const tokenMapping = Array.from(tokenMap.entries()).map(([realVal, placeholder]) => ({
+      realVal,
+      placeholder,
+    }));
+
+    return res.json({
+      success: true,
+      blocked: false,
+      sanitizedPrompt,
+      tokenMapping,
+      riskScore: detection.overallRisk,
+      processingTime: Date.now() - startTime,
+      meta: {
+        action,
+        riskScore: detection.overallRisk,
+        detectionsCount: detection.detections.length,
+        combinationsCount: detection.combinations.length,
+        sessionRiskScore: sessionResult.riskScore,
+        anomalyTriggered: sessionResult.anomalyTriggered,
+        categoriesRedacted: detection.categoriesFound,
+      },
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ─── POST /api/vantix/chat — The 7-Step Pipeline ────────────────────────────
+
+router.post("/chat", async (req, res) => {
+  const startTime = Date.now();
+  const SERVER_IDENTITIES = ["render", "root", "nobody", "www-data", "node", "ubuntu", "ec2-user"];
+  const os = require("os");
+  let fallbackUser = "employee";
+  let fallbackHost = os.hostname() || "workstation";
+  try {
+    const osUser = process.env.USERNAME || process.env.USER || (os.userInfo && os.userInfo().username) || "";
+    if (osUser && !SERVER_IDENTITIES.includes(osUser.toLowerCase())) fallbackUser = osUser;
+    const osHost = os.hostname() || "";
+    if (osHost && !osHost.startsWith("srv-")) fallbackHost = osHost;
+  } catch (e) {}
+
+  let resolvedUser = req.headers["x-vantix-user"] || req.body.userId || req.body.user;
+  if (!resolvedUser || SERVER_IDENTITIES.includes(resolvedUser.toLowerCase())) {
+    resolvedUser = fallbackUser;
+  }
+  let resolvedHost = req.headers["x-vantix-host"] || req.body.host;
+  if (!resolvedHost || resolvedHost === "browser-endpoint" || resolvedHost.startsWith("srv-")) {
+    resolvedHost = fallbackHost;
+  }
+  const clientIp = extractClientIp(req);
   const { prompt, sessionId = `session-${resolvedUser}-${Date.now()}`, userId = resolvedUser, userEmail = `${resolvedUser}@acme.com` } = req.body;
 
   if (!prompt || typeof prompt !== "string") {
@@ -295,7 +771,7 @@ router.post("/chat", async (req, res) => {
     }
 
     if (action === "silent_redact" && detection.detections.length > 0) {
-      tokenMap = tee.createTokenTable(sessionId, detection.detections);
+      tokenMap = tee.createTokenTable(sessionId, detection.detections, prompt);
       sanitizedPrompt = tee.sanitizePrompt(prompt, tokenMap);
     }
 
@@ -477,7 +953,7 @@ router.post(["/v1/chat/completions", "/chat/completions"], async (req, res) => {
 
     // ── Step 3: TEE Redaction ───────────────────────────────────────────────
     if (action === "silent_redact" && detection.detections.length > 0) {
-      tokenMap = tee.createTokenTable(sessionId, detection.detections);
+      tokenMap = tee.createTokenTable(sessionId, detection.detections, prompt);
       sanitizedPrompt = tee.sanitizePrompt(prompt, tokenMap);
     }
 
@@ -633,20 +1109,29 @@ router.post("/reset", (req, res) => {
 
 
 // ─── GET /api/vantix/audit-logs — Retrieve signed audit records ─────────────
+router.get("/audit-logs", (req, res) => {
+  const limit = parseInt(req.query.limit) || 100;
+  const logs = _inMemoryAuditLogs.slice(0, limit);
+  res.json({
+    success: true,
+    count: logs.length,
+    total: _inMemoryAuditLogs.length,
+    logs,
+  });
+});
 
 // ─── GET /api/vantix/flagged-employees — Dynamic Flagged Directory ──────────
 router.get("/flagged-employees", (req, res) => {
   const userMap = new Map();
 
-  const SERVER_IDENTITIES = ["render", "root", "nobody", "www-data", "node", "ubuntu", "ec2-user"];
+  const SERVER_IDENTITIES = ["render", "nobody", "www-data", "node", "ubuntu", "ec2-user"];
   for (const log of _inMemoryAuditLogs) {
     if (SERVER_IDENTITIES.includes((log.userId || "").toLowerCase()) || (log.endpointHost || "").startsWith("srv-")) {
       continue;
     }
 
     // Only track and flag employees with genuine data exfiltration attempts!
-    // Clean, normal, or sanitized prompts (riskScore < 35 and actionTaken !== 'hard_block') MUST NOT flag employees!
-    const isActualLeak = (log.riskScore >= 35) || (log.actionTaken === "hard_block");
+    const isActualLeak = (log.riskScore >= 30) || (log.actionTaken === "hard_block") || (log.actionTaken === "silent_redact") || (Array.isArray(log.detections) && log.detections.length > 0);
     if (!isActualLeak) {
       continue;
     }
@@ -892,7 +1377,7 @@ router.post("/simulate-leak", async (req, res) => {
   if (action === "hard_block") {
     sanitizedPrompt = "[BLOCKED — Prompt contained live credentials / confidential parameters]";
   } else if (action === "silent_redact") {
-    const tokenMap = tee.createTokenTable(`sim-${Date.now()}`, detection.detections);
+    const tokenMap = tee.createTokenTable(`sim-${Date.now()}`, detection.detections, prompt);
     sanitizedPrompt = tee.sanitizePrompt(prompt, tokenMap);
   }
 
@@ -955,4 +1440,7 @@ router.post("/employee/:userId/action", (req, res) => {
 
 
 module.exports = router;
+module.exports.recordAndBroadcast = recordAndBroadcast;
+module.exports._inMemoryAuditLogs = _inMemoryAuditLogs;
+module.exports.persistAuditLogs = persistAuditLogs;
 

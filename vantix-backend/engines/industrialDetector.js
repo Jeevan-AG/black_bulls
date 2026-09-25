@@ -133,6 +133,16 @@ const INDUSTRIAL_PATTERNS = {
   },
 
   // Credentials
+  NATURAL_LANGUAGE_CREDENTIAL: {
+    patterns: [
+      /(?:(?:my|the|our|test|sample|here\s+is\s+(?:my|the))\s+)?(?:aws|openai|anthropic|api|secret|access|private)\s*(?:access\s*)?(?:key|id|secret|token)\s*(?:is|[:=]|\s+)\s*['"]?([^\s"'.,;]{4,})['"]?/gi,
+      /(?:(?:my|the|our|test|sample|here\s+is\s+(?:my|the))\s+)?(?:password|token|secret|credential|api_key)\s*(?:is|[:=]|\s+)\s*['"]?([^\s"'.,;]{4,})['"]?/gi,
+      /\b(?:aws_key|aws_id|secret_key|api_key|access_key)\s*(?:is|[:=]|\s+)\s*['"]?([^\s"'.,;]{4,})['"]?/gi,
+    ],
+    category: "CREDENTIAL",
+    label: "Exposed Credential",
+    baseRisk: 90,
+  },
   API_KEY: {
     patterns: [
       /\b(?:sk-[A-Za-z0-9_\-]{20,})/g,                   // OpenAI legacy, Anthropic
@@ -209,15 +219,28 @@ const INDUSTRIAL_PATTERNS = {
     ],
     category: "PII",
     label: "Email Address",
-    baseRisk: 5,
+    baseRisk: 45,
   },
   PHONE: {
     patterns: [
-      /(?<!\d)(?:\+91[\s-]?)?[6-9]\d{9}(?!\d)/g,
+      /(?:(?:my|the|our|user)\s+)?phone\s*(?:number|no|#)?\s*(?:is|[:=]|\s+)\s*['"]?(\+?\d[\d\s\-().]{6,15}\d)['"]?/gi,
+      /(?<!\d)(?:\+91[\s-]?)?[2-9]\d{9}(?!\d)/g,
+      /(?:\+?\d{1,3}[\s-]?)?\(?\d{3}\)?[\s.-]\d{3}[\s.-]\d{4}\b/g,
+      /(?:\+\d{1,3}[\s-]?)?\d{2,4}[\s.-]\d{3,4}[\s.-]\d{3,4}\b/g,
     ],
     category: "PII",
     label: "Phone Number",
-    baseRisk: 5,
+    baseRisk: 45,
+  },
+  PERSONAL_IDENTIFIER: {
+    patterns: [
+      /(?:patient|customer|employee|client|user)\s+(?:name|fullname|full\s+name)\s*[:=]\s*['"]?([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3})['"]?/gi,
+      /(?:passport|driver'?s?\s+license|national\s+id)\s*(?:number|no|#)?\s*[:=]?\s*[A-Z0-9]{6,12}\b/gi,
+      /\b(?:dob|date\s+of\s+birth)\s*[:=]?\s*\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}\b/gi,
+    ],
+    category: "PII",
+    label: "Personal Identifier",
+    baseRisk: 50,
   },
   SSN: {
     patterns: [
@@ -334,6 +357,9 @@ const COMBINATION_MATRIX = {
   "REGISTER_ADDR+NETWORK_ADDR":      2.0,
   "FINANCIAL+CREDENTIAL":            2.5,
   "FINANCIAL+PII":                   2.0,
+  "PII+NETWORK_ADDR":                1.8,
+  "PII+CREDENTIAL":                  2.4,
+  "PII+LOCATION":                    1.7,
   "PROMPT_INJECTION+CREDENTIAL":     3.2,
   "PROMPT_INJECTION+NETWORK_ADDR":   2.8,
   "PROMPT_INJECTION+REGISTER_ADDR":  2.8,
@@ -365,7 +391,7 @@ function analyzePrompt(text) {
   }
 
   // ── Sublayer A: Pattern matching ──────────────────────────────────────────
-  const detections = [];
+  const rawDetections = [];
   const seen = new Set();
 
   for (const [patternName, config] of Object.entries(INDUSTRIAL_PATTERNS)) {
@@ -374,21 +400,21 @@ function analyzePrompt(text) {
       const re = new RegExp(regex.source, regex.flags);
       let match;
       while ((match = re.exec(text)) !== null) {
-        const value = match[0];
+        const matchedStr = match[0];
 
         // Skip sanitized placeholder tokens like [REGISTER_ADDR], [SCADA_REG_01], [AWS_KEY_01], [SANITIZED], etc.
-        if (/^['"]?\[[A-Z0-9_]+\]['"]?$/.test(value.trim())) {
+        if (/^['"]?\[[A-Z0-9_]+\]['"]?$/.test(matchedStr.trim())) {
           continue;
         }
 
         // Check if value is a secret assignment whose assigned RHS is purely a placeholder token
-        if (config.category === "CREDENTIAL" && /[:=]\s*['"]?\[[A-Z0-9_]+\]['"]?\s*$/.test(value.trim())) {
+        if (config.category === "CREDENTIAL" && /[:=]\s*['"]?\[[A-Z0-9_]+\]['"]?\s*$/.test(matchedStr.trim())) {
           continue;
         }
 
         // Also check if match is enclosed within a bracketed placeholder token like [SCADA_REG_01]
         const matchStart = match.index;
-        const matchEnd = match.index + value.length;
+        const matchEnd = match.index + matchedStr.length;
         const prevBracket = text.lastIndexOf("[", matchStart);
         const nextBracket = text.indexOf("]", matchEnd - 1);
         if (prevBracket !== -1 && nextBracket !== -1 && prevBracket < matchStart && nextBracket >= matchEnd - 1) {
@@ -398,22 +424,49 @@ function analyzePrompt(text) {
           }
         }
 
+        let value = matchedStr;
+        let valStart = match.index;
+        let valEnd = match.index + matchedStr.length;
+
+        // If pattern has a capture group (e.g. credential, phone, name), extract the actual secret/PII value
+        if (match[1] && match[1].trim().length >= 3) {
+          const captured = match[1].trim();
+          const offsetInMatch = match[0].indexOf(captured);
+          if (offsetInMatch !== -1) {
+            value = captured;
+            valStart = match.index + offsetInMatch;
+            valEnd = valStart + captured.length;
+          }
+        }
+
         const key = `${config.category}:${value}`;
         if (!seen.has(key)) {
           seen.add(key);
-          detections.push({
+          rawDetections.push({
             patternName,
             category: config.category,
             label: config.label,
             value,
-            start: match.index,
-            end: match.index + value.length,
+            start: valStart,
+            end: valEnd,
             isolationRisk: config.baseRisk,
           });
         }
       }
     }
   }
+
+  // Deduplicate overlapping detections: keep longer span or higher risk
+  const deduped = [];
+  rawDetections.sort((a, b) => (b.end - b.start) - (a.end - a.start) || b.isolationRisk - a.isolationRisk);
+  for (const det of rawDetections) {
+    const overlaps = deduped.some((existing) => (det.start >= existing.start && det.end <= existing.end));
+    if (!overlaps) {
+      deduped.push(det);
+    }
+  }
+  deduped.sort((a, b) => a.start - b.start);
+  const detections = deduped;
 
   // ── Sublayer B: Contextual NLP scoring ────────────────────────────────────
   const lowerText = text.toLowerCase();
@@ -465,6 +518,7 @@ function analyzePrompt(text) {
     "CREDENTIAL",
     "FINANCIAL",
     "CRITICAL_PII",
+    "PII",
     "REGISTER_ADDR",
     "PROMPT_INJECTION",
   ]);
@@ -538,21 +592,87 @@ function analyzePrompt(text) {
 
 
 // ─── Semantic Category Mapping ───────────────────────────────────────────────
-// Maps categories to their semantic placeholder tags for the TEE enclave.
+// Maps categories and patterns to their exact, accurate semantic placeholder tags.
+
+const PATTERN_PLACEHOLDERS = {
+  PHONE: "PHONE_NUMBER",
+  EMAIL: "EMAIL_ADDRESS",
+  AADHAAR: "AADHAAR_NUMBER",
+  PAN: "PAN_NUMBER",
+  SSN: "SSN_NUMBER",
+  CREDIT_CARD: "CREDIT_DEBIT_CARD",
+  IBAN: "BANK_ACCOUNT_IBAN",
+  PASSWORD_SECRET: "PASSWORD",
+  PRIVATE_KEY: "PRIVATE_KEY",
+  CONNECTION_STRING: "DB_CONNECTION_STRING",
+  JWT_TOKEN: "JWT_AUTH_TOKEN",
+  REGISTER_ADDR: "REGISTER_ADDR",
+  DNP3_IDENTIFIER: "DNP3_IDENTIFIER",
+  OPC_UA: "OPC_UA_NODE",
+  NETWORK_ADDR: "IP_ADDRESS",
+  ELECTRICAL_PARAM: "ELECTRICAL_PARAM",
+  PRESSURE_PARAM: "PRESSURE_PARAM",
+  TEMPERATURE_PARAM: "TEMPERATURE_PARAM",
+  DEVICE_TYPE: "DEVICE_TYPE",
+  FIRMWARE_VERSION: "FIRMWARE_VERSION",
+  SERIAL_NUMBER: "SERIAL_NUMBER",
+  LOCATION: "LOCATION",
+  GPS_COORD: "GPS_COORDINATES",
+  PERSONAL_IDENTIFIER: "PERSONAL_NAME",
+};
 
 const CATEGORY_PLACEHOLDERS = {
   REGISTER_ADDR:    "REGISTER_ADDR",
   ELECTRICAL_PARAM: "ELECTRICAL_PARAM",
   DEVICE_TYPE:      "DEVICE_TYPE",
   LOCATION:         "LOCATION",
-  NETWORK_ADDR:     "NETWORK_ADDR",
-  CREDENTIAL:       "CREDENTIAL",
-  CRITICAL_PII:     "PII_VALUE",
-  PII:              "PII_VALUE",
-  FINANCIAL:        "FINANCIAL_RECORD",
+  NETWORK_ADDR:     "IP_ADDRESS",
+  CREDENTIAL:       "API_KEY",
+  CRITICAL_PII:     "AADHAAR_NUMBER",
+  PII:              "PERSONAL_DATA",
+  FINANCIAL:        "CREDIT_DEBIT_CARD",
   PROMPT_INJECTION: "PROMPT_INJECTION_FLAG",
   SENSOR_DATA:      "SENSOR_DATA",
 };
+
+function resolvePlaceholderForDetection(det, fullText = "") {
+  if (!det) return "CONFIDENTIAL_DATA";
+
+  // Dynamic context for natural language credentials
+  if (det.patternName === "NATURAL_LANGUAGE_CREDENTIAL") {
+    const start = Math.max(0, (det.start || 0) - 50);
+    const end = Math.min((fullText || "").length, (det.end || 0) + 25);
+    const ctx = (fullText || "").slice(start, end).toLowerCase();
+
+    if (ctx.includes("aws")) return "AWS_KEY";
+    if (ctx.includes("openai")) return "OPENAI_API_KEY";
+    if (ctx.includes("anthropic") || ctx.includes("claude")) return "ANTHROPIC_API_KEY";
+    if (ctx.includes("password") || ctx.includes("passwd")) return "PASSWORD";
+    if (ctx.includes("token")) return "AUTH_TOKEN";
+    if (ctx.includes("secret")) return "SECRET_KEY";
+    if (ctx.includes("api")) return "API_KEY";
+    return "API_KEY";
+  }
+
+  if (det.patternName === "API_KEY") {
+    const val = det.value || "";
+    if (val.startsWith("AKIA")) return "AWS_ACCESS_KEY";
+    if (val.startsWith("sk-proj-") || val.startsWith("sk-")) return "OPENAI_API_KEY";
+    if (val.startsWith("ghp_")) return "GITHUB_TOKEN";
+    if (val.startsWith("AIza")) return "GOOGLE_API_KEY";
+    return "API_KEY";
+  }
+
+  if (PATTERN_PLACEHOLDERS[det.patternName]) {
+    return PATTERN_PLACEHOLDERS[det.patternName];
+  }
+
+  if (CATEGORY_PLACEHOLDERS[det.category]) {
+    return CATEGORY_PLACEHOLDERS[det.category];
+  }
+
+  return det.category || "CONFIDENTIAL_DATA";
+}
 
 
 module.exports = {
@@ -561,4 +681,6 @@ module.exports = {
   INDUSTRIAL_CONTEXT_CLUSTERS,
   COMBINATION_MATRIX,
   CATEGORY_PLACEHOLDERS,
+  PATTERN_PLACEHOLDERS,
+  resolvePlaceholderForDetection,
 };

@@ -76,11 +76,27 @@ const renderAiPlatformBadge = (platform, count = null) => {
   let displayName = platform || "External AI";
   let domainName = platform || "unknown";
 
-  if (p.includes("chatgpt")) {
+  if (p.includes("kiro") || p.includes("amazonaws.com") || p.includes("amazon q") || p.includes("codewhisperer")) {
+    badgeClass = "kiro";
+    displayName = "Kiro (Amazon Q)";
+    domainName = "q.us-east-1.amazonaws.com";
+  } else if (p.includes("cursor")) {
+    badgeClass = "cursor";
+    displayName = "Cursor AI";
+    domainName = "cursor.com";
+  } else if (p.includes("windsurf") || p.includes("codeium")) {
+    badgeClass = "windsurf";
+    displayName = "Windsurf AI";
+    domainName = "codeium.com";
+  } else if (p.includes("github") || p.includes("copilot")) {
+    badgeClass = "copilot";
+    displayName = "GitHub Copilot";
+    domainName = "githubcopilot.com";
+  } else if (p.includes("chatgpt")) {
     badgeClass = "chatgpt";
     displayName = "ChatGPT";
     domainName = "chatgpt.com";
-  } else if (p.includes("claude")) {
+  } else if (p.includes("claude") || p.includes("anthropic")) {
     badgeClass = "claude";
     displayName = "Claude";
     domainName = "claude.ai";
@@ -88,12 +104,12 @@ const renderAiPlatformBadge = (platform, count = null) => {
     badgeClass = "gemini";
     displayName = "Gemini";
     domainName = "gemini.google.com";
-  } else if (p.includes("api.openai")) {
+  } else if (p.includes("api.openai") || p.includes("openai api") || p.includes("groq")) {
     badgeClass = "api";
-    displayName = "OpenAI API";
+    displayName = "AI API Gateway";
     domainName = "api.openai.com";
   } else if (p.includes("deepseek")) {
-    badgeClass = "chatgpt";
+    badgeClass = "deepseek";
     displayName = "DeepSeek";
     domainName = "deepseek.com";
   }
@@ -133,6 +149,196 @@ const formatIncidentTimestamp = (ts) => {
   return { full, relative };
 };
 
+const cleanPromptText = (text) => {
+  if (!text || typeof text !== "string") return "";
+  let clean = text;
+
+  // 1. Remove XML/HTML-style IDE context wrappers (<tag>...</tag> or <tag>...)
+  const contextTags = [
+    "EnvironmentContext",
+    "CurrentFile",
+    "WorkspaceContext",
+    "EditorContext",
+    "ProjectContext",
+    "Context",
+    "system",
+    "workspace_info",
+    "user_context"
+  ];
+
+  for (const tag of contextTags) {
+    const fullTagRegex = new RegExp(`<${tag}[^>]*>[\\s\\S]*?<\\/${tag}>`, "gi");
+    clean = clean.replace(fullTagRegex, "");
+
+    const openTagIdx = clean.search(new RegExp(`<${tag}[^>]*>`, "i"));
+    if (openTagIdx !== -1) {
+      clean = clean.slice(0, openTagIdx);
+    }
+  }
+
+  // 2. Remove markdown code blocks with system context
+  clean = clean.replace(/```(?:system_information|environment|context)[\s\S]*?```/gi, "");
+
+  // 3. Remove leading/trailing formatting
+  clean = clean.replace(/^User(?:\s+Query|\s+Question|\s+Prompt)?:\s*/i, "");
+
+  return clean.trim() || text.trim();
+};
+
+const cleanAiResponseText = (raw) => {
+  if (!raw || typeof raw !== "string") return "";
+
+  // 1. Check for SSE format ("data: {...}") - OpenAI / Groq / Ollama / DeepSeek / Claude
+  const sseChunks = [];
+  const sseLines = raw.split("\n");
+  for (const line of sseLines) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith("data:") && trimmed.length > 5) {
+      const dataStr = trimmed.slice(5).trim();
+      if (dataStr === "[DONE]") continue;
+      try {
+        const obj = JSON.parse(dataStr);
+        const delta =
+          obj.choices?.[0]?.delta?.content ||
+          obj.choices?.[0]?.delta?.text ||
+          obj.choices?.[0]?.message?.content ||
+          obj.choices?.[0]?.text;
+        if (typeof delta === "string") {
+          sseChunks.push(delta);
+          continue;
+        }
+        if (obj.delta?.text) {
+          sseChunks.push(obj.delta.text);
+          continue;
+        }
+        if (obj.delta?.content) {
+          sseChunks.push(obj.delta.content);
+          continue;
+        }
+        if (obj.candidates?.[0]?.content?.parts?.[0]?.text) {
+          sseChunks.push(obj.candidates[0].content.parts[0].text);
+          continue;
+        }
+      } catch (e) {}
+    }
+  }
+  if (sseChunks.length > 0) {
+    return sseChunks.join("").trim();
+  }
+
+  // 2. Extract JSON objects from EventStream or concatenated JSON chunks (Kiro / AWS Bedrock)
+  let extracted = "";
+  let idx = 0;
+  while (idx < raw.length) {
+    const startObj = raw.indexOf("{", idx);
+    if (startObj === -1) break;
+
+    let depth = 0;
+    let endObj = -1;
+    let inString = false;
+    let escape = false;
+
+    for (let i = startObj; i < raw.length; i++) {
+      const ch = raw[i];
+      if (escape) {
+        escape = false;
+        continue;
+      }
+      if (ch === "\\") {
+        escape = true;
+        continue;
+      }
+      if (ch === '"') {
+        inString = !inString;
+        continue;
+      }
+      if (!inString) {
+        if (ch === "{") depth++;
+        else if (ch === "}") {
+          depth--;
+          if (depth === 0) {
+            endObj = i;
+            break;
+          }
+        }
+      }
+    }
+
+    if (endObj !== -1) {
+      const jsonStr = raw.slice(startObj, endObj + 1);
+      try {
+        const obj = JSON.parse(jsonStr);
+        if (obj.assistantResponseEvent?.content) {
+          extracted += obj.assistantResponseEvent.content;
+        } else if (obj.content && typeof obj.content === "string") {
+          extracted += obj.content;
+        } else if (obj.text && typeof obj.text === "string") {
+          extracted += obj.text;
+        } else if (obj.delta?.content) {
+          extracted += obj.delta.content;
+        } else if (obj.delta?.text) {
+          extracted += obj.delta.text;
+        } else if (obj.choices?.[0]?.delta?.content) {
+          extracted += obj.choices[0].delta.content;
+        } else if (obj.choices?.[0]?.message?.content) {
+          extracted += obj.choices[0].message.content;
+        } else if (obj.candidates?.[0]?.content?.parts?.[0]?.text) {
+          extracted += obj.candidates[0].content.parts[0].text;
+        } else if (obj.response && typeof obj.response === "string") {
+          extracted += obj.response;
+        } else if (obj.message && typeof obj.message === "string") {
+          extracted += obj.message;
+        }
+      } catch (e) {
+        const mContent = jsonStr.match(/"content":\s*"((?:[^"\\]|\\.)*)"/);
+        if (mContent) {
+          try { extracted += JSON.parse(`"${mContent[1]}"`); } catch (e2) { extracted += mContent[1]; }
+        } else {
+          const mText = jsonStr.match(/"text":\s*"((?:[^"\\]|\\.)*)"/);
+          if (mText) {
+            try { extracted += JSON.parse(`"${mText[1]}"`); } catch (e3) { extracted += mText[1]; }
+          }
+        }
+      }
+      idx = endObj + 1;
+    } else {
+      idx = startObj + 1;
+    }
+  }
+
+  if (extracted.trim().length > 0) {
+    return extracted.trim();
+  }
+
+  // 3. Fallback: Parse whole string as single JSON if applicable
+  try {
+    const obj = JSON.parse(raw);
+    const text =
+      obj.assistantResponseEvent?.content ||
+      obj.choices?.[0]?.message?.content ||
+      obj.choices?.[0]?.delta?.content ||
+      obj.candidates?.[0]?.content?.parts?.[0]?.text ||
+      obj.response ||
+      obj.content ||
+      obj.text;
+    if (typeof text === "string" && text.trim().length > 0) return text.trim();
+  } catch (e) {}
+
+  // 4. Fallback: Strip EventStream binary / metadata artifacts
+  let clean = raw
+    .replace(/[\x00-\x1F\x7F-\x9F]/g, " ")
+    .replace(/:event-type\s*\w+/gi, "")
+    .replace(/:content-type\s*[\w\/-]+/gi, "")
+    .replace(/:message-type\s*\w+/gi, "")
+    .replace(/assistantResponseEvent/gi, "")
+    .replace(/\{"modelId":[^}]+\}/g, "")
+    .replace(/\{"conversationId":[^}]+\}/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return clean || raw;
+};
+
 export default function Dashboard() {
   // ── Real-Time Incidents State ──────────────────────────────────────────────
   const [incidents, setIncidents] = useState([]);
@@ -145,7 +351,7 @@ export default function Dashboard() {
 
   // Simulation Modal State
   const [showSimModal, setShowSimModal] = useState(false);
-  const [simEmployee, setSimEmployee] = useState("mohammed");
+  const [simEmployee, setSimEmployee] = useState("employee");
   const [simLeakType, setSimLeakType] = useState("aws_keys");
   const [simCustomPrompt, setSimCustomPrompt] = useState("");
   const [isSimulating, setIsSimulating] = useState(false);
@@ -187,9 +393,9 @@ export default function Dashboard() {
                   userEmail: log.userEmail || `${log.userId}@acme.corp`,
                   department: log.department || (log.userId.includes("chen") ? "Cloud Infrastructure & DevOps" : "Core Systems"),
                   endpointHost: log.endpointHost || log.host || `${log.userId}-workstation`,
-                  endpointIp: log.endpointIp || "10.0.12.50",
+                  endpointIp: log.endpointIp || "127.0.0.1",
                   aiPlatform: log.aiPlatform || "chatgpt.com",
-                  actionTaken: log.actionTaken || (log.riskScore >= 85 ? "hard_block" : log.riskScore >= 35 ? "silent_redact" : "pass"),
+                  actionTaken: log.actionTaken || (log.riskScore >= 90 ? "hard_block" : log.riskScore >= 20 ? "silent_redact" : "pass"),
                   riskScore: log.riskScore !== undefined ? log.riskScore : 0,
                   categoriesRedacted: log.categoriesRedacted || ["CONFIDENTIAL_DATA"],
                   detections: log.detections || [],
@@ -233,16 +439,16 @@ export default function Dashboard() {
             if (packet.type === "detection" || packet.originalPrompt) {
               const incomingIncident = {
                 id: packet.id || `ws-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-                userId: packet.user || "mohammed",
-                userName: packet.userName || (packet.user ? packet.user.charAt(0).toUpperCase() + packet.user.slice(1).replace(/[._]/g, " ") : "Mohammed"),
-                userEmail: packet.userEmail || `${packet.user || "mohammed"}@acme.corp`,
+                userId: packet.user || "employee",
+                userName: packet.userName || (packet.user ? packet.user.charAt(0).toUpperCase() + packet.user.slice(1).replace(/[._]/g, " ") : "Employee"),
+                userEmail: packet.userEmail || `${packet.user || "employee"}@acme.corp`,
                 department: packet.department || "Core Systems",
-                endpointHost: packet.host || "mohammed-Latitude-5400",
+                endpointHost: packet.host || "workstation",
                 endpointIp: packet.endpointIp || "127.0.0.1",
                 aiPlatform: packet.aiPlatform || "chatgpt.com",
-                actionTaken: packet.actionTaken || (packet.riskScore >= 85 ? "hard_block" : packet.riskScore >= 35 ? "silent_redact" : "pass"),
+                actionTaken: packet.actionTaken || (packet.riskScore >= 90 ? "hard_block" : packet.riskScore >= 20 ? "silent_redact" : "pass"),
                 riskScore: packet.riskScore !== undefined ? packet.riskScore : 0,
-                categoriesRedacted: packet.detections ? Array.from(new Set(packet.detections.map((d) => d.category))) : ["CONFIDENTIAL_DATA"],
+                categoriesRedacted: packet.detections ? Array.from(new Set(packet.detections.map((d) => d.category))) : (packet.categoriesRedacted || ["CONFIDENTIAL_DATA"]),
                 detections: packet.detections || [],
                 originalPrompt: packet.originalPrompt || "Outbound prompt intercepted",
                 sanitizedPrompt: packet.sanitizedPrompt || "[SANITIZED]",
@@ -253,11 +459,17 @@ export default function Dashboard() {
 
               setIncidents((prev) => [incomingIncident, ...prev]);
 
-              // ONLY show exfiltration alert banner if sensitive confidential data was actually detected
-              if (incomingIncident.riskScore >= 35 || incomingIncident.actionTaken === "hard_block") {
-                showToast(`🚨 Outbound Data Leak Intercepted from ${incomingIncident.userName} (${incomingIncident.actionTaken === "hard_block" ? "Hard Blocked" : "Redacted"})`);
+              // Show clear toast notification for security events
+              const isSensitive = incomingIncident.riskScore >= 20 || incomingIncident.actionTaken === "hard_block" || incomingIncident.actionTaken === "silent_redact" || (incomingIncident.detections && incomingIncident.detections.length > 0);
+              if (isSensitive) {
+                if (incomingIncident.actionTaken === "hard_block") {
+                  showToast(`🚫 CRITICAL BLOCK: Outbound transmission halted from ${incomingIncident.userName} (${incomingIncident.aiPlatform || "AI"})`);
+                } else {
+                  const tokenCount = incomingIncident.detections?.length || 1;
+                  showToast(`🛡 SILENT REDACTION: ${tokenCount} sensitive secret${tokenCount > 1 ? "s" : ""} redacted seamlessly for ${incomingIncident.userName} (${incomingIncident.aiPlatform || "AI"})`);
+                }
               } else {
-                showToast(`✅ Prompt from ${incomingIncident.userName} passed inspection safely (Risk: 0 - Clean/Sanitized)`);
+                showToast(`✅ Clean prompt from ${incomingIncident.userName} passed inspection`);
               }
             } else if (packet.type === "reset") {
               setIncidents([]);
@@ -297,11 +509,10 @@ export default function Dashboard() {
     const userMap = new Map();
 
     incidents.forEach((inc) => {
-      // ONLY track and flag if the employee actually attempted to leak confidential data or credentials!
-      // Normal/benign prompts (riskScore < 35 and actionTaken !== 'hard_block') DO NOT raise risk and DO NOT flag employees.
-      const isActualLeak = (inc.riskScore >= 35) || (inc.actionTaken === "hard_block");
+      // Track and flag if the employee attempted to leak sensitive data (credentials, PII, industrial)
+      const isActualLeak = (inc.riskScore >= 20) || (inc.actionTaken === "hard_block") || (inc.actionTaken === "silent_redact") || (Array.isArray(inc.detections) && inc.detections.length > 0);
       if (!isActualLeak) {
-        return; // Harmless prompt: skip, do not flag employee or artificially pump risk!
+        return; // Harmless clean prompt: skip
       }
 
       const key = (inc.userId || inc.userEmail || "unknown").toLowerCase();
@@ -313,7 +524,7 @@ export default function Dashboard() {
           email: inc.userEmail || `${key}@acme.corp`,
           department: inc.department || "Core Engineering",
           endpointHost: inc.endpointHost || "ws-node",
-          endpointIp: inc.endpointIp || "10.0.12.50",
+          endpointIp: inc.endpointIp || "127.0.0.1",
           totalAttempts: 0,
           hardBlockedCount: 0,
           redactedCount: 0,
@@ -390,12 +601,14 @@ export default function Dashboard() {
 
   const employeeIncidents = useMemo(() => {
     if (!selectedEmployeeId) return [];
-    return incidents.filter(
+    const list = incidents.filter(
       (inc) =>
         ((inc.userId && inc.userId.toLowerCase() === selectedEmployeeId.toLowerCase()) ||
         (inc.userEmail && inc.userEmail.toLowerCase().includes(selectedEmployeeId.toLowerCase()))) &&
-        (inc.riskScore >= 35 || inc.actionTaken === "hard_block")
+        (inc.riskScore >= 30 || inc.actionTaken === "hard_block" || inc.actionTaken === "silent_redact" || (inc.detections && inc.detections.length > 0))
     );
+    // Sort descending by timestamp so the latest cases are at the TOP
+    return list.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
   }, [selectedEmployeeId, incidents]);
 
   // Graph 1: Category Distribution for Selected Employee
@@ -423,18 +636,19 @@ export default function Dashboard() {
       .sort((a, b) => b.count - a.count);
   }, [employeeIncidents]);
 
-  // Graph 2: Risk Progression Timeline
+  // Graph 2: Risk Progression Timeline (Chronological Case #1 -> Case #N)
   const riskTimelineData = useMemo(() => {
     if (employeeIncidents.length === 0) return [];
-    return [...employeeIncidents]
-      .reverse()
-      .map((inc, idx) => ({
-        attempt: `#${idx + 1}`,
-        time: new Date(inc.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-        riskScore: inc.riskScore || 0,
-        action: inc.actionTaken === "hard_block" ? "Blocked" : "Redacted",
-        service: inc.aiPlatform || "chatgpt.com",
-      }));
+    const chronological = [...employeeIncidents].sort(
+      (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+    );
+    return chronological.map((inc, idx) => ({
+      attempt: `Case #${idx + 1}`,
+      time: new Date(inc.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      riskScore: inc.riskScore || 0,
+      action: inc.actionTaken === "hard_block" ? "Blocked" : "Redacted",
+      service: inc.aiPlatform || "chatgpt.com",
+    }));
   }, [employeeIncidents]);
 
   // Targeted AI Platforms Visited by this Employee
@@ -1268,7 +1482,7 @@ export default function Dashboard() {
                 <div className="leak-attempts-header">
                   <div className="leak-attempts-title">
                     <Terminal size={18} color="#818cf8" />
-                    <span>Chronological Forensics & Prompt Audit Stream ({employeeIncidents.length} Incidents)</span>
+                    <span>Forensic Case History ({employeeIncidents.length} Cases — Latest Case #{employeeIncidents.length} at Top)</span>
                   </div>
 
                   {/* Filter by Target Service */}
@@ -1288,10 +1502,14 @@ export default function Dashboard() {
                       }}
                     >
                       <option value="ALL">All Destinations</option>
+                      <option value="kiro">Kiro / Amazon Q (q.us-east-1.amazonaws.com)</option>
+                      <option value="cursor">Cursor AI (cursor.com)</option>
                       <option value="chatgpt">ChatGPT (chatgpt.com)</option>
                       <option value="claude">Claude (claude.ai)</option>
-                      <option value="openai">OpenAI API (api.openai.com)</option>
                       <option value="gemini">Gemini (gemini.google.com)</option>
+                      <option value="copilot">GitHub Copilot</option>
+                      <option value="openai">OpenAI API (api.openai.com)</option>
+                      <option value="deepseek">DeepSeek (deepseek.com)</option>
                     </select>
                   </div>
                 </div>
@@ -1311,7 +1529,7 @@ export default function Dashboard() {
                         <div className="attempt-card-top">
                           <div className="attempt-card-meta">
                             <span style={{ fontWeight: 800, color: "#fff", letterSpacing: "0.5px" }}>
-                              INCIDENT #{employeeIncidents.length - idx}
+                              CASE #{employeeIncidents.length - idx}{idx === 0 ? " • LATEST CASE" : ""}
                             </span>
                             {/* Branded AI Platform Badge */}
                             {renderAiPlatformBadge(incident.aiPlatform)}
@@ -1379,8 +1597,8 @@ export default function Dashboard() {
                                 <span>1. Pre-Firewall Outbound Prompt (What Employee Tried to Send)</span>
                                 <span style={{ color: "#fca5a5" }}>PRE-FLIGHT INTERCEPTION</span>
                               </div>
-                              <div className="diff-content-box">
-                                {incident.originalPrompt}
+                              <div className="diff-content-box" style={{ whiteSpace: "pre-wrap", lineHeight: 1.6 }}>
+                                {cleanPromptText(incident.originalPrompt)}
                               </div>
                             </div>
 
@@ -1392,8 +1610,8 @@ export default function Dashboard() {
                                   {isBlocked ? "HALTED BEFORE REACHING AI" : "SANITIZED PAYLOAD DELIVERED"}
                                 </span>
                               </div>
-                              <div className="diff-content-box" style={{ color: isBlocked ? "#fca5a5" : "#93c5fd" }}>
-                                {incident.sanitizedPrompt}
+                              <div className="diff-content-box" style={{ color: isBlocked ? "#fca5a5" : "#93c5fd", whiteSpace: "pre-wrap", lineHeight: 1.6 }}>
+                                {cleanPromptText(incident.sanitizedPrompt)}
                               </div>
                             </div>
                           </div>
@@ -1404,8 +1622,8 @@ export default function Dashboard() {
                               <div style={{ fontSize: 11, fontWeight: 700, color: "#34d399", textTransform: "uppercase", marginBottom: 6 }}>
                                 3. AI Completion Delivered to Employee
                               </div>
-                              <div style={{ fontSize: 13, color: "#e5e7eb", lineHeight: 1.5, fontFamily: "monospace" }}>
-                                {incident.restoredResponse}
+                              <div style={{ fontSize: 13, color: "#e5e7eb", lineHeight: 1.6, whiteSpace: "pre-wrap", fontFamily: "inherit" }}>
+                                {cleanAiResponseText(incident.restoredResponse)}
                               </div>
                             </div>
                           )}
@@ -1450,8 +1668,8 @@ export default function Dashboard() {
                 value={simEmployee}
                 onChange={(e) => setSimEmployee(e.target.value)}
               >
-                <option value="mohammed">Mohammed (mohammed-Latitude-5400)</option>
-                {flaggedEmployees.filter(e => e.userId !== "mohammed").map(emp => (
+                <option value="employee">Current Workstation User</option>
+                {flaggedEmployees.filter(e => e.userId !== "employee").map(emp => (
                   <option key={emp.id} value={emp.userId}>{emp.name}</option>
                 ))}
               </select>

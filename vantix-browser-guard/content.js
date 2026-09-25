@@ -49,24 +49,29 @@ const CRITICAL_PATTERNS = [
 const PII_PATTERNS = [
   { regex: /\b[A-Z]{5}[0-9]{4}[A-Z]\b/g, label: "[CONFIDENTIAL_PAN]" },
   { regex: /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g, label: "[CONFIDENTIAL_EMAIL]" },
-  // Requires an actual "-" or "." separator (or a leading "+" country code /
-  // parens around the area code) between digit groups — plain spaces are NOT
-  // accepted as a separator anymore. That's the deliberate fix: math written
-  // as "100 200 3000" or "12 345 6789" no longer matches, since real phone
-  // numbers are essentially never written with only bare spaces and no other
-  // punctuation. The lookbehind/lookahead also reject a match sitting right
-  // next to a digit or an arithmetic operator, so it won't fire inside a
-  // longer number or an equation like "5+1234567890".
+  {
+    regex: /(?:(?:my|the|our|user)\s+)?phone\s*(?:number|no|#)?\s*(?:is|[:=]|\s+)\s*['"]?(\+?\d[\d\s\-().]{6,15}\d)['"]?/gi,
+    label: "[PHONE_NUMBER]",
+  },
+  {
+    regex: /(?<!\d)(?:\+91[\s-]?)?[2-9]\d{9}(?!\d)/g,
+    label: "[PHONE_NUMBER]",
+  },
   {
     regex: /(?<![\d+\-*/=.])(?:\+\d{1,3}[-.]?)?\(?\d{3}\)?[-.]\d{3}[-.]\d{4}(?!\d)/g,
-    label: "[CONFIDENTIAL_PHONE]",
+    label: "[PHONE_NUMBER]",
   },
-  // International format with a leading "+" and no separators at all
-  // (e.g. +919876543210) — still fairly phone-specific since it requires
-  // 10–14 digits immediately after a "+" with no operator right before it.
   {
     regex: /(?<![\d+\-*/=.])\+\d{10,14}\b/g,
-    label: "[CONFIDENTIAL_PHONE]",
+    label: "[PHONE_NUMBER]",
+  },
+  {
+    regex: /(?:(?:my|the|our|test|sample|here\s+is\s+(?:my|the))\s+)?(?:aws|amazon)\s*(?:access\s*)?(?:key|id|secret|token)\s*(?:is|[:=]|\s+)\s*['"]?([^\s"'.,;]{4,})['"]?/gi,
+    label: "[AWS_KEY]",
+  },
+  {
+    regex: /(?:(?:my|the|our|test|sample|here\s+is\s+(?:my|the))\s+)?(?:openai|chatgpt)\s*(?:api\s*)?(?:key|id|secret|token)\s*(?:is|[:=]|\s+)\s*['"]?([^\s"'.,;]{4,})['"]?/gi,
+    label: "[OPENAI_API_KEY]",
   },
 ];
 
@@ -356,6 +361,38 @@ function setupListeners() {
     (e) => {
       const inputEl = findPromptInput();
       if (inputEl) handlePromptSubmission(e);
+    },
+    true
+  );
+
+  document.addEventListener(
+    "paste",
+    (e) => {
+      const inputEl = findPromptInput();
+      if (!inputEl) return;
+      const isTargetInput = e.target === inputEl || inputEl.contains(e.target) || document.activeElement === inputEl;
+      if (!isTargetInput) return;
+
+      const clipboardText = e.clipboardData ? e.clipboardData.getData("text") : "";
+      if (!clipboardText || clipboardText.trim().length < 3) return;
+
+      const criticalHits = detectCritical(clipboardText);
+      if (criticalHits.length > 3) {
+        e.preventDefault();
+        e.stopPropagation();
+        showBlockBanner(criticalHits);
+        reportAsync(clipboardText, "hard_block");
+        return;
+      }
+
+      const { sanitized, matchesCount } = sanitizeTextLocally(clipboardText);
+      if (matchesCount > 0 && sanitized !== clipboardText) {
+        e.preventDefault();
+        e.stopPropagation();
+        console.log("[Vantix Guard] ⚡ Instant Paste Redaction applied:", sanitized);
+        setInputText(inputEl, sanitized);
+        showRedactPill(matchesCount);
+      }
     },
     true
   );
