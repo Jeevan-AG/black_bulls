@@ -172,8 +172,330 @@ function KpiSquareStatCard({ label, value, icon, color, tooltip, borderTopColor,
   );
 }
 
+const cleanPromptText = (text) => {
+  if (!text || typeof text !== "string") return "";
+  let clean = text;
+
+  // 1. Remove XML/HTML-style IDE context wrappers (<tag>...</tag> or <tag>...)
+  const contextTags = [
+    "EnvironmentContext",
+    "CurrentFile",
+    "WorkspaceContext",
+    "EditorContext",
+    "ProjectContext",
+    "Context",
+    "system",
+    "workspace_info",
+    "user_context"
+  ];
+
+  for (const tag of contextTags) {
+    const fullTagRegex = new RegExp(`<${tag}[^>]*>[\\s\\S]*?<\\/${tag}>`, "gi");
+    clean = clean.replace(fullTagRegex, "");
+
+    const openTagIdx = clean.search(new RegExp(`<${tag}[^>]*>`, "i"));
+    if (openTagIdx !== -1) {
+      clean = clean.slice(0, openTagIdx);
+    }
+  }
+
+  // 2. Remove markdown code blocks with system context
+  clean = clean.replace(/```(?:system_information|environment|context)[\s\S]*?```/gi, "");
+
+  // 3. Remove leading/trailing formatting
+  clean = clean.replace(/^User(?:\s+Query|\s+Question|\s+Prompt)?:\s*/i, "");
+
+  return clean.trim() || text.trim();
+};
+
+const cleanAiResponseText = (raw) => {
+  if (!raw || typeof raw !== "string") return "";
+
+  // 1. Check for SSE format ("data: {...}") - OpenAI / Groq / Ollama / DeepSeek / Claude
+  const sseChunks = [];
+  const sseLines = raw.split("\n");
+  for (const line of sseLines) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith("data:") && trimmed.length > 5) {
+      const dataStr = trimmed.slice(5).trim();
+      if (dataStr === "[DONE]") continue;
+      try {
+        const obj = JSON.parse(dataStr);
+        const delta =
+          obj.choices?.[0]?.delta?.content ||
+          obj.choices?.[0]?.delta?.text ||
+          obj.choices?.[0]?.message?.content ||
+          obj.choices?.[0]?.text;
+        if (typeof delta === "string") {
+          sseChunks.push(delta);
+          continue;
+        }
+        if (obj.delta?.text) {
+          sseChunks.push(obj.delta.text);
+          continue;
+        }
+        if (obj.delta?.content) {
+          sseChunks.push(obj.delta.content);
+          continue;
+        }
+        if (obj.candidates?.[0]?.content?.parts?.[0]?.text) {
+          sseChunks.push(obj.candidates[0].content.parts[0].text);
+          continue;
+        }
+      } catch (e) {}
+    }
+  }
+  if (sseChunks.length > 0) {
+    return sseChunks.join("").trim();
+  }
+
+  // 2. Extract JSON objects from EventStream or concatenated JSON chunks (Kiro / AWS Bedrock)
+  let extracted = "";
+  let idx = 0;
+  while (idx < raw.length) {
+    const startObj = raw.indexOf("{", idx);
+    if (startObj === -1) break;
+
+    let depth = 0;
+    let endObj = -1;
+    let inString = false;
+    let escape = false;
+
+    for (let i = startObj; i < raw.length; i++) {
+      const ch = raw[i];
+      if (escape) {
+        escape = false;
+        continue;
+      }
+      if (ch === "\\") {
+        escape = true;
+        continue;
+      }
+      if (ch === '"') {
+        inString = !inString;
+        continue;
+      }
+      if (!inString) {
+        if (ch === "{") depth++;
+        else if (ch === "}") {
+          depth--;
+          if (depth === 0) {
+            endObj = i;
+            break;
+          }
+        }
+      }
+    }
+
+    if (endObj !== -1) {
+      const jsonStr = raw.slice(startObj, endObj + 1);
+      try {
+        const obj = JSON.parse(jsonStr);
+        if (obj.assistantResponseEvent?.content) {
+          extracted += obj.assistantResponseEvent.content;
+        } else if (obj.content && typeof obj.content === "string") {
+          extracted += obj.content;
+        } else if (obj.text && typeof obj.text === "string") {
+          extracted += obj.text;
+        } else if (obj.delta?.content) {
+          extracted += obj.delta.content;
+        } else if (obj.delta?.text) {
+          extracted += obj.delta.text;
+        } else if (obj.choices?.[0]?.delta?.content) {
+          extracted += obj.choices[0].delta.content;
+        } else if (obj.choices?.[0]?.message?.content) {
+          extracted += obj.choices[0].message.content;
+        } else if (obj.candidates?.[0]?.content?.parts?.[0]?.text) {
+          extracted += obj.candidates[0].content.parts[0].text;
+        } else if (obj.response && typeof obj.response === "string") {
+          extracted += obj.response;
+        } else if (obj.message && typeof obj.message === "string") {
+          extracted += obj.message;
+        }
+      } catch (e) {
+        const mContent = jsonStr.match(/"content":\s*"((?:[^"\\]|\\.)*)"/);
+        if (mContent) {
+          try { extracted += JSON.parse(`"${mContent[1]}"`); } catch (e2) { extracted += mContent[1]; }
+        } else {
+          const mText = jsonStr.match(/"text":\s*"((?:[^"\\]|\\.)*)"/);
+          if (mText) {
+            try { extracted += JSON.parse(`"${mText[1]}"`); } catch (e3) { extracted += mText[1]; }
+          }
+        }
+      }
+      idx = endObj + 1;
+    } else {
+      idx = startObj + 1;
+    }
+  }
+
+  if (extracted.trim().length > 0) {
+    return extracted.trim();
+  }
+
+  // 3. Fallback: Parse whole string as single JSON if applicable
+  try {
+    const obj = JSON.parse(raw);
+    const text =
+      obj.assistantResponseEvent?.content ||
+      obj.choices?.[0]?.message?.content ||
+      obj.choices?.[0]?.delta?.content ||
+      obj.candidates?.[0]?.content?.parts?.[0]?.text ||
+      obj.response ||
+      obj.content ||
+      obj.text;
+    if (typeof text === "string" && text.trim().length > 0) return text.trim();
+  } catch (e) {}
+
+  // 4. Fallback: Strip EventStream binary / metadata artifacts
+  let clean = raw
+    .replace(/[\x00-\x1F\x7F-\x9F]/g, " ")
+    .replace(/:event-type\s*\w+/gi, "")
+    .replace(/:content-type\s*[\w\/-]+/gi, "")
+    .replace(/:message-type\s*\w+/gi, "")
+    .replace(/assistantResponseEvent/gi, "")
+    .replace(/\{"modelId":[^}]+\}/g, "")
+    .replace(/\{"conversationId":[^}]+\}/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return clean || raw;
+};
+
+const formatIncidentTimestamp = (ts) => {
+  if (!ts) return { full: "Unknown Timestamp", relative: "" };
+  const d = new Date(ts);
+  const full =
+    d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) +
+    " • " +
+    d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }) +
+    " UTC";
+
+  const diffMs = Date.now() - d.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  let relative = "";
+  if (diffMins < 1) relative = "Just now";
+  else if (diffMins < 60) relative = `${diffMins}m ago`;
+  else {
+    const diffHours = Math.floor(diffMins / 60);
+    if (diffHours < 24) relative = `${diffHours}h ago`;
+    else relative = `${Math.floor(diffHours / 24)}d ago`;
+  }
+
+  return { full, relative };
+};
+
+const INITIAL_SEED_INCIDENTS = [
+  {
+    id: "audit-seed-01",
+    userId: "mohammed",
+    userName: "Mohammed (Workstation Node)",
+    userEmail: "mohammed@acme.corp",
+    department: "Cloud Engineering & AI Platform",
+    endpointHost: "mohammed-Latitude-5400",
+    endpointIp: "127.0.0.1",
+    aiPlatform: "Cursor AI",
+    actionTaken: "silent_redact",
+    riskScore: 85,
+    categoriesRedacted: ["AWS_KEY", "SECRET_KEY"],
+    detections: [
+      { category: "AWS_KEY", value: "AKIAIOSFODNN7EXAMPLE", severity: "CRITICAL", label: "AWS Access Key ID" },
+      { category: "SECRET_KEY", value: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY", severity: "CRITICAL", label: "AWS Secret Access Key" },
+    ],
+    originalPrompt: "Help me debug our S3 bucket upload script with AWS credentials: AKIAIOSFODNN7EXAMPLE and secret key wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY to deploy assets.",
+    sanitizedPrompt: "Help me debug our S3 bucket upload script with AWS credentials: [AWS_KEY_1] and secret key [AWS_SECRET_1] to deploy assets.",
+    restoredResponse: "Here is the optimized S3 upload handler using boto3 with your credentials verified.",
+    cryptoSignature: "e9b41a877d9c6c518b52822d3b2b414f52f36070a75f0a391515ef483e582844",
+    timestamp: new Date(Date.now() - 3 * 60 * 1000).toISOString(),
+  },
+  {
+    id: "audit-seed-02",
+    userId: "mohammed",
+    userName: "Mohammed (Workstation Node)",
+    userEmail: "mohammed@acme.corp",
+    department: "Cloud Engineering & AI Platform",
+    endpointHost: "mohammed-Latitude-5400",
+    endpointIp: "127.0.0.1",
+    aiPlatform: "Kiro (Amazon Q)",
+    actionTaken: "silent_redact",
+    riskScore: 78,
+    categoriesRedacted: ["PHONE_NUMBER", "EMAIL_ADDRESS"],
+    detections: [
+      { category: "PHONE_NUMBER", value: "+1-555-019-2834", severity: "HIGH", label: "Executive Mobile Phone" },
+    ],
+    originalPrompt: "Can you draft an onboarding email to contact the lead engineer at +1-555-019-2834 regarding cluster provisioning?",
+    sanitizedPrompt: "Can you draft an onboarding email to contact the lead engineer at [PHONE_NUMBER_1] regarding cluster provisioning?",
+    restoredResponse: "Certainly! Here is the drafted onboarding message containing contact phone +1-555-019-2834.",
+    cryptoSignature: "7a8bc98ef5099238e4a9032cb455f4109b823e59048a12dc6032bc9000aeb64a",
+    timestamp: new Date(Date.now() - 14 * 60 * 1000).toISOString(),
+  },
+  {
+    id: "audit-seed-03",
+    userId: "mohammed",
+    userName: "Mohammed (Workstation Node)",
+    userEmail: "mohammed@acme.corp",
+    department: "Cloud Engineering & AI Platform",
+    endpointHost: "mohammed-Latitude-5400",
+    endpointIp: "127.0.0.1",
+    aiPlatform: "Antigravity (Gemini)",
+    actionTaken: "silent_redact",
+    riskScore: 65,
+    categoriesRedacted: ["INTERNAL_IP", "JWT_TOKEN"],
+    detections: [
+      { category: "INTERNAL_IP", value: "10.240.12.88", severity: "MEDIUM", label: "VPC Internal IP" },
+    ],
+    originalPrompt: "Check latency to database microservice hosted at 10.240.12.88 on port 5432 and optimize connection pooling.",
+    sanitizedPrompt: "Check latency to database microservice hosted at [INTERNAL_IP_1] on port 5432 and optimize connection pooling.",
+    restoredResponse: "To optimize latency for 10.240.12.88:5432, configure pgbouncer pool mode to transaction with max_client_conn set to 200.",
+    cryptoSignature: "3d7b92f019a823ccbe70912384f501239aa8271038e91823bb5019284fa90123",
+    timestamp: new Date(Date.now() - 32 * 60 * 1000).toISOString(),
+  },
+  {
+    id: "audit-seed-04",
+    userId: "sarah_chen",
+    userName: "Sarah Chen",
+    userEmail: "sarah.chen@acme.corp",
+    department: "DevOps & Infrastructure",
+    endpointHost: "ws-srv-devops-01",
+    endpointIp: "10.0.4.18",
+    aiPlatform: "ChatGPT",
+    actionTaken: "hard_block",
+    riskScore: 95,
+    categoriesRedacted: ["SCADA_REGISTER", "CRITICAL_INFRASTRUCTURE"],
+    detections: [
+      { category: "SCADA_REGISTER", value: "Turbine-PLC-0x4001", severity: "CRITICAL", label: "SCADA Modbus Register" },
+    ],
+    originalPrompt: "Override turbine governor control setting register Turbine-PLC-0x4001 with forced manual bypass value 0xFFFF.",
+    sanitizedPrompt: "[EXFILTRATION_BLOCKED]",
+    restoredResponse: "🚫 Outbound transmission hard-blocked by Vantix Firewall. Reason: Critical SCADA PLC manipulation attempt.",
+    cryptoSignature: "bf1082a938e5509182377489ab10398ef71029384bb501928374a501928374ab",
+    timestamp: new Date(Date.now() - 55 * 60 * 1000).toISOString(),
+  },
+  {
+    id: "audit-seed-05",
+    userId: "david_miller",
+    userName: "David Miller",
+    userEmail: "david.miller@acme.corp",
+    department: "Finance & Treasury",
+    endpointHost: "ws-fin-lead-04",
+    endpointIp: "10.0.8.42",
+    aiPlatform: "Claude",
+    actionTaken: "silent_redact",
+    riskScore: 82,
+    categoriesRedacted: ["PCI_CREDIT_CARD", "IBAN"],
+    detections: [
+      { category: "PCI_CREDIT_CARD", value: "4532-8910-2394-1102", severity: "HIGH", label: "PCI Visa Card Number" },
+    ],
+    originalPrompt: "Format the quarterly vendor reconciliation for corporate card 4532-8910-2394-1102 and prepare ledger rows.",
+    sanitizedPrompt: "Format the quarterly vendor reconciliation for corporate card [CREDIT_CARD_1] and prepare ledger rows.",
+    restoredResponse: "Reconciliation schedule formatted for card ending in 1102 with tax categories organized.",
+    cryptoSignature: "1928374abf1082a938e5509182377489ab10398ef71029384bb501928374ab10",
+    timestamp: new Date(Date.now() - 90 * 60 * 1000).toISOString(),
+  }
+];
+
 export default function Dashboard() {
-  const [incidents, setIncidents] = useState([]);
+  const [incidents, setIncidents] = useState(INITIAL_SEED_INCIDENTS);
   const [toastMessage, setToastMessage] = useState(null);
 
   // Person Investigation State
@@ -209,23 +531,28 @@ export default function Dashboard() {
           setIncidents((prev) => {
             const merged = [...prev];
             auditJson.logs.forEach((log) => {
-              if (log.userId && !merged.some((m) => m.id === log.id || (m.timestamp === log.timestamp && m.userId === log.userId && m.originalPrompt === log.originalPrompt))) {
+              const uid = log.userId || log.user || "employee";
+              const rawPrompt = log.originalPrompt || log.promptSnippet || "Outbound prompt intercepted";
+              const rawSanitized = log.sanitizedPrompt || "[SANITIZED]";
+              const rawAiResponse = log.restoredResponse || "";
+
+              if (!merged.some((m) => m.id === log.id || (m.timestamp === log.timestamp && m.userId === uid && m.originalPrompt === rawPrompt))) {
                 merged.unshift({
                   id: log.id || `audit-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-                  userId: log.userId,
-                  userName: log.userName || log.userId.charAt(0).toUpperCase() + log.userId.slice(1).replace(/[._]/g, " "),
-                  userEmail: log.userEmail || `${log.userId}@acme.corp`,
-                  department: log.department || "Engineering",
-                  endpointHost: log.endpointHost || log.host || `${log.userId}-workstation`,
+                  userId: uid,
+                  userName: log.userName || uid.charAt(0).toUpperCase() + uid.slice(1).replace(/[._]/g, " "),
+                  userEmail: log.userEmail || `${uid}@acme.corp`,
+                  department: log.department || (uid.includes("chen") ? "Cloud Infrastructure & DevOps" : uid.includes("david") ? "Finance & Treasury" : "Engineering & AI Systems"),
+                  endpointHost: log.endpointHost || log.host || `${uid}-workstation`,
                   endpointIp: log.endpointIp || "127.0.0.1",
                   aiPlatform: log.aiPlatform || "chatgpt.com",
                   actionTaken: log.actionTaken || (log.riskScore >= 70 ? "hard_block" : log.riskScore >= 30 ? "silent_redact" : "pass"),
                   riskScore: log.riskScore !== undefined ? log.riskScore : 0,
                   categoriesRedacted: log.categoriesRedacted || ["CONFIDENTIAL_DATA"],
                   detections: log.detections || [],
-                  originalPrompt: log.originalPrompt || log.promptSnippet || "Outbound prompt intercepted",
-                  sanitizedPrompt: log.sanitizedPrompt || "[SANITIZED]",
-                  restoredResponse: log.restoredResponse || "",
+                  originalPrompt: cleanPromptText(rawPrompt),
+                  sanitizedPrompt: cleanPromptText(rawSanitized),
+                  restoredResponse: cleanAiResponseText(rawAiResponse),
                   cryptoSignature: log.cryptoSignature || "",
                   timestamp: log.timestamp || new Date().toISOString(),
                 });
@@ -267,9 +594,9 @@ export default function Dashboard() {
                 riskScore: packet.riskScore !== undefined ? packet.riskScore : 0,
                 categoriesRedacted: packet.detections ? Array.from(new Set(packet.detections.map((d) => d.category))) : (packet.categoriesRedacted || ["CONFIDENTIAL_DATA"]),
                 detections: packet.detections || [],
-                originalPrompt: packet.originalPrompt || "Outbound prompt intercepted",
-                sanitizedPrompt: packet.sanitizedPrompt || "[SANITIZED]",
-                restoredResponse: packet.restoredResponse || "",
+                originalPrompt: cleanPromptText(packet.originalPrompt || "Outbound prompt intercepted"),
+                sanitizedPrompt: cleanPromptText(packet.sanitizedPrompt || "[SANITIZED]"),
+                restoredResponse: cleanAiResponseText(packet.restoredResponse || ""),
                 cryptoSignature: packet.cryptoSignature || "",
                 timestamp: packet.timestamp || new Date().toISOString(),
               };
