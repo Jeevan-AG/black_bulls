@@ -7,6 +7,11 @@ import {
   Terminal,
   Sparkles,
   ChevronRight,
+  Shield,
+  Lock,
+  User,
+  Activity,
+  AlertTriangle,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -38,7 +43,7 @@ const getWsUrl = () => {
   return CLOUD_WS_URL;
 };
 
-const PIE_COLORS = ["#ff0055", "#e11d48", "#f43f5e", "#9f1239", "#f59e0b", "#fb7185"];
+const PIE_COLORS = ["#ff0055", "#e11d48", "#f43f5e", "#fb7185", "#f59e0b", "#06b6d4"];
 
 export default function ThreatTracking() {
   const [incidents, setIncidents] = useState([]);
@@ -227,7 +232,7 @@ export default function ThreatTracking() {
       initial={{ opacity: 0, y: 15 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.35, ease: "easeOut" }}
-      style={{ display: "flex", flexDirection: "column", gap: 24 }}
+      style={{ display: "flex", flexDirection: "column", gap: 28 }}
     >
       {/* Toast Alert */}
       <AnimatePresence>
@@ -241,21 +246,21 @@ export default function ThreatTracking() {
               top: 24,
               right: 28,
               zIndex: 9999,
-              background: "rgba(13, 14, 18, 0.95)",
-              backdropFilter: "blur(20px)",
-              border: "1px solid rgba(225, 29, 72, 0.4)",
+              background: "rgba(11, 13, 20, 0.96)",
+              backdropFilter: "blur(24px)",
+              border: "1px solid rgba(255, 0, 85, 0.5)",
               color: "#ffffff",
-              padding: "10px 18px",
+              padding: "12px 22px",
               borderRadius: "9999px",
-              boxShadow: "0 10px 30px rgba(0,0,0,0.7)",
+              boxShadow: "0 14px 40px rgba(0,0,0,0.8), 0 0 25px rgba(255,0,85,0.35)",
               display: "flex",
               alignItems: "center",
-              gap: 10,
-              fontSize: 12.5,
-              fontWeight: 600,
+              gap: 12,
+              fontSize: 13,
+              fontWeight: 700,
             }}
           >
-            <Sparkles size={14} color="#ff0055" />
+            <Sparkles size={16} color="#ff0055" />
             <span>{toastMessage}</span>
           </motion.div>
         )}
@@ -263,29 +268,34 @@ export default function ThreatTracking() {
 
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 16 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
           {selectedEmployeeId && (
-            <button className="apple-btn" onClick={() => setSelectedEmployeeId(null)} style={{ padding: "6px 12px" }}>
+            <button className="apple-btn" onClick={() => setSelectedEmployeeId(null)} style={{ padding: "8px 16px" }}>
               <ArrowLeft size={14} />
-              <span>Back</span>
+              <span>Back to Overview</span>
             </button>
           )}
-          <h1 style={{ fontSize: 28, fontWeight: 700, color: "#ffffff", margin: 0, letterSpacing: "-0.02em" }}>
-            {selectedEmployee ? selectedEmployee.name : "Threat Tracking"}
-          </h1>
+          <div>
+            <h1 style={{ fontSize: 28, fontWeight: 800, color: "#ffffff", margin: 0, letterSpacing: "-0.03em" }}>
+              {selectedEmployee ? selectedEmployee.name : "Threat Tracking & Identity Forensics"}
+            </h1>
+            <p style={{ fontSize: 13.5, color: "var(--apple-text-sub)", margin: "4px 0 0 0" }}>
+              Per-user DLP risk scoring, anomaly telemetry, and outbound prompt interception logs
+            </p>
+          </div>
         </div>
 
         {!selectedEmployeeId && (
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <div style={{ position: "relative", width: 280 }}>
-              <Search size={14} color="var(--apple-text-muted)" style={{ position: "absolute", left: 14, top: 12 }} />
+            <div style={{ position: "relative", width: 300 }}>
+              <Search size={15} color="var(--apple-text-muted)" style={{ position: "absolute", left: 14, top: 13 }} />
               <input
                 type="text"
                 className="apple-input"
-                placeholder="Search employee or department..."
+                placeholder="Search user, host, department..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                style={{ paddingLeft: 38 }}
+                style={{ paddingLeft: 40 }}
               />
             </div>
           </div>
@@ -295,19 +305,24 @@ export default function ThreatTracking() {
       {!selectedEmployeeId ? (
         /* Overview Table View */
         <div className="apple-card" style={{ padding: 0, overflow: "hidden" }}>
-          <div style={{ padding: "16px 24px", borderBottom: "1px solid var(--apple-border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <ShieldAlert size={16} color="#ff0055" />
-              <span style={{ fontSize: 14, fontWeight: 600, color: "#ffffff" }}>Flagged Identities</span>
+          <div style={{ padding: "18px 26px", borderBottom: "1px solid var(--apple-border)", display: "flex", justifyContent: "space-between", alignItems: "center", background: "rgba(255,255,255,0.015)" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <div style={{ width: 30, height: 30, borderRadius: 9, background: "rgba(255, 0, 85, 0.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <ShieldAlert size={16} color="#ff0055" />
+              </div>
+              <div>
+                <span style={{ fontSize: 15, fontWeight: 700, color: "#ffffff", display: "block" }}>Flagged Identities</span>
+                <span style={{ fontSize: 11.5, color: "var(--apple-text-muted)" }}>Classified by risk severity & volume</span>
+              </div>
             </div>
 
-            <div style={{ display: "flex", gap: 6 }}>
+            <div style={{ display: "flex", gap: 8 }}>
               {["ALL", "CRITICAL", "HIGH", "MEDIUM"].map((filter) => (
                 <button
                   key={filter}
                   className={`apple-btn ${threatFilter === filter ? "primary" : ""}`}
                   onClick={() => setThreatFilter(filter)}
-                  style={{ padding: "4px 12px", fontSize: 11 }}
+                  style={{ padding: "5px 14px", fontSize: 11.5, fontWeight: 700 }}
                 >
                   {filter}
                 </button>
@@ -319,12 +334,12 @@ export default function ThreatTracking() {
             <table className="apple-table">
               <thead>
                 <tr>
-                  <th>Employee</th>
+                  <th>Employee / Workstation</th>
                   <th>Department</th>
                   <th>Host / IP</th>
                   <th>Peak Risk</th>
-                  <th>Exfiltration Attempts</th>
-                  <th>Status</th>
+                  <th>Exfiltration Count</th>
+                  <th>Threat Tier</th>
                   <th>Action</th>
                 </tr>
               </thead>
@@ -333,39 +348,53 @@ export default function ThreatTracking() {
                   <tr key={emp.id} style={{ cursor: "pointer" }} onClick={() => setSelectedEmployeeId(emp.id)}>
                     <td>
                       <div style={{ display: "flex", flexDirection: "column" }}>
-                        <span style={{ fontWeight: 600, color: "#ffffff" }}>{emp.name}</span>
-                        <span style={{ fontSize: 11, color: "var(--apple-text-muted)" }}>{emp.email}</span>
+                        <span style={{ fontWeight: 700, color: "#ffffff", fontSize: 14 }}>{emp.name}</span>
+                        <span style={{ fontSize: 11.5, color: "var(--apple-text-muted)" }}>{emp.email}</span>
                       </div>
                     </td>
-                    <td style={{ fontSize: 12, color: "var(--apple-text-sub)" }}>{emp.department}</td>
-                    <td style={{ fontSize: 12, fontFamily: "monospace", color: "var(--apple-text-muted)" }}>
+                    <td style={{ fontSize: 13, color: "var(--apple-text-sub)" }}>{emp.department}</td>
+                    <td style={{ fontSize: 12, fontFamily: "JetBrains Mono, monospace", color: "var(--apple-text-muted)" }}>
                       {emp.endpointHost}
                     </td>
                     <td>
-                      <span style={{ fontWeight: 700, color: emp.peakRiskScore >= 80 ? "#ff0055" : "#f59e0b" }}>
-                        {emp.peakRiskScore}/100
-                      </span>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <div style={{ width: 44, height: 6, borderRadius: 9999, background: "rgba(255,255,255,0.08)", overflow: "hidden" }}>
+                          <div
+                            style={{
+                              width: `${Math.min(emp.peakRiskScore, 100)}%`,
+                              height: "100%",
+                              background: emp.peakRiskScore >= 80 ? "#ff0055" : emp.peakRiskScore >= 50 ? "#f59e0b" : "#10b981",
+                            }}
+                          />
+                        </div>
+                        <span style={{ fontWeight: 800, color: emp.peakRiskScore >= 80 ? "#ff0055" : emp.peakRiskScore >= 50 ? "#fbbf24" : "#34d399" }}>
+                          {emp.peakRiskScore}/100
+                        </span>
+                      </div>
                     </td>
-                    <td style={{ fontSize: 13, fontWeight: 600, color: "#ffffff" }}>
+                    <td style={{ fontSize: 13.5, fontWeight: 700, color: "#ffffff" }}>
                       {emp.totalAttempts} attempts
                     </td>
                     <td>
-                      <span className={`apple-pill ${emp.threatLevel === "CRITICAL" ? "red" : emp.threatLevel === "HIGH" ? "amber" : "red"}`}>
+                      <span className={`apple-pill ${emp.threatLevel === "CRITICAL" ? "red" : emp.threatLevel === "HIGH" ? "amber" : "cyan"}`}>
                         {emp.threatLevel}
                       </span>
                     </td>
                     <td>
-                      <button className="apple-btn" style={{ padding: "4px 10px", fontSize: 11 }} onClick={(e) => { e.stopPropagation(); setSelectedEmployeeId(emp.id); }}>
-                        <span>Inspect</span>
-                        <ChevronRight size={12} />
+                      <button className="apple-btn" style={{ padding: "6px 12px", fontSize: 11.5 }} onClick={(e) => { e.stopPropagation(); setSelectedEmployeeId(emp.id); }}>
+                        <span>Inspect Dossier</span>
+                        <ChevronRight size={13} />
                       </button>
                     </td>
                   </tr>
                 ))}
                 {filteredEmployees.length === 0 && (
                   <tr>
-                    <td colSpan={7} style={{ textAlign: "center", padding: 32, color: "var(--apple-text-muted)" }}>
-                      No threat identities match search filter
+                    <td colSpan={7} style={{ textAlign: "center", padding: "48px 24px", color: "var(--apple-text-muted)" }}>
+                      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
+                        <Shield size={22} color="#ff0055" />
+                        <span>No threat identities match search filter</span>
+                      </div>
                     </td>
                   </tr>
                 )}
@@ -375,81 +404,83 @@ export default function ThreatTracking() {
         </div>
       ) : (
         /* Employee Forensics Dossier View */
-        <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 26 }}>
           {/* Top Profile Summary Strip */}
           <div className="apple-card" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 20 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
               <div
                 style={{
-                  width: 52,
-                  height: 52,
-                  borderRadius: 16,
+                  width: 58,
+                  height: 58,
+                  borderRadius: 18,
                   background: selectedEmployee.threatLevel === "CRITICAL" ? "linear-gradient(135deg, #ff0055 0%, #e11d48 100%)" : "linear-gradient(135deg, #f59e0b 0%, #b45309 100%)",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  fontSize: 18,
-                  fontWeight: 800,
+                  fontSize: 20,
+                  fontWeight: 900,
                   color: "#ffffff",
+                  boxShadow: "0 10px 30px rgba(255, 0, 85, 0.4)",
+                  border: "1px solid rgba(255, 255, 255, 0.25)",
                 }}
               >
                 {selectedEmployee.name.slice(0, 2).toUpperCase()}
               </div>
 
               <div>
-                <h2 style={{ fontSize: 20, fontWeight: 700, color: "#ffffff", margin: 0 }}>{selectedEmployee.name}</h2>
-                <div style={{ fontSize: 12, color: "var(--apple-text-muted)", marginTop: 4 }}>
+                <h2 style={{ fontSize: 22, fontWeight: 800, color: "#ffffff", margin: 0 }}>{selectedEmployee.name}</h2>
+                <div style={{ fontSize: 13, color: "var(--apple-text-sub)", marginTop: 4, fontFamily: "JetBrains Mono, monospace" }}>
                   {selectedEmployee.email} • {selectedEmployee.department} • {selectedEmployee.endpointHost} ({selectedEmployee.endpointIp})
                 </div>
               </div>
             </div>
 
-            <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 24 }}>
               <div style={{ textAlign: "right" }}>
-                <div style={{ fontSize: 22, fontWeight: 800, color: selectedEmployee.threatLevel === "CRITICAL" ? "#ff0055" : "#f59e0b" }}>
+                <div style={{ fontSize: 26, fontWeight: 900, color: selectedEmployee.threatLevel === "CRITICAL" ? "#ff0055" : "#f59e0b" }}>
                   {selectedEmployee.peakRiskScore}/100
                 </div>
-                <div style={{ fontSize: 11, color: "var(--apple-text-muted)", textTransform: "uppercase" }}>Peak Risk</div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: "var(--apple-text-muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Peak Risk</div>
               </div>
 
               <div style={{ textAlign: "right" }}>
-                <div style={{ fontSize: 22, fontWeight: 800, color: "#ffffff" }}>{selectedEmployee.totalAttempts}</div>
-                <div style={{ fontSize: 11, color: "var(--apple-text-muted)", textTransform: "uppercase" }}>Exfiltrations</div>
+                <div style={{ fontSize: 26, fontWeight: 900, color: "#ffffff" }}>{selectedEmployee.totalAttempts}</div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: "var(--apple-text-muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Exfiltrations</div>
               </div>
             </div>
           </div>
 
           {/* 2 Graphs: Risk Timeline & Category Distribution */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(380px, 1fr))", gap: 20 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(400px, 1fr))", gap: 22 }}>
             <div className="apple-card">
-              <div style={{ fontSize: 14, fontWeight: 600, color: "#ffffff", marginBottom: 16 }}>Risk Progression Timeline</div>
-              <div style={{ height: 180, width: "100%" }}>
+              <div style={{ fontSize: 15, fontWeight: 700, color: "#ffffff", marginBottom: 18 }}>Risk Progression Timeline</div>
+              <div style={{ height: 190, width: "100%" }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={riskTimelineData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                     <defs>
                       <linearGradient id="riskGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#ff0055" stopOpacity={0.4} />
+                        <stop offset="5%" stopColor="#ff0055" stopOpacity={0.45} />
                         <stop offset="95%" stopColor="#ff0055" stopOpacity={0.0} />
                       </linearGradient>
                     </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(225,29,72,0.06)" />
-                    <XAxis dataKey="attempt" stroke="#71717a" fontSize={11} />
-                    <YAxis domain={[0, 100]} stroke="#71717a" fontSize={11} />
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,0,85,0.06)" />
+                    <XAxis dataKey="attempt" stroke="#64748b" fontSize={11.5} />
+                    <YAxis domain={[0, 100]} stroke="#64748b" fontSize={11.5} />
                     <Tooltip className="apple-tooltip" />
-                    <Area type="monotone" dataKey="riskScore" stroke="#ff0055" strokeWidth={2} fillOpacity={1} fill="url(#riskGrad)" />
+                    <Area type="monotone" dataKey="riskScore" stroke="#ff0055" strokeWidth={2.5} fillOpacity={1} fill="url(#riskGrad)" />
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
             </div>
 
             <div className="apple-card">
-              <div style={{ fontSize: 14, fontWeight: 600, color: "#ffffff", marginBottom: 16 }}>Targeted Confidential Categories</div>
-              <div style={{ height: 180, width: "100%" }}>
+              <div style={{ fontSize: 15, fontWeight: 700, color: "#ffffff", marginBottom: 18 }}>Targeted Confidential Categories</div>
+              <div style={{ height: 190, width: "100%" }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
-                    <Pie data={categoryChartData} dataKey="count" nameKey="name" cx="50%" cy="50%" innerRadius={45} outerRadius={75} paddingAngle={4}>
+                    <Pie data={categoryChartData} dataKey="count" nameKey="name" cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={4}>
                       {categoryChartData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                        <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} stroke="rgba(0,0,0,0.5)" strokeWidth={2} />
                       ))}
                     </Pie>
                     <Tooltip className="apple-tooltip" />
@@ -460,10 +491,15 @@ export default function ThreatTracking() {
           </div>
 
           {/* Chronological Prompt Forensics Log */}
-          <div className="apple-card" style={{ padding: 24 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 20 }}>
-              <Terminal size={16} color="#ff0055" />
-              <span style={{ fontSize: 15, fontWeight: 600, color: "#ffffff" }}>Chronological Prompt Forensics</span>
+          <div className="apple-card" style={{ padding: 26 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 22 }}>
+              <div style={{ width: 30, height: 30, borderRadius: 9, background: "rgba(255, 0, 85, 0.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <Terminal size={16} color="#ff0055" />
+              </div>
+              <div>
+                <span style={{ fontSize: 16, fontWeight: 700, color: "#ffffff", display: "block" }}>Chronological Prompt Forensics</span>
+                <span style={{ fontSize: 11.5, color: "var(--apple-text-muted)" }}>Raw vs sanitized outbound payload inspection</span>
+              </div>
             </div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -473,40 +509,46 @@ export default function ThreatTracking() {
                   <div
                     key={inc.id || idx}
                     style={{
-                      background: "rgba(13, 14, 18, 0.6)",
+                      background: "rgba(9, 11, 17, 0.75)",
                       border: "1px solid var(--apple-border)",
-                      borderRadius: 14,
-                      padding: 16,
+                      borderRadius: 16,
+                      padding: 18,
                       display: "flex",
                       flexDirection: "column",
-                      gap: 12,
+                      gap: 14,
+                      boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05)",
                     }}
                   >
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        <span style={{ fontSize: 12, fontWeight: 700, color: "#ffffff" }}>INCIDENT #{selectedEmployee.incidentsList.length - idx}</span>
-                        <span className="apple-pill red">{inc.aiPlatform || "chatgpt.com"}</span>
-                        <span style={{ fontSize: 11, color: "var(--apple-text-muted)" }}>
+                        <span style={{ fontSize: 12.5, fontWeight: 800, color: "#ffffff", letterSpacing: "0.04em" }}>INCIDENT #{selectedEmployee.incidentsList.length - idx}</span>
+                        <span className="apple-pill red" style={{ fontFamily: "JetBrains Mono, monospace" }}>{inc.aiPlatform || "chatgpt.com"}</span>
+                        <span style={{ fontSize: 11.5, color: "var(--apple-text-muted)", fontFamily: "JetBrains Mono, monospace" }}>
                           {new Date(inc.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
                         </span>
                       </div>
 
                       <span className={`apple-pill ${isBlocked ? "red" : "rose"}`}>
+                        {isBlocked ? <ShieldAlert size={12} /> : <Lock size={12} />}
                         {isBlocked ? "Hard Blocked" : "Silent Redacted"}
                       </span>
                     </div>
 
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                      <div style={{ background: "rgba(255, 0, 85, 0.05)", border: "1px solid rgba(255, 0, 85, 0.2)", borderRadius: 10, padding: 12 }}>
-                        <div style={{ fontSize: 10, fontWeight: 700, color: "#ff0055", textTransform: "uppercase", marginBottom: 6 }}>Outbound Prompt Attempt</div>
-                        <div style={{ fontSize: 12, fontFamily: "monospace", color: "#e5e7eb", lineHeight: 1.5, whiteSpace: "pre-wrap" }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+                      <div style={{ background: "rgba(255, 0, 85, 0.06)", border: "1px solid rgba(255, 0, 85, 0.25)", borderRadius: 12, padding: 14 }}>
+                        <div style={{ fontSize: 11, fontWeight: 800, color: "#ff0055", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>
+                          Outbound Intercepted Prompt
+                        </div>
+                        <div style={{ fontSize: 12.5, fontFamily: "JetBrains Mono, monospace", color: "#f1f5f9", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
                           {inc.originalPrompt}
                         </div>
                       </div>
 
-                      <div style={{ background: "rgba(225, 29, 72, 0.05)", border: "1px solid rgba(225, 29, 72, 0.2)", borderRadius: 10, padding: 12 }}>
-                        <div style={{ fontSize: 10, fontWeight: 700, color: "#e11d48", textTransform: "uppercase", marginBottom: 6 }}>Firewall Enforcement Result</div>
-                        <div style={{ fontSize: 12, fontFamily: "monospace", color: "#fca5a5", lineHeight: 1.5, whiteSpace: "pre-wrap" }}>
+                      <div style={{ background: "rgba(16, 185, 129, 0.06)", border: "1px solid rgba(16, 185, 129, 0.25)", borderRadius: 12, padding: 14 }}>
+                        <div style={{ fontSize: 11, fontWeight: 800, color: "#34d399", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>
+                          Enforcement Scrubbed Result
+                        </div>
+                        <div style={{ fontSize: 12.5, fontFamily: "JetBrains Mono, monospace", color: "#a7f3d0", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
                           {inc.sanitizedPrompt}
                         </div>
                       </div>

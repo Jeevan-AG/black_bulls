@@ -11,6 +11,11 @@ import {
   Database,
   Terminal,
   Zap,
+  Radio,
+  Cpu,
+  Globe,
+  CheckCircle2,
+  AlertTriangle,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -42,7 +47,7 @@ const getWsUrl = () => {
   return CLOUD_WS_URL;
 };
 
-const PIE_COLORS = ["#ff0055", "#e11d48", "#f43f5e", "#9f1239", "#f59e0b", "#fb7185"];
+const PIE_COLORS = ["#ff0055", "#e11d48", "#f43f5e", "#fb7185", "#f59e0b", "#06b6d4"];
 
 export default function Dashboard() {
   const [incidents, setIncidents] = useState([]);
@@ -77,7 +82,7 @@ export default function Dashboard() {
                   userId: log.userId,
                   userName: log.userName || log.userId.charAt(0).toUpperCase() + log.userId.slice(1).replace(/[._]/g, " "),
                   userEmail: log.userEmail || `${log.userId}@acme.corp`,
-                  department: log.department || "Engineering",
+                  department: log.department || "Core Systems",
                   endpointHost: log.endpointHost || log.host || `${log.userId}-workstation`,
                   endpointIp: log.endpointIp || "127.0.0.1",
                   aiPlatform: log.aiPlatform || "chatgpt.com",
@@ -147,7 +152,7 @@ export default function Dashboard() {
     }
 
     connect();
-    const interval = setInterval(fetchLiveData, 10000);
+    const interval = setInterval(fetchLiveData, 8000);
     return () => {
       clearInterval(interval);
       if (wsRef.current) wsRef.current.close();
@@ -206,7 +211,7 @@ export default function Dashboard() {
       showToast(`Simulation launched for ${simEmployee}`);
       setShowSimModal(false);
       setSimCustomPrompt("");
-      fetchLiveData();
+      setTimeout(fetchLiveData, 600);
     } catch (err) {
       showToast("Simulation sent via stream");
     } finally {
@@ -218,7 +223,7 @@ export default function Dashboard() {
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(incidents, null, 2));
     const downloadAnchor = document.createElement("a");
     downloadAnchor.setAttribute("href", dataStr);
-    downloadAnchor.setAttribute("download", "vantix-audit-log.json");
+    downloadAnchor.setAttribute("download", "vantix-dlp-audit-log.json");
     document.body.appendChild(downloadAnchor);
     downloadAnchor.click();
     downloadAnchor.remove();
@@ -229,7 +234,7 @@ export default function Dashboard() {
       initial={{ opacity: 0, y: 15 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.35, ease: "easeOut" }}
-      style={{ display: "flex", flexDirection: "column", gap: 28 }}
+      style={{ display: "flex", flexDirection: "column", gap: 30 }}
     >
       {/* Toast Alert */}
       <AnimatePresence>
@@ -243,54 +248,77 @@ export default function Dashboard() {
               top: 24,
               right: 28,
               zIndex: 9999,
-              background: "rgba(13, 14, 18, 0.95)",
-              backdropFilter: "blur(20px)",
-              border: "1px solid rgba(225, 29, 72, 0.4)",
+              background: "rgba(11, 13, 20, 0.96)",
+              backdropFilter: "blur(24px)",
+              border: "1px solid rgba(255, 0, 85, 0.5)",
               color: "#ffffff",
-              padding: "10px 18px",
+              padding: "12px 22px",
               borderRadius: "9999px",
-              boxShadow: "0 10px 30px rgba(0,0,0,0.7)",
+              boxShadow: "0 14px 40px rgba(0,0,0,0.8), 0 0 25px rgba(255,0,85,0.35)",
               display: "flex",
               alignItems: "center",
-              gap: 10,
-              fontSize: 12.5,
-              fontWeight: 600,
+              gap: 12,
+              fontSize: 13,
+              fontWeight: 700,
             }}
           >
-            <Sparkles size={14} color="#ff0055" />
+            <Sparkles size={16} color="#ff0055" />
             <span>{toastMessage}</span>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Header */}
+      {/* Header Bar */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 16 }}>
         <div>
-          <h1 style={{ fontSize: 28, fontWeight: 700, color: "#ffffff", margin: 0, letterSpacing: "-0.02em" }}>
-            Operation Centre
-          </h1>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <h1 style={{ fontSize: 30, fontWeight: 800, color: "#ffffff", margin: 0, letterSpacing: "-0.03em" }}>
+              Operation Centre
+            </h1>
+            <div
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 7,
+                padding: "4px 12px",
+                borderRadius: "9999px",
+                fontSize: 11,
+                fontWeight: 800,
+                letterSpacing: "0.06em",
+                background: "rgba(16, 185, 129, 0.12)",
+                border: "1px solid rgba(16, 185, 129, 0.35)",
+                color: "#34d399",
+              }}
+            >
+              <span className="live-pulse-dot emerald" style={{ width: 6, height: 6 }} />
+              SOC LIVE • PROXY 0.4ms
+            </div>
+          </div>
+          <p style={{ margin: "6px 0 0 0", fontSize: 13.5, color: "var(--apple-text-sub)" }}>
+            Enterprise AI exfiltration mitigation & zero-trust packet inspector
+          </p>
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <button className="apple-btn" onClick={() => setShowSimModal(true)}>
-            <Play size={13} color="#ff0055" />
+            <Play size={14} color="#ff0055" />
             <span>Simulate Test</span>
           </button>
           <button className="apple-btn primary" onClick={handleExportAudit}>
-            <Download size={13} />
+            <Download size={14} />
             <span>Export Audit</span>
           </button>
         </div>
       </div>
 
       {/* 4 Rich Cyberpunk KPI Scorecards */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 18 }}>
         {/* Card 1: Total Intercepts */}
         <motion.div
           className="apple-card"
-          whileHover={{ y: -3, borderColor: "rgba(255, 0, 85, 0.4)" }}
+          whileHover={{ y: -3, borderColor: "rgba(255, 0, 85, 0.5)" }}
           style={{
-            background: "linear-gradient(135deg, rgba(255, 0, 85, 0.07) 0%, rgba(13, 14, 18, 0.8) 100%)",
+            background: "linear-gradient(135deg, rgba(255, 0, 85, 0.08) 0%, rgba(14, 17, 26, 0.85) 100%)",
             borderTop: "2px solid #ff0055",
             display: "flex",
             flexDirection: "column",
@@ -298,19 +326,20 @@ export default function Dashboard() {
           }}
         >
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontSize: 11, fontWeight: 700, color: "var(--apple-text-muted)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+            <span style={{ fontSize: 11.5, fontWeight: 800, color: "var(--apple-text-sub)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
               Total Intercepts
             </span>
-            <div style={{ width: 34, height: 34, borderRadius: 10, background: "rgba(255, 0, 85, 0.12)", border: "1px solid rgba(255, 0, 85, 0.25)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <Activity size={16} color="#ff0055" />
+            <div style={{ width: 38, height: 38, borderRadius: 12, background: "rgba(255, 0, 85, 0.14)", border: "1px solid rgba(255, 0, 85, 0.35)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 0 15px rgba(255, 0, 85, 0.25)" }}>
+              <Activity size={18} color="#ff0055" />
             </div>
           </div>
-          <div style={{ marginTop: 14 }}>
-            <div style={{ fontSize: 32, fontWeight: 800, color: "#ffffff", letterSpacing: "-0.03em", lineHeight: 1 }}>
+          <div style={{ marginTop: 18 }}>
+            <div style={{ fontSize: 36, fontWeight: 800, color: "#ffffff", letterSpacing: "-0.03em", lineHeight: 1 }}>
               {totalIntercepts}
             </div>
-            <div style={{ fontSize: 11, color: "var(--apple-text-muted)", marginTop: 8 }}>
-              Real-time OS proxy stream
+            <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 10 }}>
+              <span className="live-pulse-dot" style={{ width: 5, height: 5 }} />
+              <span style={{ fontSize: 11.5, color: "var(--apple-text-muted)", fontWeight: 600 }}>Active OS packet stream</span>
             </div>
           </div>
         </motion.div>
@@ -318,28 +347,28 @@ export default function Dashboard() {
         {/* Card 2: Hard Blocked */}
         <motion.div
           className="apple-card"
-          whileHover={{ y: -3, borderColor: "rgba(225, 29, 72, 0.4)" }}
+          whileHover={{ y: -3, borderColor: "rgba(255, 23, 68, 0.5)" }}
           style={{
-            background: "linear-gradient(135deg, rgba(225, 29, 72, 0.07) 0%, rgba(13, 14, 18, 0.8) 100%)",
-            borderTop: "2px solid #e11d48",
+            background: "linear-gradient(135deg, rgba(255, 23, 68, 0.08) 0%, rgba(14, 17, 26, 0.85) 100%)",
+            borderTop: "2px solid #ff1744",
             display: "flex",
             flexDirection: "column",
             justifyContent: "space-between",
           }}
         >
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontSize: 11, fontWeight: 700, color: "var(--apple-text-muted)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+            <span style={{ fontSize: 11.5, fontWeight: 800, color: "var(--apple-text-sub)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
               Hard Blocked
             </span>
-            <div style={{ width: 34, height: 34, borderRadius: 10, background: "rgba(225, 29, 72, 0.12)", border: "1px solid rgba(225, 29, 72, 0.25)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <ShieldAlert size={16} color="#e11d48" />
+            <div style={{ width: 38, height: 38, borderRadius: 12, background: "rgba(255, 23, 68, 0.14)", border: "1px solid rgba(255, 23, 68, 0.35)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 0 15px rgba(255, 23, 68, 0.25)" }}>
+              <ShieldAlert size={18} color="#ff1744" />
             </div>
           </div>
-          <div style={{ marginTop: 14 }}>
-            <div style={{ fontSize: 32, fontWeight: 800, color: "#ff0055", letterSpacing: "-0.03em", lineHeight: 1 }}>
+          <div style={{ marginTop: 18 }}>
+            <div style={{ fontSize: 36, fontWeight: 800, color: "#ff1744", letterSpacing: "-0.03em", lineHeight: 1 }}>
               {totalBlocked}
             </div>
-            <div style={{ fontSize: 11, color: "var(--apple-text-muted)", marginTop: 8 }}>
+            <div style={{ fontSize: 11.5, color: "var(--apple-text-muted)", marginTop: 10, fontWeight: 600 }}>
               Halted before AI transmission
             </div>
           </div>
@@ -348,9 +377,9 @@ export default function Dashboard() {
         {/* Card 3: Silent Redacted */}
         <motion.div
           className="apple-card"
-          whileHover={{ y: -3, borderColor: "rgba(244, 63, 94, 0.4)" }}
+          whileHover={{ y: -3, borderColor: "rgba(244, 63, 94, 0.5)" }}
           style={{
-            background: "linear-gradient(135deg, rgba(244, 63, 94, 0.07) 0%, rgba(13, 14, 18, 0.8) 100%)",
+            background: "linear-gradient(135deg, rgba(244, 63, 94, 0.08) 0%, rgba(14, 17, 26, 0.85) 100%)",
             borderTop: "2px solid #f43f5e",
             display: "flex",
             flexDirection: "column",
@@ -358,29 +387,29 @@ export default function Dashboard() {
           }}
         >
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontSize: 11, fontWeight: 700, color: "var(--apple-text-muted)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+            <span style={{ fontSize: 11.5, fontWeight: 800, color: "var(--apple-text-sub)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
               Silent Redacted
             </span>
-            <div style={{ width: 34, height: 34, borderRadius: 10, background: "rgba(244, 63, 94, 0.12)", border: "1px solid rgba(244, 63, 94, 0.25)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <Lock size={16} color="#f43f5e" />
+            <div style={{ width: 38, height: 38, borderRadius: 12, background: "rgba(244, 63, 94, 0.14)", border: "1px solid rgba(244, 63, 94, 0.35)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 0 15px rgba(244, 63, 94, 0.25)" }}>
+              <Lock size={18} color="#f43f5e" />
             </div>
           </div>
-          <div style={{ marginTop: 14 }}>
-            <div style={{ fontSize: 32, fontWeight: 800, color: "#f43f5e", letterSpacing: "-0.03em", lineHeight: 1 }}>
+          <div style={{ marginTop: 18 }}>
+            <div style={{ fontSize: 36, fontWeight: 800, color: "#f43f5e", letterSpacing: "-0.03em", lineHeight: 1 }}>
               {totalRedacted}
             </div>
-            <div style={{ fontSize: 11, color: "var(--apple-text-muted)", marginTop: 8 }}>
-              Tokens scrubbed & sanitized
+            <div style={{ fontSize: 11.5, color: "var(--apple-text-muted)", marginTop: 10, fontWeight: 600 }}>
+              PII & API tokens sanitized
             </div>
           </div>
         </motion.div>
 
-        {/* Card 4: Block Rate */}
+        {/* Card 4: Protection Ratio */}
         <motion.div
           className="apple-card"
-          whileHover={{ y: -3, borderColor: "rgba(16, 185, 129, 0.4)" }}
+          whileHover={{ y: -3, borderColor: "rgba(16, 185, 129, 0.5)" }}
           style={{
-            background: "linear-gradient(135deg, rgba(16, 185, 129, 0.07) 0%, rgba(13, 14, 18, 0.8) 100%)",
+            background: "linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(14, 17, 26, 0.85) 100%)",
             borderTop: "2px solid #10b981",
             display: "flex",
             flexDirection: "column",
@@ -388,37 +417,42 @@ export default function Dashboard() {
           }}
         >
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontSize: 11, fontWeight: 700, color: "var(--apple-text-muted)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
-              Block Rate
+            <span style={{ fontSize: 11.5, fontWeight: 800, color: "var(--apple-text-sub)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+              Enforcement Ratio
             </span>
-            <div style={{ width: 34, height: 34, borderRadius: 10, background: "rgba(16, 185, 129, 0.12)", border: "1px solid rgba(16, 185, 129, 0.25)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <Zap size={16} color="#10b981" />
+            <div style={{ width: 38, height: 38, borderRadius: 12, background: "rgba(16, 185, 129, 0.14)", border: "1px solid rgba(16, 185, 129, 0.35)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 0 15px rgba(16, 185, 129, 0.25)" }}>
+              <Zap size={18} color="#10b981" />
             </div>
           </div>
-          <div style={{ marginTop: 14 }}>
-            <div style={{ fontSize: 32, fontWeight: 800, color: "#10b981", letterSpacing: "-0.03em", lineHeight: 1 }}>
-              {totalIntercepts > 0 ? Math.round((totalBlocked / totalIntercepts) * 100) : 0}%
+          <div style={{ marginTop: 18 }}>
+            <div style={{ fontSize: 36, fontWeight: 800, color: "#10b981", letterSpacing: "-0.03em", lineHeight: 1 }}>
+              {totalIntercepts > 0 ? Math.round(((totalBlocked + totalRedacted) / totalIntercepts) * 100) : 100}%
             </div>
-            <div style={{ fontSize: 11, color: "var(--apple-text-muted)", marginTop: 8 }}>
-              Enforcement protection ratio
+            <div style={{ fontSize: 11.5, color: "var(--apple-text-muted)", marginTop: 10, fontWeight: 600 }}>
+              Zero uninspected leakage
             </div>
           </div>
         </motion.div>
       </div>
 
       {/* 2 Clean Recharts Visualizations */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(400px, 1fr))", gap: 20 }}>
-        {/* Chart 1: Exfiltration Data Classes */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(420px, 1fr))", gap: 22 }}>
+        {/* Chart 1: Exfiltration Vectors */}
         <div className="apple-card">
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <Database size={16} color="#ff0055" />
-              <span style={{ fontSize: 14, fontWeight: 600, color: "#ffffff" }}>Exfiltration Vectors</span>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <div style={{ width: 28, height: 28, borderRadius: 8, background: "rgba(255, 0, 85, 0.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <Database size={15} color="#ff0055" />
+              </div>
+              <div>
+                <span style={{ fontSize: 15, fontWeight: 700, color: "#ffffff", display: "block" }}>Exfiltration Vectors</span>
+                <span style={{ fontSize: 11.5, color: "var(--apple-text-muted)" }}>Classified DLP threat categories</span>
+              </div>
             </div>
             <span className="apple-pill red">{globalCategoryChartData.length} Classes</span>
           </div>
 
-          <div style={{ height: 210, width: "100%" }}>
+          <div style={{ height: 220, width: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
             {globalCategoryChartData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
@@ -428,20 +462,28 @@ export default function Dashboard() {
                     nameKey="name"
                     cx="50%"
                     cy="50%"
-                    innerRadius={55}
-                    outerRadius={85}
-                    paddingAngle={3}
+                    innerRadius={60}
+                    outerRadius={90}
+                    paddingAngle={4}
                   >
                     {globalCategoryChartData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                      <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} stroke="rgba(0,0,0,0.5)" strokeWidth={2} />
                     ))}
                   </Pie>
                   <Tooltip className="apple-tooltip" />
                 </PieChart>
               </ResponsiveContainer>
             ) : (
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "var(--apple-text-muted)", fontSize: 12 }}>
-                No exfiltration vectors recorded
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, color: "var(--apple-text-muted)", fontSize: 12.5 }}>
+                <div style={{ position: "relative", width: 64, height: 64, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <motion.div
+                    animate={{ rotate: 360 }}
+                    transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
+                    style={{ position: "absolute", inset: 0, borderRadius: "50%", border: "2px dashed rgba(255,0,85,0.3)" }}
+                  />
+                  <Radio size={24} color="#ff0055" />
+                </div>
+                <span>Radar Active • Awaiting Outbound Threat Signatures</span>
               </div>
             )}
           </div>
@@ -449,22 +491,27 @@ export default function Dashboard() {
 
         {/* Chart 2: Enforcement Breakdown */}
         <div className="apple-card">
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <Shield size={16} color="#e11d48" />
-              <span style={{ fontSize: 14, fontWeight: 600, color: "#ffffff" }}>Enforcement Actions</span>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <div style={{ width: 28, height: 28, borderRadius: 8, background: "rgba(225, 29, 72, 0.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <Shield size={15} color="#e11d48" />
+              </div>
+              <div>
+                <span style={{ fontSize: 15, fontWeight: 700, color: "#ffffff", display: "block" }}>Enforcement Pipeline</span>
+                <span style={{ fontSize: 11.5, color: "var(--apple-text-muted)" }}>Interception actions executed</span>
+              </div>
             </div>
-            <span className="apple-pill red">{totalIntercepts} Inspected</span>
+            <span className="apple-pill red">{totalIntercepts} Processed</span>
           </div>
 
-          <div style={{ height: 210, width: "100%" }}>
+          <div style={{ height: 220, width: "100%" }}>
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={globalEnforcementData} layout="vertical" margin={{ top: 10, right: 20, left: 10, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(225,29,72,0.06)" horizontal={false} />
-                <XAxis type="number" stroke="#71717a" fontSize={11} />
-                <YAxis dataKey="name" type="category" stroke="#a1a1aa" fontSize={11} width={110} tickLine={false} />
+              <BarChart data={globalEnforcementData} layout="vertical" margin={{ top: 10, right: 24, left: 10, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,0,85,0.06)" horizontal={false} />
+                <XAxis type="number" stroke="#64748b" fontSize={11.5} />
+                <YAxis dataKey="name" type="category" stroke="#94a3b8" fontSize={11.5} width={120} tickLine={false} />
                 <Tooltip className="apple-tooltip" />
-                <Bar dataKey="count" radius={[0, 6, 6, 0]} barSize={14}>
+                <Bar dataKey="count" radius={[0, 8, 8, 0]} barSize={16}>
                   {globalEnforcementData.map((entry, index) => (
                     <Cell key={`bar-${index}`} fill={entry.fill} />
                   ))}
@@ -477,12 +524,17 @@ export default function Dashboard() {
 
       {/* Live Interception Stream Feed */}
       <div className="apple-card" style={{ padding: 0, overflow: "hidden" }}>
-        <div style={{ padding: "18px 24px", borderBottom: "1px solid var(--apple-border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <Terminal size={16} color="#ff0055" />
-            <span style={{ fontSize: 14, fontWeight: 600, color: "#ffffff" }}>Real-time Interception Feed</span>
+        <div style={{ padding: "20px 28px", borderBottom: "1px solid var(--apple-border)", display: "flex", justifyContent: "space-between", alignItems: "center", background: "rgba(255,255,255,0.015)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ width: 30, height: 30, borderRadius: 9, background: "rgba(255, 0, 85, 0.14)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <Terminal size={16} color="#ff0055" />
+            </div>
+            <div>
+              <span style={{ fontSize: 15, fontWeight: 700, color: "#ffffff", display: "block" }}>Real-time Interception Feed</span>
+              <span style={{ fontSize: 11.5, color: "var(--apple-text-muted)" }}>Live OS MITM packet inspection ledger</span>
+            </div>
           </div>
-          <span style={{ fontSize: 11, color: "var(--apple-text-muted)" }}>{incidents.length} events</span>
+          <span style={{ fontSize: 12, color: "var(--apple-text-sub)", fontWeight: 600 }}>{incidents.length} events logged</span>
         </div>
 
         <div style={{ overflowX: "auto" }}>
@@ -497,30 +549,44 @@ export default function Dashboard() {
               </tr>
             </thead>
             <tbody>
-              {incidents.slice(0, 7).map((inc, idx) => {
+              {incidents.slice(0, 8).map((inc, idx) => {
                 const isBlocked = inc.actionTaken === "hard_block";
                 return (
                   <tr key={inc.id || idx}>
                     <td>
                       <div style={{ display: "flex", flexDirection: "column" }}>
-                        <span style={{ fontWeight: 600, color: "#ffffff" }}>{inc.userName}</span>
-                        <span style={{ fontSize: 11, color: "var(--apple-text-muted)" }}>{inc.endpointHost}</span>
+                        <span style={{ fontWeight: 700, color: "#ffffff", fontSize: 14 }}>{inc.userName}</span>
+                        <span style={{ fontSize: 11.5, color: "var(--apple-text-muted)", fontFamily: "JetBrains Mono, monospace" }}>{inc.endpointHost} ({inc.endpointIp})</span>
                       </div>
                     </td>
                     <td>
-                      <span className="apple-pill red">{inc.aiPlatform || "chatgpt.com"}</span>
+                      <span className="apple-pill red" style={{ textTransform: "lowercase", fontFamily: "JetBrains Mono, monospace" }}>
+                        {inc.aiPlatform || "chatgpt.com"}
+                      </span>
                     </td>
                     <td>
                       <span className={`apple-pill ${isBlocked ? "red" : "rose"}`}>
+                        {isBlocked ? <ShieldAlert size={12} /> : <Lock size={12} />}
                         {isBlocked ? "Hard Blocked" : "Silent Redacted"}
                       </span>
                     </td>
                     <td>
-                      <span style={{ fontWeight: 700, color: inc.riskScore >= 70 ? "#ff0055" : "#f59e0b" }}>
-                        {inc.riskScore}/100
-                      </span>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <div style={{ width: 50, height: 6, borderRadius: 9999, background: "rgba(255,255,255,0.08)", overflow: "hidden" }}>
+                          <div
+                            style={{
+                              width: `${Math.min(inc.riskScore, 100)}%`,
+                              height: "100%",
+                              background: inc.riskScore >= 70 ? "#ff0055" : inc.riskScore >= 30 ? "#f59e0b" : "#10b981",
+                            }}
+                          />
+                        </div>
+                        <span style={{ fontWeight: 800, fontSize: 13, color: inc.riskScore >= 70 ? "#ff0055" : inc.riskScore >= 30 ? "#fbbf24" : "#34d399" }}>
+                          {inc.riskScore}/100
+                        </span>
+                      </div>
                     </td>
-                    <td style={{ fontSize: 12, color: "var(--apple-text-muted)" }}>
+                    <td style={{ fontSize: 12.5, color: "var(--apple-text-muted)", fontFamily: "JetBrains Mono, monospace" }}>
                       {new Date(inc.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
                     </td>
                   </tr>
@@ -528,8 +594,19 @@ export default function Dashboard() {
               })}
               {incidents.length === 0 && (
                 <tr>
-                  <td colSpan={5} style={{ textAlign: "center", padding: 32, color: "var(--apple-text-muted)" }}>
-                    No interceptions recorded yet
+                  <td colSpan={5} style={{ textAlign: "center", padding: "48px 24px" }}>
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
+                      <div style={{ width: 48, height: 48, borderRadius: 14, background: "rgba(255,0,85,0.1)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        <Shield size={22} color="#ff0055" />
+                      </div>
+                      <span style={{ fontSize: 14, fontWeight: 600, color: "var(--apple-text-sub)" }}>
+                        No interception events recorded in this session.
+                      </span>
+                      <button className="apple-btn" onClick={() => setShowSimModal(true)} style={{ marginTop: 4 }}>
+                        <Play size={13} color="#ff0055" />
+                        <span>Trigger Test Interception</span>
+                      </button>
+                    </div>
                   </td>
                 </tr>
               )}
@@ -538,7 +615,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Apple Simulation Modal */}
+      {/* Simulation Modal */}
       <AnimatePresence>
         {showSimModal && (
           <motion.div
@@ -551,19 +628,27 @@ export default function Dashboard() {
           >
             <motion.div
               className="apple-card"
-              initial={{ scale: 0.9, opacity: 0 }}
+              initial={{ scale: 0.92, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              style={{ width: 440, maxWidth: "90vw", background: "rgba(13, 14, 18, 0.95)", border: "1px solid rgba(225, 29, 72, 0.3)" }}
+              exit={{ scale: 0.92, opacity: 0 }}
+              style={{ width: 480, maxWidth: "90vw", background: "rgba(11, 13, 20, 0.98)", border: "1px solid rgba(255, 0, 85, 0.4)", boxShadow: "0 25px 60px rgba(0,0,0,0.9), 0 0 35px rgba(255,0,85,0.25)" }}
               onClick={(e) => e.stopPropagation()}
             >
-              <h3 style={{ fontSize: 18, fontWeight: 700, color: "#ffffff", marginBottom: 16 }}>
-                Simulate Exfiltration Test
-              </h3>
-
-              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 18 }}>
+                <div style={{ width: 32, height: 32, borderRadius: 9, background: "rgba(255, 0, 85, 0.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <Zap size={16} color="#ff0055" />
+                </div>
                 <div>
-                  <label style={{ fontSize: 11, fontWeight: 600, color: "var(--apple-text-muted)", marginBottom: 6, display: "block" }}>
+                  <h3 style={{ fontSize: 18, fontWeight: 800, color: "#ffffff", margin: 0 }}>
+                    Simulate AI Exfiltration Test
+                  </h3>
+                  <span style={{ fontSize: 11.5, color: "var(--apple-text-muted)" }}>Inject live test payloads into the MITM proxy pipeline</span>
+                </div>
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                <div>
+                  <label style={{ fontSize: 11.5, fontWeight: 700, color: "var(--apple-text-sub)", marginBottom: 6, display: "block" }}>
                     Select User Origin
                   </label>
                   <select
@@ -571,15 +656,15 @@ export default function Dashboard() {
                     value={simEmployee}
                     onChange={(e) => setSimEmployee(e.target.value)}
                   >
-                    <option value="employee">Current Workstation User</option>
-                    <option value="sarah_chen">Sarah Chen (DevOps)</option>
-                    <option value="david_miller">David Miller (Finance)</option>
+                    <option value="employee">Current Workstation User (127.0.0.1)</option>
+                    <option value="sarah_chen">Sarah Chen (DevOps - SecOps Host)</option>
+                    <option value="david_miller">David Miller (Finance - ERP Host)</option>
                   </select>
                 </div>
 
                 <div>
-                  <label style={{ fontSize: 11, fontWeight: 600, color: "var(--apple-text-muted)", marginBottom: 6, display: "block" }}>
-                    Scenario Type
+                  <label style={{ fontSize: 11.5, fontWeight: 700, color: "var(--apple-text-sub)", marginBottom: 6, display: "block" }}>
+                    Threat Scenario Type
                   </label>
                   <select
                     className="apple-input"
@@ -593,12 +678,12 @@ export default function Dashboard() {
                 </div>
               </div>
 
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 24 }}>
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 12, marginTop: 26 }}>
                 <button className="apple-btn" onClick={() => setShowSimModal(false)}>
                   Cancel
                 </button>
                 <button className="apple-btn primary" onClick={handleSimulate} disabled={isSimulating}>
-                  {isSimulating ? "Testing..." : "Launch Interception"}
+                  {isSimulating ? "Injecting..." : "Launch Interception"}
                 </button>
               </div>
             </motion.div>

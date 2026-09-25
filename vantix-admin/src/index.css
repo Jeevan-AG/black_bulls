@@ -1,24 +1,38 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 
 :root {
-  --apple-bg: #060709;
-  --apple-topbar-bg: rgba(13, 14, 18, 0.82);
-  --apple-card: rgba(20, 21, 28, 0.72);
-  --apple-card-hover: rgba(28, 29, 38, 0.85);
-  --apple-border: rgba(225, 29, 72, 0.18);
-  --apple-border-strong: rgba(244, 63, 94, 0.38);
+  /* Ultra-Premium Obsidian & Laser Crimson Palette */
+  --apple-bg: #07080c;
+  --apple-surface: #0b0d14;
+  --apple-topbar-bg: rgba(11, 13, 20, 0.85);
   
-  --apple-text-main: #ffffff;
-  --apple-text-sub: #a1a1aa;
-  --apple-text-muted: #71717a;
+  --apple-card: rgba(14, 17, 26, 0.75);
+  --apple-card-hover: rgba(20, 24, 38, 0.88);
+  --apple-card-elevated: rgba(22, 26, 42, 0.92);
+  
+  --apple-border: rgba(255, 20, 75, 0.16);
+  --apple-border-subtle: rgba(255, 255, 255, 0.07);
+  --apple-border-strong: rgba(255, 0, 85, 0.42);
+  --apple-border-glow: rgba(255, 0, 85, 0.65);
+  
+  --apple-text-main: #f8fafc;
+  --apple-text-sub: #94a3b8;
+  --apple-text-muted: #64748b;
   
   --apple-red: #e11d48;
   --apple-red-bright: #ff0055;
+  --apple-red-neon: #ff1744;
   --apple-rose: #f43f5e;
-  --apple-dark-red: #9f1239;
+  --apple-dark-red: #881337;
+  
   --apple-emerald: #10b981;
+  --apple-emerald-glow: rgba(16, 185, 129, 0.25);
+  --apple-cyan: #06b6d4;
   --apple-amber: #f59e0b;
-  --apple-cyan: #38bdf8;
+  --apple-purple: #a855f7;
+
+  --cyber-glow-red: 0 0 25px rgba(255, 0, 85, 0.45);
+  --cyber-glow-red-lg: 0 0 45px rgba(255, 0, 85, 0.35), 0 0 80px rgba(225, 29, 72, 0.2);
 }
 
 * {
@@ -31,36 +45,48 @@
 
 body {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Inter", sans-serif;
+  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   background-color: var(--apple-bg);
   color: var(--apple-text-main);
   overflow-x: hidden;
-  letter-spacing: -0.011em;
+  letter-spacing: -0.015em;
 }
 
-/* Ambient Crimson & Black Cyber Background */
+code, pre, .font-mono {
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* ─── Immersive Cyber-Matrix & Ambient Crimson Background ─── */
 .orion-global-bg {
   position: fixed;
   inset: 0;
   z-index: 0;
   pointer-events: none;
   overflow: hidden;
-  background: 
-    radial-gradient(circle at 20% 15%, rgba(225, 29, 72, 0.15) 0%, transparent 45%),
-    radial-gradient(circle at 80% 25%, rgba(159, 18, 57, 0.12) 0%, transparent 40%),
-    radial-gradient(circle at 50% 85%, rgba(244, 63, 94, 0.08) 0%, transparent 50%),
-    #060709;
+  background-color: #07080c;
+  background-image: 
+    /* Subtle Technical Grid Overlay */
+    linear-gradient(rgba(255, 0, 85, 0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 0, 85, 0.025) 1px, transparent 1px),
+    /* Top Focal Laser Crimson Radial Glow */
+    radial-gradient(ellipse 90% 50% at 50% -10%, rgba(225, 29, 72, 0.22) 0%, rgba(136, 19, 55, 0.08) 50%, transparent 80%),
+    /* Right Top Neon Flare */
+    radial-gradient(circle 500px at 85% 15%, rgba(255, 0, 85, 0.12) 0%, transparent 70%),
+    /* Bottom Left Ambient Depth */
+    radial-gradient(circle 600px at 15% 85%, rgba(244, 63, 94, 0.08) 0%, transparent 70%);
+  background-size: 44px 44px, 44px 44px, 100% 100%, 100% 100%, 100% 100%;
 }
 
-/* App Shell Layout */
+/* ─── Main App Shell Layout ─── */
 .app-shell {
   display: flex;
   flex-direction: column;
   min-height: 100vh;
   position: relative;
+  background: transparent;
 }
 
-/* Apple Frosted Crimson Navbar */
+/* ─── Ultra-Sleek Glass Topbar ─── */
 .orion-topnav {
   position: sticky;
   top: 0;
@@ -68,82 +94,87 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 28px;
-  height: 64px;
+  padding: 0 32px;
+  height: 66px;
   background: var(--apple-topbar-bg);
-  backdrop-filter: blur(28px) saturate(180%);
-  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  backdrop-filter: blur(28px) saturate(190%);
+  -webkit-backdrop-filter: blur(28px) saturate(190%);
   border-bottom: 1px solid var(--apple-border);
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.6), inset 0 -1px 0 rgba(255, 255, 255, 0.04);
   transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .orion-topnav-left {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 18px;
 }
 
 .orion-hamburger-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(225, 29, 72, 0.08);
+  background: rgba(255, 255, 255, 0.03);
   border: 1px solid var(--apple-border);
   color: var(--apple-text-main);
-  width: 38px;
-  height: 38px;
-  border-radius: 11px;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
   cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
 .orion-hamburger-btn:hover {
-  background: rgba(225, 29, 72, 0.2);
+  background: rgba(255, 0, 85, 0.15);
   border-color: var(--apple-border-strong);
-  transform: scale(1.02);
+  color: #ffffff;
+  transform: translateY(-1px);
+  box-shadow: 0 0 16px rgba(255, 0, 85, 0.35);
 }
 
 .orion-hamburger-btn:active {
-  transform: scale(0.96);
+  transform: scale(0.95);
 }
 
 .orion-brand {
   display: flex;
   align-items: center;
-  gap: 10px;
-  font-size: 17px;
-  font-weight: 700;
+  gap: 12px;
+  font-size: 18px;
+  font-weight: 800;
   letter-spacing: -0.02em;
   color: var(--apple-text-main);
 }
 
 .orion-brand-icon {
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
-  background: linear-gradient(135deg, #ff0055 0%, #e11d48 100%);
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  background: linear-gradient(135deg, #ff0055 0%, #e11d48 60%, #9f1239 100%);
   color: white;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-weight: 800;
-  font-size: 13px;
-  box-shadow: 0 4px 14px rgba(225, 29, 72, 0.45);
+  font-weight: 900;
+  font-size: 15px;
+  box-shadow: 0 0 20px rgba(255, 0, 85, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 .orion-actions {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
 }
 
-/* Left Apple Drawer & Glass Overlay */
+/* ─── Left Slide-out Cyber Drawer ─── */
 .orion-drawer-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.75);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  background: rgba(4, 5, 8, 0.82);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   z-index: 998;
 }
 
@@ -151,34 +182,35 @@ body {
   position: fixed;
   top: 0;
   left: 0;
-  width: 280px;
+  width: 300px;
   height: 100vh;
-  background: rgba(13, 14, 18, 0.94);
-  backdrop-filter: blur(40px) saturate(200%);
-  -webkit-backdrop-filter: blur(40px) saturate(200%);
+  background: rgba(11, 13, 20, 0.96);
+  backdrop-filter: blur(40px) saturate(220%);
+  -webkit-backdrop-filter: blur(40px) saturate(220%);
   border-right: 1px solid var(--apple-border);
   z-index: 999;
   display: flex;
   flex-direction: column;
-  box-shadow: 20px 0 50px rgba(0, 0, 0, 0.8);
+  box-shadow: 25px 0 60px rgba(0, 0, 0, 0.9), inset -1px 0 0 rgba(255, 0, 85, 0.15);
 }
 
 .orion-drawer-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 20px 24px;
+  padding: 22px 24px;
   border-bottom: 1px solid var(--apple-border);
+  background: rgba(255, 255, 255, 0.015);
 }
 
 .orion-drawer-close {
-  background: rgba(225, 29, 72, 0.08);
+  background: rgba(255, 255, 255, 0.03);
   border: 1px solid var(--apple-border);
   color: var(--apple-text-sub);
   cursor: pointer;
-  width: 32px;
-  height: 32px;
-  border-radius: 9px;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -186,92 +218,108 @@ body {
 }
 
 .orion-drawer-close:hover {
-  background: rgba(225, 29, 72, 0.2);
-  color: var(--apple-text-main);
+  background: rgba(255, 0, 85, 0.2);
+  border-color: var(--apple-border-strong);
+  color: #ffffff;
 }
 
 .orion-drawer-nav {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding: 16px;
+  padding: 20px 16px;
   flex: 1;
 }
 
 .orion-drawer-nav a {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 11px 16px;
-  border-radius: 12px;
+  gap: 14px;
+  padding: 12px 18px;
+  border-radius: 14px;
   text-decoration: none;
   color: var(--apple-text-sub);
-  font-weight: 500;
+  font-weight: 600;
   font-size: 14px;
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  border: 1px solid transparent;
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .orion-drawer-nav a:hover {
-  background: rgba(225, 29, 72, 0.1);
+  background: rgba(255, 0, 85, 0.08);
+  border-color: rgba(255, 0, 85, 0.2);
   color: var(--apple-text-main);
+  transform: translateX(3px);
 }
 
 .orion-drawer-nav a.active {
-  background: linear-gradient(135deg, rgba(225, 29, 72, 0.22) 0%, rgba(159, 18, 57, 0.15) 100%);
+  background: linear-gradient(135deg, rgba(255, 0, 85, 0.22) 0%, rgba(225, 29, 72, 0.12) 100%);
   border: 1px solid var(--apple-border-strong);
   color: #ffffff;
-  box-shadow: 0 4px 16px rgba(225, 29, 72, 0.25);
+  box-shadow: 0 4px 20px rgba(255, 0, 85, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
-/* Main Content Area */
+/* ─── Main Content Canvas ─── */
 .main-content {
   position: relative;
   z-index: 10;
   flex: 1;
-  padding: 32px 36px;
-  max-width: 1520px;
+  padding: 36px 40px;
+  max-width: 1540px;
   margin: 0 auto;
   width: 100%;
 }
 
-/* Minimalist Glass Card */
+/* ─── High-End Cyber Glass Card ─── */
 .apple-card {
   background: var(--apple-card);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
+  backdrop-filter: blur(28px) saturate(180%);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
   border: 1px solid var(--apple-border);
-  border-radius: 20px;
-  padding: 24px;
-  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  border-radius: 22px;
+  padding: 26px;
+  box-shadow: 
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.07),
+    0 16px 36px -12px rgba(0, 0, 0, 0.75),
+    0 0 0 1px rgba(255, 0, 85, 0.05);
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
 }
 
 .apple-card:hover {
   border-color: var(--apple-border-strong);
   background: var(--apple-card-hover);
+  box-shadow: 
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.12),
+    0 22px 48px -15px rgba(0, 0, 0, 0.85),
+    0 0 25px rgba(255, 0, 85, 0.15);
 }
 
-/* Cyber Crimson Apple Buttons */
+/* ─── Glowing Cyber Buttons ─── */
 .apple-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: 9px 18px;
+  padding: 10px 20px;
   border-radius: 9999px;
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
   border: 1px solid var(--apple-border);
-  background: rgba(225, 29, 72, 0.08);
+  background: rgba(255, 255, 255, 0.03);
   color: var(--apple-text-main);
-  backdrop-filter: blur(12px);
+  backdrop-filter: blur(16px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
 .apple-btn:hover {
-  background: rgba(225, 29, 72, 0.18);
+  background: rgba(255, 0, 85, 0.14);
   border-color: var(--apple-border-strong);
+  color: #ffffff;
   transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(255, 0, 85, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.15);
 }
 
 .apple-btn:active {
@@ -279,95 +327,105 @@ body {
 }
 
 .apple-btn.primary {
-  background: linear-gradient(135deg, #ff0055 0%, #e11d48 100%);
-  border: 1px solid rgba(255, 0, 85, 0.5);
+  background: linear-gradient(135deg, #ff0055 0%, #e11d48 60%, #b91c1c 100%);
+  border: 1px solid rgba(255, 255, 255, 0.25);
   color: #ffffff;
-  box-shadow: 0 4px 18px rgba(225, 29, 72, 0.45);
+  box-shadow: 0 4px 22px rgba(255, 0, 85, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
 }
 
 .apple-btn.primary:hover {
-  background: linear-gradient(135deg, #e11d48 0%, #9f1239 100%);
-  box-shadow: 0 6px 22px rgba(225, 29, 72, 0.6);
+  background: linear-gradient(135deg, #ff1744 0%, #ff0055 60%, #be123c 100%);
+  box-shadow: 0 6px 30px rgba(255, 0, 85, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  transform: translateY(-2px);
 }
 
 .apple-btn.danger {
   background: rgba(244, 63, 94, 0.15);
-  border: 1px solid rgba(244, 63, 94, 0.3);
+  border: 1px solid rgba(244, 63, 94, 0.35);
   color: #f43f5e;
 }
 
 .apple-btn.danger:hover {
   background: rgba(244, 63, 94, 0.28);
+  border-color: rgba(244, 63, 94, 0.6);
+  color: #ffffff;
 }
 
-/* Inputs */
+/* ─── Premium Glass Inputs ─── */
 .apple-input {
   width: 100%;
-  padding: 10px 16px;
-  background: rgba(13, 14, 18, 0.6);
+  padding: 11px 18px;
+  background: rgba(9, 11, 17, 0.7);
   border: 1px solid var(--apple-border);
-  border-radius: 12px;
-  font-size: 13px;
+  border-radius: 14px;
+  font-size: 13.5px;
   color: var(--apple-text-main);
   outline: none;
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-  backdrop-filter: blur(12px);
+  backdrop-filter: blur(14px);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.4);
 }
 
 .apple-input:focus {
-  border-color: var(--apple-red);
-  background: rgba(225, 29, 72, 0.08);
-  box-shadow: 0 0 0 3px rgba(225, 29, 72, 0.25);
+  border-color: var(--apple-red-bright);
+  background: rgba(255, 0, 85, 0.08);
+  box-shadow: 0 0 0 3px rgba(255, 0, 85, 0.25), inset 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
 .apple-input::placeholder {
   color: var(--apple-text-muted);
 }
 
-/* Sleek Badges */
+/* ─── Cyber Micro Badges / Pills ─── */
 .apple-pill {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 10px;
+  padding: 4px 12px;
   border-radius: 9999px;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
   border: 1px solid transparent;
+  backdrop-filter: blur(8px);
 }
 
 .apple-pill.emerald {
-  background: rgba(16, 185, 129, 0.12);
-  border-color: rgba(16, 185, 129, 0.28);
+  background: rgba(16, 185, 129, 0.14);
+  border-color: rgba(16, 185, 129, 0.35);
   color: #34d399;
+  box-shadow: 0 0 12px rgba(16, 185, 129, 0.15);
 }
 
 .apple-pill.rose, .apple-pill.red {
-  background: rgba(225, 29, 72, 0.15);
-  border-color: rgba(225, 29, 72, 0.35);
-  color: #ff2b56;
+  background: rgba(255, 0, 85, 0.14);
+  border-color: rgba(255, 0, 85, 0.35);
+  color: #ff2a5f;
+  box-shadow: 0 0 12px rgba(255, 0, 85, 0.2);
 }
 
 .apple-pill.indigo {
   background: rgba(244, 63, 94, 0.12);
   border-color: rgba(244, 63, 94, 0.3);
-  color: #fca5a5;
+  color: #fda4af;
 }
 
 .apple-pill.amber {
-  background: rgba(245, 158, 11, 0.12);
-  border-color: rgba(245, 158, 11, 0.28);
+  background: rgba(245, 158, 11, 0.14);
+  border-color: rgba(245, 158, 11, 0.35);
   color: #fbbf24;
+  box-shadow: 0 0 12px rgba(245, 158, 11, 0.15);
 }
 
 .apple-pill.cyan {
-  background: rgba(56, 189, 248, 0.12);
-  border-color: rgba(56, 189, 248, 0.28);
-  color: #38bdf8;
+  background: rgba(6, 182, 212, 0.14);
+  border-color: rgba(6, 182, 212, 0.35);
+  color: #22d3ee;
+  box-shadow: 0 0 12px rgba(6, 182, 212, 0.15);
 }
 
-/* Minimalist Tables */
+/* ─── Futuristic Data Grid / Table ─── */
 .apple-table {
   width: 100%;
   border-collapse: separate;
@@ -376,57 +434,81 @@ body {
 
 .apple-table th {
   text-align: left;
-  padding: 12px 18px;
+  padding: 14px 20px;
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--apple-text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.08em;
   border-bottom: 1px solid var(--apple-border);
+  background: rgba(255, 255, 255, 0.015);
 }
 
 .apple-table td {
-  padding: 14px 18px;
-  font-size: 13px;
+  padding: 16px 20px;
+  font-size: 13.5px;
   color: var(--apple-text-main);
-  border-bottom: 1px solid rgba(225, 29, 72, 0.08);
+  border-bottom: 1px solid rgba(255, 0, 85, 0.08);
   vertical-align: middle;
+  transition: background 0.15s ease;
 }
 
 .apple-table tr:hover td {
-  background: rgba(225, 29, 72, 0.06);
+  background: rgba(255, 0, 85, 0.05);
 }
 
-/* Custom Recharts Tooltip */
+/* ─── Recharts Custom High-Tech Tooltip ─── */
 .apple-tooltip {
-  background: rgba(13, 14, 18, 0.95) !important;
-  backdrop-filter: blur(20px) !important;
-  -webkit-backdrop-filter: blur(20px) !important;
+  background: rgba(11, 13, 20, 0.96) !important;
+  backdrop-filter: blur(24px) !important;
+  -webkit-backdrop-filter: blur(24px) !important;
   border: 1px solid var(--apple-border-strong) !important;
-  border-radius: 12px !important;
-  padding: 10px 14px !important;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7) !important;
+  border-radius: 14px !important;
+  padding: 12px 16px !important;
+  box-shadow: 0 12px 35px rgba(0, 0, 0, 0.8), 0 0 20px rgba(255, 0, 85, 0.25) !important;
 }
 
 .apple-tooltip p {
   margin: 0;
-  font-size: 12px;
+  font-size: 12.5px;
   color: var(--apple-text-main);
-  font-weight: 600;
+  font-weight: 700;
 }
 
-/* Animations */
-@keyframes pulseGlow {
-  0% { transform: scale(1); opacity: 0.8; }
-  50% { transform: scale(1.25); opacity: 1; }
-  100% { transform: scale(1); opacity: 0.8; }
+/* ─── Pulsing Radar Indicators ─── */
+@keyframes pulseRadar {
+  0% { transform: scale(0.95); opacity: 0.85; box-shadow: 0 0 0 0 rgba(255, 0, 85, 0.7); }
+  70% { transform: scale(1.15); opacity: 1; box-shadow: 0 0 0 8px rgba(255, 0, 85, 0); }
+  100% { transform: scale(0.95); opacity: 0.85; box-shadow: 0 0 0 0 rgba(255, 0, 85, 0); }
 }
 
 .live-pulse-dot {
-  width: 7px;
-  height: 7px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
-  background: #e11d48;
-  box-shadow: 0 0 10px #ff0055;
-  animation: pulseGlow 1.8s infinite ease-in-out;
+  background: #ff0055;
+  box-shadow: 0 0 12px #ff0055;
+  animation: pulseRadar 2s infinite cubic-bezier(0.45, 0, 0.55, 1);
+}
+
+.live-pulse-dot.emerald {
+  background: #10b981;
+  box-shadow: 0 0 12px #10b981;
+  animation: pulseRadar 2s infinite cubic-bezier(0.45, 0, 0.55, 1);
+}
+
+/* Custom Sleek Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #07080c;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 0, 85, 0.25);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 0, 85, 0.5);
 }
