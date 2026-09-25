@@ -1,0 +1,18 @@
+{
+  "name": "vantix-sdk",
+  "version": "2.0.0",
+  "description": "Official JavaScript/Node.js SDK for Vantix Silent AI Data Firewall",
+  "main": "vantix.js",
+  "keywords": [
+    "vantix",
+    "security",
+    "data-firewall",
+    "tee",
+    "dlp",
+    "scada",
+    "ics",
+    "ai-proxy"
+  ],
+  "author": "Vantix Security",
+  "license": "MIT"
+}
