@@ -1289,8 +1289,8 @@ router.get("/session-graph", (req, res) => {
 
 // ─── GET /api/vantix/audit-logs — Retrieve signed audit records ─────────────
 router.get("/audit-logs", (req, res) => {
-  const limit = parseInt(req.query.limit) || 100;
-  const logs = _inMemoryAuditLogs.slice(0, limit);
+  const limit = parseInt(req.query.limit) || 500;
+  const logs = req.query.limit ? _inMemoryAuditLogs.slice(0, limit) : _inMemoryAuditLogs;
   res.json({
     success: true,
     count: logs.length,

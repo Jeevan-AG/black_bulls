@@ -1,0 +1,346 @@
+/* ==========================================================================
+   Cyber Loading Screen & Concentric Buffering Circle
+   ========================================================================== */
+
+.cyber-loader-container {
+  position: fixed;
+  inset: 0;
+  z-index: 999999;
+  background: #06070a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  user-select: none;
+  cursor: pointer;
+}
+
+/* Perspective Cyber Grid Background */
+.cyber-loader-grid {
+  position: absolute;
+  inset: 0;
+  background-image: 
+    linear-gradient(to right, rgba(255, 30, 56, 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 30, 56, 0.05) 1px, transparent 1px);
+  background-size: 40px 40px;
+  mask-image: radial-gradient(circle at center, black 40%, transparent 80%);
+  -webkit-mask-image: radial-gradient(circle at center, black 40%, transparent 80%);
+  pointer-events: none;
+}
+
+.cyber-loader-glow {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+  filter: blur(80px);
+}
+
+.glow-top-right {
+  top: -10%;
+  right: -5%;
+  width: 500px;
+  height: 500px;
+  background: radial-gradient(circle, rgba(255, 30, 56, 0.18) 0%, transparent 70%);
+}
+
+.glow-bottom-left {
+  bottom: -10%;
+  left: -5%;
+  width: 450px;
+  height: 450px;
+  background: radial-gradient(circle, rgba(225, 29, 72, 0.14) 0%, transparent 70%);
+}
+
+/* Central Content */
+.cyber-loader-content {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  max-width: 480px;
+  padding: 24px;
+}
+
+/* Buffering Rings & Logo Wrapper */
+.cyber-buffering-wrapper {
+  position: relative;
+  width: 190px;
+  height: 190px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 28px;
+}
+
+.cyber-loader-pulse-aura {
+  position: absolute;
+  width: 160px;
+  height: 160px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 30, 56, 0.35) 0%, rgba(255, 30, 56, 0) 70%);
+  animation: cyberAuraPulse 2s ease-in-out infinite alternate;
+  pointer-events: none;
+}
+
+@keyframes cyberAuraPulse {
+  0% { transform: scale(0.9); opacity: 0.4; }
+  100% { transform: scale(1.25); opacity: 0.85; }
+}
+
+/* SVG Buffering Circle Spinner */
+.cyber-svg-outer-orbit {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.cyber-svg-track {
+  fill: none;
+  stroke: rgba(255, 30, 56, 0.15);
+  stroke-width: 4;
+}
+
+.cyber-svg-spinner {
+  fill: none;
+  stroke: #ff1e38;
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-dasharray: 578;
+  filter: drop-shadow(0 0 8px #ff1e38);
+  transition: stroke-dashoffset 0.08s linear;
+}
+
+/* Secondary Dashed Rings */
+.cyber-reticle-ring {
+  position: absolute;
+  inset: 12px;
+  border-radius: 50%;
+  border: 1px dashed rgba(255, 60, 85, 0.4);
+  animation: cyberSpinClockwise 12s linear infinite;
+  pointer-events: none;
+}
+
+.cyber-reticle-counter-ring {
+  position: absolute;
+  inset: 22px;
+  border-radius: 50%;
+  border: 1.5px dotted rgba(255, 30, 56, 0.3);
+  animation: cyberSpinCounter 8s linear infinite;
+  pointer-events: none;
+}
+
+@keyframes cyberSpinClockwise {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes cyberSpinCounter {
+  from { transform: rotate(360deg); }
+  to { transform: rotate(0deg); }
+}
+
+/* HUD Compass Ticks */
+.cyber-hud-tick {
+  position: absolute;
+  font-family: 'Geist Mono', monospace, monospace;
+  font-size: 8px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.35);
+  letter-spacing: 0.05em;
+  pointer-events: none;
+}
+
+.tick-n { top: -2px; left: 50%; transform: translateX(-50%); }
+.tick-s { bottom: -2px; left: 50%; transform: translateX(-50%); }
+.tick-e { right: -4px; top: 50%; transform: translateY(-50%); }
+.tick-w { left: -4px; top: 50%; transform: translateY(-50%); }
+
+/* Eagle Crest Emblem */
+.cyber-loader-emblem-box {
+  position: relative;
+  width: 96px;
+  height: 96px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgba(13, 14, 18, 0.85);
+  border: 1px solid rgba(255, 30, 56, 0.35);
+  box-shadow: inset 0 0 20px rgba(255, 30, 56, 0.2), 0 0 25px rgba(255, 30, 56, 0.3);
+  padding: 10px;
+  overflow: hidden;
+}
+
+.cyber-loader-eagle-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 0 10px rgba(255, 30, 56, 0.75));
+  animation: cyberEagleGlow 2.5s ease-in-out infinite alternate;
+}
+
+@keyframes cyberEagleGlow {
+  0% { transform: scale(0.96); filter: drop-shadow(0 0 6px rgba(255, 30, 56, 0.6)); }
+  100% { transform: scale(1.02); filter: drop-shadow(0 0 14px rgba(255, 30, 56, 0.95)); }
+}
+
+.cyber-emblem-scanline {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #ff334f, transparent);
+  box-shadow: 0 0 8px #ff334f;
+  animation: cyberScanline 2.2s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes cyberScanline {
+  0% { top: 0%; opacity: 0; }
+  15% { opacity: 1; }
+  85% { opacity: 1; }
+  100% { top: 100%; opacity: 0; }
+}
+
+/* Brand Title */
+.cyber-loader-brand-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  margin-bottom: 22px;
+}
+
+.cyber-loader-brand-title {
+  font-family: 'Space Grotesk', 'Outfit', sans-serif;
+  font-size: 26px;
+  font-weight: 900;
+  letter-spacing: 0.22em;
+  color: #ffffff;
+  line-height: 1.1;
+  text-shadow: 0 0 20px rgba(255, 30, 56, 0.4);
+}
+
+.cyber-loader-brand-subtitle {
+  font-family: 'Geist Mono', monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  color: #ff334f;
+  margin-top: 6px;
+}
+
+/* Telemetry & Progress */
+.cyber-loader-telemetry {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cyber-loader-bar-bg {
+  position: relative;
+  width: 100%;
+  height: 5px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.cyber-loader-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #ff1e38 0%, #ff4d66 100%);
+  box-shadow: 0 0 10px #ff1e38;
+  border-radius: 4px;
+  transition: width 0.08s linear;
+}
+
+.cyber-loader-bar-light {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  background: #ffffff;
+  box-shadow: 0 0 10px #ffffff, 0 0 15px #ff1e38;
+  transform: translateX(-50%);
+  transition: left 0.08s linear;
+}
+
+.cyber-loader-status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  font-family: 'Geist Mono', monospace;
+  font-size: 11px;
+}
+
+.cyber-status-text-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: rgba(255, 255, 255, 0.7);
+  letter-spacing: 0.04em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cyber-status-icon {
+  color: #ff1e38;
+  display: flex;
+  align-items: center;
+  animation: cyberIconPulse 1s ease-in-out infinite;
+}
+
+@keyframes cyberIconPulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+.cyber-status-label {
+  font-weight: 600;
+  color: #e2e8f0;
+}
+
+.cyber-status-percent {
+  font-weight: 800;
+  color: #ff334f;
+  letter-spacing: 0.08em;
+  padding-left: 12px;
+}
+
+/* Skip hint */
+.cyber-loader-skip-hint {
+  margin-top: 18px;
+  font-family: 'Geist Mono', monospace;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.3);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  transition: color 0.2s ease;
+}
+
+.cyber-loader-container:hover .cyber-loader-skip-hint {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+@media (max-width: 600px) {
+  .cyber-buffering-wrapper {
+    width: 160px;
+    height: 160px;
+  }
+  .cyber-loader-emblem-box {
+    width: 80px;
+    height: 80px;
+  }
+  .cyber-loader-brand-title {
+    font-size: 22px;
+  }
+}

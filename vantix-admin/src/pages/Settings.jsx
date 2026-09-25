@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from "react";
+import { motion } from "framer-motion";
+import { Lock, Unlock, Shield, Download, CheckCircle, AlertTriangle, Sun, Moon, Sparkles } from "lucide-react";
 import api from "../utils/api";
-import { Lock, Unlock } from "lucide-react";
+import { getStoredTheme, applyTheme } from "../utils/theme";
 
 const Settings = () => {
+  const [currentTheme, setCurrentTheme] = useState(() => getStoredTheme());
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -10,14 +13,17 @@ const Settings = () => {
   const [pwSuccess, setPwSuccess] = useState("");
   const [busy, setBusy] = useState(false);
 
-  // Org info
   const [orgInfo, setOrgInfo] = useState({ email: "", employeeCount: 0, createdAt: "" });
   const [isProjectActive, setIsProjectActive] = useState(true);
 
   useEffect(() => {
+    const handleThemeChange = (e) => {
+      if (e.detail?.theme) setCurrentTheme(e.detail.theme);
+    };
+    window.addEventListener("vantix:theme-change", handleThemeChange);
+
     const fetchSettings = async () => {
       try {
-        // Decode admin email from token
         const token = sessionStorage.getItem("vantixAdminToken");
         if (token) {
           const payload = JSON.parse(atob(token.split(".")[1]));
@@ -26,10 +32,7 @@ const Settings = () => {
 
         const usersRes = await api.get("/users");
         if (usersRes.data.success) {
-          setOrgInfo((prev) => ({
-            ...prev,
-            employeeCount: usersRes.data.users.length,
-          }));
+          setOrgInfo((prev) => ({ ...prev, employeeCount: usersRes.data.users.length }));
         }
 
         const statusRes = await api.get("/auth/project-status");
@@ -41,19 +44,24 @@ const Settings = () => {
       }
     };
     fetchSettings();
+
+    return () => {
+      window.removeEventListener("vantix:theme-change", handleThemeChange);
+    };
   }, []);
 
-  const toggleProjectStatus = async () => {
-    if (!window.confirm(`Are you sure you want to ${isProjectActive ? 'TERMINATE' : 'RESTORE'} project access? This will affect all local copies connecting to this database.`)) {
-      return;
-    }
+  const handleSelectTheme = (newTheme) => {
+    applyTheme(newTheme);
+    setCurrentTheme(newTheme);
+  };
 
+  const toggleProjectStatus = async () => {
+    if (!window.confirm(`Are you sure you want to ${isProjectActive ? "TERMINATE" : "RESTORE"} project access?`)) return;
     try {
       setBusy(true);
       const res = await api.post("/auth/toggle-project-status");
       if (res.data.success) {
         setIsProjectActive(res.data.isActive);
-        alert(`Project ${res.data.isActive ? 'Activated' : 'Terminated'} Successfully.`);
       }
     } catch (err) {
       alert(err.response?.data?.error || "Failed to toggle project status");
@@ -78,10 +86,7 @@ const Settings = () => {
 
     try {
       setBusy(true);
-      const res = await api.post("/auth/change-password", {
-        currentPassword,
-        newPassword,
-      });
+      const res = await api.post("/auth/change-password", { currentPassword, newPassword });
       if (res.data.success) {
         setPwSuccess("Password updated successfully!");
         setCurrentPassword("");
@@ -95,343 +100,206 @@ const Settings = () => {
     }
   };
 
-  const platforms = [
-    "ChatGPT", "Gemini", "Claude", "Copilot", "Perplexity",
-    "DeepSeek", "Grok", "Meta AI", "HuggingChat", "Mistral"
-  ];
-
   return (
-    <div className="grid" style={{ gap: 16 }}>
-      {/* Organization Info */}
-      <section className="card">
-        <div className="card__head">
-          <p className="card__title">Organization</p>
+    <motion.div
+      initial={{ opacity: 0, y: 15 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.35, ease: "easeOut" }}
+      style={{ display: "flex", flexDirection: "column", gap: 24 }}
+    >
+      {/* Header */}
+      <div>
+        <h1 style={{ fontSize: 28, fontWeight: 700, color: "var(--apple-text-main)", margin: 0, letterSpacing: "-0.02em" }}>
+          Settings
+        </h1>
+        <p style={{ fontSize: 13, color: "var(--apple-text-muted)", margin: "4px 0 0 0" }}>
+          Security administration, workspace appearance & system status
+        </p>
+      </div>
+
+      {/* Theme & Appearance Card */}
+      <div className="apple-card">
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+          <Sparkles size={18} color="#e11d48" />
+          <h3 style={{ fontSize: 16, fontWeight: 600, color: "var(--apple-text-main)", margin: 0 }}>
+            Workspace Theme & Appearance
+          </h3>
         </div>
-        <div className="card__body">
-          <div className="grid grid--3" style={{ gap: 20 }}>
-            <div className="metric">
-              <div>
-                <div className="value" style={{ fontSize: 15, wordBreak: "break-all", fontWeight: 600 }}>
-                  {orgInfo.email || "—"}
-                </div>
-                <div className="hint">Admin email</div>
-              </div>
-            </div>
-            <div className="metric">
-              <div>
-                <div className="value gradient-teal">{orgInfo.employeeCount}</div>
-                <div className="hint">Employees registered</div>
-              </div>
-            </div>
-            <div className="metric">
-              <div>
-                <div className="value" style={{ fontSize: 15, fontFamily: 'var(--mono)', fontWeight: 600, color: 'var(--brand)' }}>
-                  v1.0.0
-                </div>
-                <div className="hint">Vantix version</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
+        <p style={{ fontSize: 13, color: "var(--apple-text-sub)", margin: "0 0 18px 0" }}>
+          Customize your interface appearance. Toggle between dark cyberpunk mode and clean light daylight mode.
+        </p>
 
-      {/* Change Password */}
-      <section className="card">
-        <div className="card__head">
-          <p className="card__title">Change Password</p>
-        </div>
-        <div className="card__body" style={{ maxWidth: 480 }}>
-          {pwError && (
-            <div className="toast toast--err" style={{ marginBottom: 14 }}>
-              {pwError}
-            </div>
-          )}
-          {pwSuccess && (
-            <div className="toast toast--ok" style={{ marginBottom: 14 }}>
-              {pwSuccess}
-            </div>
-          )}
-
-          <form onSubmit={handleChangePassword} className="grid" style={{ gap: 14 }}>
-            <div className="field">
-              <div className="label">Current password</div>
-              <input
-                className="input"
-                type="password"
-                value={currentPassword}
-                onChange={(e) => setCurrentPassword(e.target.value)}
-                placeholder="••••••••"
-                required
-                autoComplete="current-password"
-              />
-            </div>
-
-            <div className="field">
-              <div className="label">New password</div>
-              <input
-                className="input"
-                type="password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="••••••••"
-                required
-                minLength={6}
-                autoComplete="new-password"
-              />
-            </div>
-
-            <div className="field">
-              <div className="label">Confirm new password</div>
-              <input
-                className="input"
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder="••••••••"
-                required
-                autoComplete="new-password"
-              />
-            </div>
-
-            <button
-              className="btn btn--primary"
-              type="submit"
-              disabled={busy}
-              style={{ marginTop: 4, width: "fit-content" }}
-            >
-              {busy ? "Updating…" : "Update password"}
-            </button>
-          </form>
-        </div>
-      </section>
-
-      {/* Browser Guard & Endpoint Distribution */}
-      <section className="card">
-        <div className="card__head" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <p className="card__title">Browser Guard & Remote Distribution</p>
-          <a
-            href="/downloads/vantix-browser-guard.zip"
-            download="vantix-browser-guard.zip"
-            className="btn btn--primary"
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 16 }}>
+          {/* Dark Mode Option */}
+          <div
+            onClick={() => handleSelectTheme("dark")}
             style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 8,
-              padding: "7px 16px",
-              fontSize: 13,
-              fontWeight: 600,
-              textDecoration: "none",
-              borderRadius: 8,
+              padding: 18,
+              borderRadius: 14,
+              border: `2px solid ${currentTheme === "dark" ? "#e11d48" : "var(--apple-border)"}`,
+              background: currentTheme === "dark" ? "rgba(225, 29, 72, 0.09)" : "transparent",
+              cursor: "pointer",
+              transition: "all 0.2s ease",
+              display: "flex",
+              flexDirection: "column",
+              gap: 12,
             }}
           >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-              <polyline points="7 10 12 15 17 10" />
-              <line x1="12" y1="15" x2="12" y2="3" />
-            </svg>
-            Download Extension (.zip)
-          </a>
-        </div>
-        <div className="card__body">
-          <p style={{ color: "var(--text-secondary)", fontSize: 13, lineHeight: 1.6, margin: "0 0 18px 0" }}>
-            The Vantix Browser Guard inspects employee prompts in real time on web AI applications and communicates directly with your live cloud detection engine on Render.
-          </p>
-
-          <div style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-            gap: 16,
-            marginBottom: 20
-          }}>
-            <div style={{
-              background: "var(--card-bg, rgba(255, 255, 255, 0.03))",
-              border: "1px solid var(--border-color)",
-              borderRadius: 8,
-              padding: 16
-            }}>
-              <h4 style={{ margin: "0 0 10px 0", fontSize: 14, fontWeight: 600, color: "var(--brand)" }}>
-                Option A: Manual Installation (All OS)
-              </h4>
-              <ol style={{ margin: 0, paddingLeft: 20, fontSize: 12, lineHeight: 1.8, color: "var(--text-secondary)" }}>
-                <li>Click <strong>Download Extension (.zip)</strong> above.</li>
-                <li>Extract the downloaded archive anywhere on your system.</li>
-                <li>In Chrome or Brave, navigate to <code>chrome://extensions</code>.</li>
-                <li>Enable <strong>Developer mode</strong> (toggle in top-right corner).</li>
-                <li>Click <strong>Load unpacked</strong> and select the extracted folder.</li>
-              </ol>
-            </div>
-
-            <div style={{
-              background: "var(--card-bg, rgba(255, 255, 255, 0.03))",
-              border: "1px solid var(--border-color)",
-              borderRadius: 8,
-              padding: 16
-            }}>
-              <h4 style={{ margin: "0 0 10px 0", fontSize: 14, fontWeight: 600, color: "var(--brand)" }}>
-                Option B: Linux OS Interception (1-Line)
-              </h4>
-              <p style={{ margin: "0 0 8px 0", fontSize: 12, lineHeight: 1.5, color: "var(--text-secondary)" }}>
-                Intercepts Python AI scripts, terminal curl, and OpenAI SDKs via iptables:
-              </p>
-              <div style={{
-                background: "var(--panel)",
-                border: "1px solid var(--border-color)",
-                padding: "8px 12px",
-                borderRadius: 6,
-                fontFamily: "var(--mono)",
-                fontSize: 11,
-                color: "var(--brand)",
-                wordBreak: "break-all"
-              }}>
-                {"curl -fsSL https://vantix-beta.vercel.app/quickstart.sh | sudo bash"}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <Moon size={18} color="#f43f5e" />
+                <span style={{ fontSize: 14, fontWeight: 700, color: "var(--apple-text-main)" }}>Dark Mode</span>
               </div>
+              {currentTheme === "dark" && (
+                <span className="apple-pill red" style={{ fontSize: 10, padding: "2px 8px" }}>Active</span>
+              )}
             </div>
 
-            <div style={{
-              background: "var(--card-bg, rgba(255, 255, 255, 0.03))",
-              border: "1px solid var(--border-color)",
-              borderRadius: 8,
-              padding: 16
-            }}>
-              <h4 style={{ margin: "0 0 10px 0", fontSize: 14, fontWeight: 600, color: "var(--brand)" }}>
-                Option C: macOS Terminal 1-Line Setup
-              </h4>
-              <p style={{ margin: "0 0 8px 0", fontSize: 12, lineHeight: 1.5, color: "var(--text-secondary)" }}>
-                Downloads & unzips Extension directly to <code>~/vantix-guard</code>:
-              </p>
-              <div style={{
-                background: "var(--panel)",
-                border: "1px solid var(--border-color)",
-                padding: "8px 12px",
-                borderRadius: 6,
-                fontFamily: "var(--mono)",
-                fontSize: 11,
-                color: "var(--brand)",
-                wordBreak: "break-all"
-              }}>
-                {"curl -fsSL https://vantix-beta.vercel.app/downloads/vantix-browser-guard.zip -o ~/vantix-guard.zip && unzip -qo ~/vantix-guard.zip -d ~/vantix-guard"}
-              </div>
-            </div>
-
-            <div style={{
-              background: "var(--card-bg, rgba(255, 255, 255, 0.03))",
-              border: "1px solid var(--border-color)",
-              borderRadius: 8,
-              padding: 16
-            }}>
-              <h4 style={{ margin: "0 0 10px 0", fontSize: 14, fontWeight: 600, color: "var(--brand)" }}>
-                Option D: Windows PowerShell 1-Line Setup
-              </h4>
-              <p style={{ margin: "0 0 8px 0", fontSize: 12, lineHeight: 1.5, color: "var(--text-secondary)" }}>
-                Downloads & unzips Extension directly to <code>$HOME\vantix-guard</code>:
-              </p>
-              <div style={{
-                background: "var(--panel)",
-                border: "1px solid var(--border-color)",
-                padding: "8px 12px",
-                borderRadius: 6,
-                fontFamily: "var(--mono)",
-                fontSize: 11,
-                color: "var(--brand)",
-                wordBreak: "break-all"
-              }}>
-                {'iwr https://vantix-beta.vercel.app/downloads/vantix-browser-guard.zip -OutFile "$HOME\\vantix-guard.zip"; Expand-Archive "$HOME\\vantix-guard.zip" -DestinationPath "$HOME\\vantix-guard" -Force'}
-              </div>
-            </div>
-          </div>
-
-          <div style={{ marginBottom: 16 }}>
-            <p style={{ color: "var(--text-secondary)", fontSize: 12, fontWeight: 600, marginBottom: 8 }}>
-              Active Cloud Gateway Target:
-            </p>
-            <div style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 8,
-              background: "rgba(16, 185, 129, 0.1)",
-              border: "1px solid rgba(16, 185, 129, 0.3)",
-              color: "#10b981",
-              padding: "6px 12px",
-              borderRadius: 6,
-              fontSize: 12,
-              fontFamily: "var(--mono)"
-            }}>
-              <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#10b981" }}></div>
-              https://vantix-backend-7gcw.onrender.com
-            </div>
-          </div>
-
-          <p style={{ color: "var(--text-secondary)", fontSize: 12, fontWeight: 600, margin: "16px 0 8px 0" }}>
-            Monitored Platforms:
-          </p>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            {platforms.map((p) => (
-              <span key={p} className="badge badge--admin" style={{ fontSize: 12, padding: '5px 14px' }}>
-                {p}
-              </span>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Danger Zone */}
-      <section className="card" style={{ border: "1px solid rgba(255,77,109,0.15)", background: "rgba(255,77,109,0.02)" }}>
-        <div className="card__head">
-          <p className="card__title" style={{ color: "#FF4D6D" }}>
-            <svg width="14" height="14" fill="none" stroke="#FF4D6D" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6, verticalAlign: -2 }}>
-              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
-            </svg>
-            Danger Zone
-          </p>
-        </div>
-        <div className="card__body">
-          <p style={{ fontSize: 13, color: "var(--muted-text)", marginBottom: 18, lineHeight: 1.6 }}>
-            If you believe the project is being used without authorization (e.g., someone has a local copy they shouldn't have), you can remotely terminate access. This will block all backend requests until re-activated.
-          </p>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-            <button 
-              className={`btn ${isProjectActive ? 'btn--danger' : 'btn--primary'}`}
-              onClick={toggleProjectStatus}
-              disabled={busy}
-              style={{ 
-                background: isProjectActive ? "#FF4D6D" : "linear-gradient(135deg, #25E6D9, #2EE59D)",
-                border: "none",
-                color: isProjectActive ? "#fff" : "#051226",
-                fontWeight: 700,
+            {/* Dark UI Preview */}
+            <div
+              style={{
+                height: 56,
                 borderRadius: 8,
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 8,
+                background: "#060709",
+                border: "1px solid rgba(225, 29, 72, 0.3)",
+                padding: "8px 12px",
+                display: "flex",
+                flexDirection: "column",
+                gap: 6,
               }}
             >
-              {isProjectActive ? (
-                <>
-                  <Lock size={16} />
-                  Terminate Project Access
-                </>
-              ) : (
-                <>
-                  <Unlock size={16} />
-                  Restore Project Access
-                </>
+              <div style={{ height: 6, width: "45%", background: "#e11d48", borderRadius: 3 }} />
+              <div style={{ display: "flex", gap: 8 }}>
+                <div style={{ height: 22, flex: 1, background: "rgba(20, 21, 28, 0.95)", borderRadius: 4, border: "1px solid rgba(255,255,255,0.08)" }} />
+                <div style={{ height: 22, flex: 1, background: "rgba(20, 21, 28, 0.95)", borderRadius: 4, border: "1px solid rgba(255,255,255,0.08)" }} />
+              </div>
+            </div>
+
+            <p style={{ fontSize: 12, color: "var(--apple-text-muted)", margin: 0 }}>
+              Cyberpunk high-contrast theme optimized for command center operations.
+            </p>
+          </div>
+
+          {/* Light Mode Option */}
+          <div
+            onClick={() => handleSelectTheme("light")}
+            style={{
+              padding: 18,
+              borderRadius: 14,
+              border: `2px solid ${currentTheme === "light" ? "#e11d48" : "var(--apple-border)"}`,
+              background: currentTheme === "light" ? "rgba(225, 29, 72, 0.09)" : "transparent",
+              cursor: "pointer",
+              transition: "all 0.2s ease",
+              display: "flex",
+              flexDirection: "column",
+              gap: 12,
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <Sun size={18} color="#f59e0b" />
+                <span style={{ fontSize: 14, fontWeight: 700, color: "var(--apple-text-main)" }}>Light Mode</span>
+              </div>
+              {currentTheme === "light" && (
+                <span className="apple-pill red" style={{ fontSize: 10, padding: "2px 8px" }}>Active</span>
               )}
-            </button>
-            <span className="badge" style={{
-              borderColor: isProjectActive ? 'rgba(46,229,157,.25)' : 'rgba(255,77,109,.25)',
-              background: isProjectActive ? 'rgba(46,229,157,.06)' : 'rgba(255,77,109,.06)',
-              color: isProjectActive ? '#2EE59D' : '#FF4D6D',
-              fontSize: 11,
-            }}>
-              {isProjectActive ? (
-                <><div className="pulse-dot" style={{ width: 6, height: 6 }} /> Active</>
-              ) : (
-                "Terminated"
-              )}
-            </span>
+            </div>
+
+            {/* Light UI Preview */}
+            <div
+              style={{
+                height: 56,
+                borderRadius: 8,
+                background: "#f3f5f8",
+                border: "1px solid rgba(0, 0, 0, 0.12)",
+                padding: "8px 12px",
+                display: "flex",
+                flexDirection: "column",
+                gap: 6,
+              }}
+            >
+              <div style={{ height: 6, width: "45%", background: "#e11d48", borderRadius: 3 }} />
+              <div style={{ display: "flex", gap: 8 }}>
+                <div style={{ height: 22, flex: 1, background: "#ffffff", borderRadius: 4, border: "1px solid rgba(0,0,0,0.1)" }} />
+                <div style={{ height: 22, flex: 1, background: "#ffffff", borderRadius: 4, border: "1px solid rgba(0,0,0,0.1)" }} />
+              </div>
+            </div>
+
+            <p style={{ fontSize: 12, color: "var(--apple-text-muted)", margin: 0 }}>
+              Crisp daylight mode with bright canvas and clear, high-contrast typography.
+            </p>
           </div>
         </div>
-      </section>
-    </div>
+      </div>
+
+      {/* Organization Overview Card */}
+      <div className="apple-card" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 20 }}>
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 600, color: "var(--apple-text-muted)", textTransform: "uppercase" }}>Admin Identity</div>
+          <div style={{ fontSize: 16, fontWeight: 600, color: "var(--apple-text-main)", marginTop: 4 }}>{orgInfo.email || "admin@vantix.corp"}</div>
+        </div>
+
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 600, color: "var(--apple-text-muted)", textTransform: "uppercase" }}>Registered Identities</div>
+          <div style={{ fontSize: 16, fontWeight: 600, color: "var(--apple-cyan)", marginTop: 4 }}>{orgInfo.employeeCount} Employees</div>
+        </div>
+
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 600, color: "var(--apple-text-muted)", textTransform: "uppercase" }}>Vantix Core</div>
+          <div style={{ fontSize: 16, fontWeight: 600, color: "var(--apple-emerald)", marginTop: 4 }}>v1.0.0 Production</div>
+        </div>
+      </div>
+
+      {/* Password Management Card */}
+      <div className="apple-card" style={{ maxWidth: 540 }}>
+        <h3 style={{ fontSize: 16, fontWeight: 600, color: "var(--apple-text-main)", marginBottom: 16 }}>Change Admin Password</h3>
+
+        {pwError && <div style={{ padding: "8px 12px", background: "rgba(244, 63, 94, 0.15)", border: "1px solid rgba(244, 63, 94, 0.3)", color: "#f43f5e", borderRadius: 8, fontSize: 12, marginBottom: 12 }}>{pwError}</div>}
+        {pwSuccess && <div style={{ padding: "8px 12px", background: "rgba(16, 185, 129, 0.15)", border: "1px solid rgba(16, 185, 129, 0.3)", color: "#34d399", borderRadius: 8, fontSize: 12, marginBottom: 12 }}>{pwSuccess}</div>}
+
+        <form onSubmit={handleChangePassword} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <div>
+            <label style={{ fontSize: 11, fontWeight: 600, color: "var(--apple-text-muted)", marginBottom: 6, display: "block" }}>Current Password</label>
+            <input type="password" className="apple-input" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} required />
+          </div>
+
+          <div>
+            <label style={{ fontSize: 11, fontWeight: 600, color: "var(--apple-text-muted)", marginBottom: 6, display: "block" }}>New Password</label>
+            <input type="password" className="apple-input" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required minLength={6} />
+          </div>
+
+          <div>
+            <label style={{ fontSize: 11, fontWeight: 600, color: "var(--apple-text-muted)", marginBottom: 6, display: "block" }}>Confirm New Password</label>
+            <input type="password" className="apple-input" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required />
+          </div>
+
+          <button type="submit" className="apple-btn primary" disabled={busy} style={{ marginTop: 8, width: "fit-content" }}>
+            {busy ? "Updating..." : "Update Password"}
+          </button>
+        </form>
+      </div>
+
+      {/* Danger Zone */}
+      <div className="apple-card" style={{ border: "1px solid rgba(244, 63, 94, 0.2)", background: "rgba(244, 63, 94, 0.03)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+          <AlertTriangle size={16} color="#f43f5e" />
+          <h3 style={{ fontSize: 16, fontWeight: 600, color: "#f43f5e", margin: 0 }}>System Kill-Switch</h3>
+        </div>
+
+        <p style={{ fontSize: 13, color: "var(--apple-text-sub)", lineHeight: 1.5, marginBottom: 16 }}>
+          Remotely terminate or restore global backend telemetry access for all connected proxies and browser guards.
+        </p>
+
+        <button
+          className={`apple-btn ${isProjectActive ? "danger" : "primary"}`}
+          onClick={toggleProjectStatus}
+          disabled={busy}
+        >
+          {isProjectActive ? <Lock size={14} /> : <Unlock size={14} />}
+          <span>{isProjectActive ? "Terminate Project Access" : "Restore Project Access"}</span>
+        </button>
+      </div>
+    </motion.div>
   );
 };
 

@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate, useNavigate } from "react-route
 import AdminAuth from './pages/AdminAuth';
 import AdminRegister from './pages/AdminRegister';
 import Dashboard from './pages/Dashboard';
+import ThreatTracking from './pages/ThreatTracking';
 import Employees from './pages/Employees';
 import Rules from './pages/Rules';
 import Settings from './pages/Settings';
@@ -36,6 +37,7 @@ function App() {
 
         {/* Unified Admin Dashboard & Security Operations */}
         <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+        <Route path="/threat-tracking" element={<ProtectedRoute><ThreatTracking /></ProtectedRoute>} />
         <Route path="/rules" element={<ProtectedRoute><Rules /></ProtectedRoute>} />
         <Route path="/employees" element={<ProtectedRoute><Employees /></ProtectedRoute>} />
         <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />

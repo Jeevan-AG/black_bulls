@@ -90,12 +90,12 @@ export default function AuditLogPanel({ logs = [] }) {
                             setTimeout(() => setSelectedSig(null), 1500);
                           }}
                         >
-                          {selectedSig === sig ? "COPIED ✓" : displaySig}
+                          {selectedSig === sig ? <><Check size={11} style={{ marginRight: 4 }} /> COPIED</> : displaySig}
                         </code>
                       </td>
                       <td>
-                        <span className="sig-valid-badge">
-                          ✓ VALID
+                        <span className="sig-valid-badge" style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                          <Check size={12} /> VALID
                         </span>
                       </td>
                     </tr>

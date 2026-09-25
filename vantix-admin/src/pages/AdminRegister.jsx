@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import api from "../utils/api";
 import { Shield, User, Mail, Lock, CheckCircle, Star, Zap, Building } from "lucide-react";
+import vantixIcon from "../assets/vantix-icon.png";
 
 const AdminRegister = () => {
   const [fullName, setFullName] = useState("");
@@ -83,7 +84,9 @@ const AdminRegister = () => {
         {/* Left Section - Information & Plans */}
         <section style={{ padding: "60px", background: "rgba(255,255,255,0.01)", borderRight: "1px solid var(--border-color)" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "32px" }}>
-            <Shield size={32} color="var(--brand)" />
+            <div style={{ width: 38, height: 38, borderRadius: 10, background: "rgba(255,30,56,0.1)", border: "1px solid rgba(255,30,56,0.3)", padding: 4, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <img src={vantixIcon} alt="Vantix" style={{ width: "100%", height: "100%", objectFit: "contain", filter: "drop-shadow(0 0 6px rgba(255,30,56,0.6))" }} />
+            </div>
             <span style={{ fontSize: "24px", fontWeight: "800", letterSpacing: "2px", color: "var(--text-primary)" }}>VANTIX</span>
           </div>
 

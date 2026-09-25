@@ -6,3 +6,5 @@ ACCESS_GUIDE.md
 *.log
 *.pid
 .vantix.pid
+vantix-bridge/ca/certs/
+vantix-bridge/ca/*.srl
