@@ -80,6 +80,29 @@
       </div>
     </div>
 
+    <!-- Custom Flagged Terms -->
+    <div class="engine-card">
+      <div class="engine-row" style="margin-bottom: 4px;">
+        <span class="engine-label" style="font-weight:700; color:#cbd5e1;">CUSTOM FLAGGED TERMS</span>
+      </div>
+      <div id="custom-terms-list" class="terms-list">
+        <span class="terms-empty">No custom terms yet.</span>
+      </div>
+      <div class="terms-add-row">
+        <input id="term-input" type="text" placeholder="e.g. Project Zephyr" maxlength="120" />
+        <select id="term-type">
+          <option value="literal">Text</option>
+          <option value="regex">Regex</option>
+        </select>
+        <select id="term-action">
+          <option value="redact">Redact</option>
+          <option value="block">Block</option>
+        </select>
+        <button id="btn-add-term" class="add-term-btn" title="Add">+</button>
+      </div>
+      <p id="term-error" class="term-error"></p>
+    </div>
+
     <!-- Actions -->
     <div class="action-buttons">
       <button id="btn-open-dashboard" class="primary-btn">

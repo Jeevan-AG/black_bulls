@@ -11,6 +11,27 @@ let effectiveBackendUrl = LOCAL_BACKEND_URL;
 let currentSystemUser = "mohammed";
 let currentSystemHost = "mohammed-Latitude-5400";
 
+// Pull admin-defined custom keywords/patterns and cache them in
+// chrome.storage.local, where content.js reads them into a synchronous
+// in-memory list (so per-keystroke detection never has to wait on a network
+// call). This is polled periodically and can also be triggered on demand
+// (see the REFRESH_CUSTOM_RULES message handler below) right after the popup
+// adds/removes a term, so the change takes effect immediately rather than
+// waiting for the next poll.
+async function refreshCustomRules() {
+  try {
+    const res = await fetch(`${LOCAL_BACKEND_URL}/api/custom-rules`);
+    const json = await res.json();
+    if (json && json.success && Array.isArray(json.keywords)) {
+      await chrome.storage.local.set({ customKeywords: json.keywords });
+      return;
+    }
+  } catch (e) {
+    // Local backend not reachable — leave whatever is already cached in
+    // storage untouched rather than clearing it out.
+  }
+}
+
 // Fetch dynamic system identity — ONLY from local engine (which runs on user's machine)
 // Never query cloud Render for identity — it would return the server's OS, not the user's.
 async function fetchSystemIdentity() {
@@ -108,6 +129,7 @@ chrome.runtime.onInstalled.addListener(async () => {
   console.log("[Vantix Guard] Background service worker initialized.");
   fetchSystemIdentity();
   setupExtensionHeaders();
+  refreshCustomRules();
 });
 
 setupExtensionHeaders();
@@ -149,10 +171,17 @@ async function checkEngineHealth() {
 
 // Check engine health on startup and periodically
 checkEngineHealth();
+refreshCustomRules();
 setInterval(checkEngineHealth, 15000);
+setInterval(refreshCustomRules, 15000);
 
 // Handle messages from content script
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.type === "REFRESH_CUSTOM_RULES") {
+    refreshCustomRules().then(() => sendResponse({ success: true }));
+    return true;
+  }
+
   if (message.type === "INSPECT_PROMPT") {
     (async () => {
       try {

@@ -80,6 +80,10 @@ app.use("/api/reports", require("./routes/reports"));
 // Detection rules (managed by admin dashboard)
 app.use("/api/rules", require("./routes/rules"));
 
+// Custom flagged keywords/patterns — lightweight, in-memory, no MongoDB/auth
+// required. Polled by the browser extension's background worker.
+app.use("/api/custom-rules", require("./routes/customRules"));
+
 // Presidio integration (legacy — kept for backward compatibility)
 app.use("/api/scan", require("./routes/scan"));
 app.use("/api/check", require("./routes/scan"));
@@ -154,4 +158,3 @@ server.listen(PORT, "0.0.0.0", () => {
     });
   }
 });
-

@@ -226,3 +226,115 @@ body {
   border-top: 1px solid #1e293b;
   padding-top: 8px;
 }
+
+/* Custom Flagged Terms */
+body {
+  overflow-y: auto;
+  max-height: 600px;
+}
+
+.terms-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 120px;
+  overflow-y: auto;
+  margin-bottom: 8px;
+}
+
+.terms-empty {
+  font-size: 10px;
+  color: #475569;
+  font-style: italic;
+}
+
+.term-chip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 8px;
+  background: #111827;
+  border: 1px solid #1f2937;
+  border-radius: 6px;
+  font-size: 11px;
+}
+
+.term-chip.action-block {
+  border-color: rgba(239, 68, 68, 0.35);
+}
+
+.term-chip.action-redact {
+  border-color: rgba(34, 211, 238, 0.3);
+}
+
+.term-chip-label {
+  color: #e2e8f0;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 150px;
+}
+
+.term-chip-meta {
+  font-size: 9px;
+  color: #64748b;
+  text-transform: uppercase;
+  margin-left: 6px;
+}
+
+.term-chip-remove {
+  background: none;
+  border: none;
+  color: #64748b;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  padding: 2px 4px;
+}
+
+.term-chip-remove:hover {
+  color: #ef4444;
+}
+
+.terms-add-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto auto;
+  gap: 6px;
+}
+
+.terms-add-row input,
+.terms-add-row select {
+  background: #0f172a;
+  border: 1px solid #1e293b;
+  border-radius: 6px;
+  color: #f1f5f9;
+  font-size: 11px;
+  padding: 6px;
+}
+
+.terms-add-row input {
+  min-width: 0;
+}
+
+.add-term-btn {
+  background: #0369a1;
+  border: 1px solid #38bdf8;
+  border-radius: 6px;
+  color: #fff;
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 0 10px;
+}
+
+.add-term-btn:hover {
+  background: #075985;
+}
+
+.term-error {
+  font-size: 10px;
+  color: #ef4444;
+  margin-top: 4px;
+  min-height: 12px;
+}

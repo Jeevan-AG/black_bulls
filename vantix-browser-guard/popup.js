@@ -80,4 +80,97 @@ document.addEventListener("DOMContentLoaded", async () => {
   btnDashboard.addEventListener("click", () => {
     chrome.tabs.create({ url: activeDashboardUrl });
   });
+
+  // ─── Custom Flagged Terms ───────────────────────────────────────────────
+  const CUSTOM_RULES_URL = `${LOCAL_BACKEND_URL}/api/custom-rules`;
+  const elTermsList = document.getElementById("custom-terms-list");
+  const elTermInput = document.getElementById("term-input");
+  const elTermType = document.getElementById("term-type");
+  const elTermAction = document.getElementById("term-action");
+  const btnAddTerm = document.getElementById("btn-add-term");
+  const elTermError = document.getElementById("term-error");
+
+  function renderTerms(keywords) {
+    elTermsList.innerHTML = "";
+    if (!keywords || keywords.length === 0) {
+      elTermsList.innerHTML = `<span class="terms-empty">No custom terms yet.</span>`;
+      return;
+    }
+    for (const k of keywords) {
+      const chip = document.createElement("div");
+      chip.className = `term-chip action-${k.action}`;
+      chip.innerHTML = `
+        <span class="term-chip-label" title="${k.term}">${k.label || k.term}</span>
+        <span style="display:flex; align-items:center;">
+          <span class="term-chip-meta">${k.type === "regex" ? "regex" : "text"} · ${k.action}</span>
+          <button class="term-chip-remove" data-id="${k.id}" title="Remove">✕</button>
+        </span>
+      `;
+      elTermsList.appendChild(chip);
+    }
+    elTermsList.querySelectorAll(".term-chip-remove").forEach((btn) => {
+      btn.addEventListener("click", () => removeTerm(btn.dataset.id));
+    });
+  }
+
+  async function loadTerms() {
+    try {
+      const res = await fetch(CUSTOM_RULES_URL);
+      const json = await res.json();
+      if (json && json.success) renderTerms(json.keywords);
+    } catch (e) {
+      elTermsList.innerHTML = `<span class="terms-empty">Backend offline — can't load terms.</span>`;
+    }
+  }
+
+  async function addTerm() {
+    const term = elTermInput.value.trim();
+    elTermError.textContent = "";
+    if (!term) return;
+
+    try {
+      const res = await fetch(CUSTOM_RULES_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          term,
+          type: elTermType.value,
+          action: elTermAction.value,
+        }),
+      });
+      const json = await res.json();
+      if (!json.success) {
+        elTermError.textContent = json.error || "Could not add term.";
+        return;
+      }
+      elTermInput.value = "";
+      renderTerms(json.keywords);
+      // Tell background.js to re-sync chrome.storage.local immediately, so
+      // any open ChatGPT/Claude tab picks up the new term without waiting
+      // for the next 15s poll.
+      chrome.runtime.sendMessage({ type: "REFRESH_CUSTOM_RULES" });
+    } catch (e) {
+      elTermError.textContent = "Backend unreachable — is it running on :5000?";
+    }
+  }
+
+  async function removeTerm(id) {
+    try {
+      const res = await fetch(`${CUSTOM_RULES_URL}/${id}`, { method: "DELETE" });
+      const json = await res.json();
+      if (json.success) {
+        renderTerms(json.keywords);
+        chrome.runtime.sendMessage({ type: "REFRESH_CUSTOM_RULES" });
+      }
+    } catch (e) {
+      elTermError.textContent = "Backend unreachable — could not remove term.";
+    }
+  }
+
+  btnAddTerm.addEventListener("click", addTerm);
+  elTermInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") addTerm();
+  });
+
+  loadTerms();
 });
