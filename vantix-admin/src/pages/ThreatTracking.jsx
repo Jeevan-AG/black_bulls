@@ -282,7 +282,7 @@ export default function ThreatTracking() {
               <span>Back</span>
             </button>
           )}
-          <h1 style={{ fontSize: 28, fontWeight: 700, color: "#ffffff", margin: 0, letterSpacing: "-0.02em" }}>
+          <h1 style={{ fontSize: 28, fontWeight: 700, color: "var(--apple-text-main)", margin: 0, letterSpacing: "-0.02em" }}>
             {selectedEmployee ? selectedEmployee.name : "Threat Tracking"}
           </h1>
         </div>
@@ -310,7 +310,7 @@ export default function ThreatTracking() {
           <div style={{ padding: "16px 24px", borderBottom: "1px solid var(--apple-border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <ShieldAlert size={16} color="#ff0055" />
-              <span style={{ fontSize: 14, fontWeight: 600, color: "#ffffff" }}>Flagged Identities</span>
+              <span style={{ fontSize: 14, fontWeight: 600, color: "var(--apple-text-main)" }}>Flagged Identities</span>
             </div>
 
             <div style={{ display: "flex", gap: 6 }}>
@@ -345,7 +345,7 @@ export default function ThreatTracking() {
                   <tr key={emp.id} style={{ cursor: "pointer" }} onClick={() => setSelectedEmployeeId(emp.id)}>
                     <td>
                       <div style={{ display: "flex", flexDirection: "column" }}>
-                        <span style={{ fontWeight: 600, color: "#ffffff" }}>{emp.name}</span>
+                        <span style={{ fontWeight: 600, color: "var(--apple-text-main)" }}>{emp.name}</span>
                         <span style={{ fontSize: 11, color: "var(--apple-text-muted)" }}>{emp.email}</span>
                       </div>
                     </td>
@@ -358,7 +358,7 @@ export default function ThreatTracking() {
                         {emp.peakRiskScore}/100
                       </span>
                     </td>
-                    <td style={{ fontSize: 13, fontWeight: 600, color: "#ffffff" }}>
+                    <td style={{ fontSize: 13, fontWeight: 600, color: "var(--apple-text-main)" }}>
                       {emp.totalAttempts} attempts
                     </td>
                     <td>
@@ -409,7 +409,7 @@ export default function ThreatTracking() {
               </div>
 
               <div>
-                <h2 style={{ fontSize: 20, fontWeight: 700, color: "#ffffff", margin: 0 }}>{selectedEmployee.name}</h2>
+                <h2 style={{ fontSize: 20, fontWeight: 700, color: "var(--apple-text-main)", margin: 0 }}>{selectedEmployee.name}</h2>
                 <div style={{ fontSize: 12, color: "var(--apple-text-muted)", marginTop: 4 }}>
                   {selectedEmployee.email} • {selectedEmployee.department} • {selectedEmployee.endpointHost} ({selectedEmployee.endpointIp})
                 </div>
@@ -425,7 +425,7 @@ export default function ThreatTracking() {
               </div>
 
               <div style={{ textAlign: "right" }}>
-                <div style={{ fontSize: 22, fontWeight: 800, color: "#ffffff" }}>{selectedEmployee.totalAttempts}</div>
+                <div style={{ fontSize: 22, fontWeight: 800, color: "var(--apple-text-main)" }}>{selectedEmployee.totalAttempts}</div>
                 <div style={{ fontSize: 11, color: "var(--apple-text-muted)", textTransform: "uppercase" }}>Exfiltrations</div>
               </div>
             </div>
@@ -434,7 +434,7 @@ export default function ThreatTracking() {
           {/* 2 Graphs: Risk Timeline & Category Distribution */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(380px, 1fr))", gap: 20 }}>
             <div className="apple-card">
-              <div style={{ fontSize: 14, fontWeight: 600, color: "#ffffff", marginBottom: 16 }}>Risk Progression Timeline</div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: "var(--apple-text-main)", marginBottom: 16 }}>Risk Progression Timeline</div>
               <div style={{ height: 210, width: "100%" }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={riskTimelineData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
@@ -455,7 +455,7 @@ export default function ThreatTracking() {
             </div>
 
             <div className="apple-card">
-              <div style={{ fontSize: 14, fontWeight: 600, color: "#ffffff", marginBottom: 16 }}>Targeted Confidential Categories</div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: "var(--apple-text-main)", marginBottom: 16 }}>Targeted Confidential Categories</div>
               <div style={{ height: 210, width: "100%" }}>
                 {categoryChartData.length > 0 ? (
                   <ResponsiveContainer width="100%" height="100%">
@@ -509,7 +509,7 @@ export default function ThreatTracking() {
           <div className="apple-card" style={{ padding: 24 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 20 }}>
               <Terminal size={16} color="#ff0055" />
-              <span style={{ fontSize: 15, fontWeight: 600, color: "#ffffff" }}>Chronological Prompt Forensics</span>
+              <span style={{ fontSize: 15, fontWeight: 600, color: "var(--apple-text-main)" }}>Chronological Prompt Forensics</span>
             </div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -519,7 +519,7 @@ export default function ThreatTracking() {
                   <div
                     key={inc.id || idx}
                     style={{
-                      background: "rgba(13, 14, 18, 0.6)",
+                      background: "var(--apple-card-hover)",
                       border: "1px solid var(--apple-border)",
                       borderRadius: 14,
                       padding: 16,
@@ -530,7 +530,7 @@ export default function ThreatTracking() {
                   >
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        <span style={{ fontSize: 12, fontWeight: 700, color: "#ffffff" }}>INCIDENT #{selectedEmployee.incidentsList.length - idx}</span>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: "var(--apple-text-main)" }}>INCIDENT #{selectedEmployee.incidentsList.length - idx}</span>
                         <span className="apple-pill red">{inc.aiPlatform || "chatgpt.com"}</span>
                         <span style={{ fontSize: 11, color: "var(--apple-text-muted)" }}>
                           {new Date(inc.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}

@@ -101,7 +101,7 @@ const Rules = () => {
       {/* Page Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div>
-          <h1 style={{ fontSize: 28, fontWeight: 700, color: "#ffffff", margin: 0, letterSpacing: "-0.02em" }}>
+          <h1 style={{ fontSize: 28, fontWeight: 700, color: "var(--apple-text-main)", margin: 0, letterSpacing: "-0.02em" }}>
             DLP Rules
           </h1>
           <p style={{ fontSize: 13, color: "var(--apple-text-muted)", margin: "4px 0 0 0" }}>
@@ -118,7 +118,7 @@ const Rules = () => {
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <Shield size={16} color="#38bdf8" />
-              <span style={{ fontSize: 15, fontWeight: 600, color: "#ffffff" }}>Protected Domains</span>
+              <span style={{ fontSize: 15, fontWeight: 600, color: "var(--apple-text-main)" }}>Protected Domains</span>
             </div>
             <span className="apple-pill cyan">{rules.domains.length}</span>
           </div>
@@ -171,7 +171,7 @@ const Rules = () => {
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <FileText size={16} color="#f59e0b" />
-              <span style={{ fontSize: 15, fontWeight: 600, color: "#ffffff" }}>Confidential Keywords</span>
+              <span style={{ fontSize: 15, fontWeight: 600, color: "var(--apple-text-main)" }}>Confidential Keywords</span>
             </div>
             <span className="apple-pill amber">{rules.keywords.length}</span>
           </div>
@@ -225,7 +225,7 @@ const Rules = () => {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <Key size={16} color="#818cf8" />
-            <span style={{ fontSize: 15, fontWeight: 600, color: "#ffffff" }}>Protected API Keys</span>
+            <span style={{ fontSize: 15, fontWeight: 600, color: "var(--apple-text-main)" }}>Protected API Keys</span>
           </div>
           <span className="apple-pill indigo">{rules.apiKeys.length}</span>
         </div>

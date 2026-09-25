@@ -1,11 +1,27 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Menu, X, Shield, ShieldAlert, Sliders, Users, Settings, LogOut, Play, Download } from 'lucide-react';
+import { Menu, X, Shield, ShieldAlert, Sliders, Users, Settings, LogOut, Play, Download, Sun, Moon } from 'lucide-react';
 import vantixIcon from '../../assets/vantix-icon.png';
+import { getStoredTheme, applyTheme } from '../../utils/theme.js';
 
 const AppShell = ({ children, onLogout }) => {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [theme, setTheme] = useState(() => getStoredTheme());
+
+  useEffect(() => {
+    const handleThemeChange = (e) => {
+      if (e.detail?.theme) setTheme(e.detail.theme);
+    };
+    window.addEventListener('vantix:theme-change', handleThemeChange);
+    return () => window.removeEventListener('vantix:theme-change', handleThemeChange);
+  }, []);
+
+  const toggleTheme = () => {
+    const next = theme === 'light' ? 'dark' : 'light';
+    applyTheme(next);
+    setTheme(next);
+  };
 
   return (
     <div className="app-shell">
@@ -35,12 +51,21 @@ const AppShell = ({ children, onLogout }) => {
             </div>
           </div>
 
-          <div className="orion-actions" style={{ display: "flex", alignItems: "center", gap: 14 }}>
+          <div className="orion-actions" style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <span
               className="live-pulse-dot"
               style={{ background: "#10b981", boxShadow: "0 0 10px #10b981" }}
               title="System Connected"
             />
+            <button
+              className="apple-btn"
+              onClick={toggleTheme}
+              style={{ padding: "6px 10px" }}
+              title={`Switch to ${theme === "light" ? "Dark" : "Light"} mode`}
+              aria-label="Toggle theme"
+            >
+              {theme === "light" ? <Moon size={14} color="#6366f1" /> : <Sun size={14} color="#f59e0b" />}
+            </button>
             <button className="apple-btn" onClick={onLogout} style={{ padding: "6px 14px" }}>
               <LogOut size={13} color="#f43f5e" />
               <span style={{ fontSize: 12, fontWeight: 600 }}>Sign Out</span>

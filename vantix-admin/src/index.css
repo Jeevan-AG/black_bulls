@@ -1,6 +1,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 
-:root {
+:root,
+.theme-dark {
   --apple-bg: #060709;
   --apple-topbar-bg: rgba(13, 14, 18, 0.82);
   --apple-card: rgba(20, 21, 28, 0.72);
@@ -19,6 +20,27 @@
   --apple-emerald: #10b981;
   --apple-amber: #f59e0b;
   --apple-cyan: #38bdf8;
+}
+
+.theme-light {
+  --apple-bg: #f3f5f8;
+  --apple-topbar-bg: rgba(255, 255, 255, 0.92);
+  --apple-card: #ffffff;
+  --apple-card-hover: #ffffff;
+  --apple-border: rgba(225, 29, 72, 0.14);
+  --apple-border-strong: rgba(225, 29, 72, 0.3);
+  
+  --apple-text-main: #0f172a;
+  --apple-text-sub: #475569;
+  --apple-text-muted: #64748b;
+  
+  --apple-red: #e11d48;
+  --apple-red-bright: #e11d48;
+  --apple-rose: #e11d48;
+  --apple-dark-red: #9f1239;
+  --apple-emerald: #059669;
+  --apple-amber: #d97706;
+  --apple-cyan: #0284c7;
 }
 
 * {
@@ -613,6 +635,193 @@ body {
   font-weight: 800;
   letter-spacing: -0.03em;
   line-height: 1;
-  color: #ffffff;
+  color: var(--apple-text-main);
   font-feature-settings: "tnum";
 }
+
+/* ==========================================================================
+   Light Mode Theme Styling
+   ========================================================================== */
+.theme-light .orion-global-bg {
+  background: 
+    radial-gradient(circle at 20% 15%, rgba(225, 29, 72, 0.05) 0%, transparent 45%),
+    radial-gradient(circle at 80% 25%, rgba(244, 63, 94, 0.04) 0%, transparent 40%),
+    radial-gradient(circle at 50% 85%, rgba(225, 29, 72, 0.03) 0%, transparent 50%),
+    #f3f5f8;
+}
+
+.theme-light .apple-card {
+  background: #ffffff;
+  border-color: rgba(0, 0, 0, 0.08);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04), 0 1px 3px rgba(0, 0, 0, 0.02);
+}
+
+.theme-light .apple-card:hover {
+  border-color: rgba(225, 29, 72, 0.28);
+  box-shadow: 0 8px 28px rgba(225, 29, 72, 0.08);
+}
+
+.theme-light .orion-topnav {
+  background: rgba(255, 255, 255, 0.9);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.03);
+}
+
+.theme-light .orion-brand {
+  color: #0f172a;
+}
+
+.theme-light .orion-hamburger-btn {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.1);
+  color: #0f172a;
+}
+
+.theme-light .orion-hamburger-btn:hover {
+  background: rgba(225, 29, 72, 0.12);
+  border-color: rgba(225, 29, 72, 0.3);
+}
+
+.theme-light .orion-drawer {
+  background: #ffffff;
+  border-right: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: 10px 0 40px rgba(0, 0, 0, 0.1);
+}
+
+.theme-light .orion-drawer-header {
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.theme-light .orion-drawer-close {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.08);
+  color: #475569;
+}
+
+.theme-light .orion-drawer-close:hover {
+  background: rgba(225, 29, 72, 0.1);
+  color: #0f172a;
+}
+
+.theme-light .orion-drawer-nav a {
+  color: #475569;
+}
+
+.theme-light .orion-drawer-nav a:hover {
+  background: rgba(225, 29, 72, 0.06);
+  color: #0f172a;
+}
+
+.theme-light .orion-drawer-nav a.active {
+  background: linear-gradient(135deg, rgba(225, 29, 72, 0.12) 0%, rgba(244, 63, 94, 0.06) 100%);
+  border-color: rgba(225, 29, 72, 0.28);
+  color: #e11d48;
+  box-shadow: 0 2px 10px rgba(225, 29, 72, 0.1);
+}
+
+.theme-light .orion-drawer-footer {
+  background: #f8fafc;
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.theme-light .apple-btn {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.12);
+  color: #0f172a;
+}
+
+.theme-light .apple-btn:hover {
+  background: rgba(225, 29, 72, 0.1);
+  border-color: rgba(225, 29, 72, 0.3);
+}
+
+.theme-light .apple-btn.primary {
+  background: linear-gradient(135deg, #e11d48 0%, #be123c 100%);
+  color: #ffffff;
+  border-color: rgba(225, 29, 72, 0.5);
+  box-shadow: 0 4px 14px rgba(225, 29, 72, 0.25);
+}
+
+.theme-light .apple-input {
+  background: #f8fafc;
+  border-color: rgba(0, 0, 0, 0.12);
+  color: #0f172a;
+}
+
+.theme-light .apple-input:focus {
+  background: #ffffff;
+  border-color: var(--apple-red);
+  box-shadow: 0 0 0 3px rgba(225, 29, 72, 0.15);
+}
+
+.theme-light .apple-input::placeholder {
+  color: #94a3b8;
+}
+
+.theme-light .apple-table th {
+  color: #64748b;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.theme-light .apple-table td {
+  color: #0f172a;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.theme-light .apple-table tr:hover td {
+  background: rgba(225, 29, 72, 0.03);
+}
+
+.theme-light .apple-tooltip {
+  background: rgba(255, 255, 255, 0.98) !important;
+  border: 1px solid rgba(0, 0, 0, 0.1) !important;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12) !important;
+}
+
+.theme-light .apple-tooltip p {
+  color: #0f172a !important;
+}
+
+.theme-light .kpi-square-card {
+  background: #ffffff !important;
+  border-color: rgba(0, 0, 0, 0.08) !important;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.04);
+}
+
+.theme-light .kpi-square-value {
+  color: #0f172a !important;
+}
+
+.theme-light .kpi-info-trigger {
+  background: rgba(0, 0, 0, 0.04);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  color: #64748b;
+}
+
+.theme-light .kpi-info-trigger:hover {
+  color: #0f172a;
+  background: rgba(225, 29, 72, 0.15);
+  border-color: rgba(225, 29, 72, 0.35);
+}
+
+.theme-light .kpi-square-tooltip {
+  background: rgba(255, 255, 255, 0.98);
+  border-color: rgba(0, 0, 0, 0.12);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.12);
+}
+
+.theme-light .kpi-tooltip-title {
+  color: #0f172a;
+}
+
+.theme-light .kpi-tooltip-desc {
+  color: #475569;
+}
+
+.theme-light h1,
+.theme-light h2,
+.theme-light h3,
+.theme-light h4 {
+  color: var(--apple-text-main) !important;
+}
+

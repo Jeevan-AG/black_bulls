@@ -101,7 +101,7 @@ const Employees = () => {
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div>
-          <h1 style={{ fontSize: 28, fontWeight: 700, color: "#ffffff", margin: 0, letterSpacing: "-0.02em" }}>
+          <h1 style={{ fontSize: 28, fontWeight: 700, color: "var(--apple-text-main)", margin: 0, letterSpacing: "-0.02em" }}>
             Employees
           </h1>
           <p style={{ fontSize: 13, color: "var(--apple-text-muted)", margin: "4px 0 0 0" }}>
@@ -124,7 +124,7 @@ const Employees = () => {
             </span>
             <Users size={16} color="#38bdf8" />
           </div>
-          <div style={{ fontSize: 32, fontWeight: 800, color: "#ffffff" }}>{users.length}</div>
+          <div style={{ fontSize: 32, fontWeight: 800, color: "var(--apple-text-main)" }}>{users.length}</div>
         </div>
 
         <div className="apple-card">
@@ -153,7 +153,7 @@ const Employees = () => {
       {/* Employee Directory Table */}
       <div className="apple-card" style={{ padding: 0, overflow: "hidden" }}>
         <div style={{ padding: "16px 24px", borderBottom: "1px solid var(--apple-border)" }}>
-          <span style={{ fontSize: 14, fontWeight: 600, color: "#ffffff" }}>Employee Roster</span>
+          <span style={{ fontSize: 14, fontWeight: 600, color: "var(--apple-text-main)" }}>Employee Roster</span>
         </div>
 
         <div style={{ overflowX: "auto" }}>
@@ -171,7 +171,7 @@ const Employees = () => {
             <tbody>
               {users.map((user) => (
                 <tr key={user._id}>
-                  <td style={{ fontWeight: 600, color: "#ffffff" }}>{user.email}</td>
+                  <td style={{ fontWeight: 600, color: "var(--apple-text-main)" }}>{user.email}</td>
                   <td>
                     <select
                       className="apple-input"
@@ -247,7 +247,7 @@ const Employees = () => {
               style={{ width: 420, maxWidth: "90vw", background: "rgba(18, 19, 26, 0.95)" }}
               onClick={(e) => e.stopPropagation()}
             >
-              <h3 style={{ fontSize: 18, fontWeight: 700, color: "#ffffff", marginBottom: 16 }}>
+              <h3 style={{ fontSize: 18, fontWeight: 700, color: "var(--apple-text-main)", marginBottom: 16 }}>
                 Add New Employee
               </h3>
 

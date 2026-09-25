@@ -354,7 +354,7 @@ export default function Dashboard() {
 
       {/* Header */}
       <div>
-        <h1 style={{ fontSize: 28, fontWeight: 700, color: "#ffffff", margin: 0, letterSpacing: "-0.02em" }}>
+        <h1 style={{ fontSize: 28, fontWeight: 700, color: "var(--apple-text-main)", margin: 0, letterSpacing: "-0.02em" }}>
           Operation Centre
         </h1>
       </div>
@@ -409,7 +409,7 @@ export default function Dashboard() {
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <Database size={16} color="#ff0055" />
-              <span style={{ fontSize: 14, fontWeight: 600, color: "#ffffff" }}>Exfiltration Vectors</span>
+              <span style={{ fontSize: 14, fontWeight: 600, color: "var(--apple-text-main)" }}>Exfiltration Vectors</span>
             </div>
           </div>
 
@@ -466,7 +466,7 @@ export default function Dashboard() {
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <Shield size={16} color="#e11d48" />
-              <span style={{ fontSize: 14, fontWeight: 600, color: "#ffffff" }}>Enforcement Actions</span>
+              <span style={{ fontSize: 14, fontWeight: 600, color: "var(--apple-text-main)" }}>Enforcement Actions</span>
             </div>
           </div>
 
@@ -493,7 +493,7 @@ export default function Dashboard() {
         <div style={{ padding: "18px 24px", borderBottom: "1px solid var(--apple-border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <Terminal size={16} color="#ff0055" />
-            <span style={{ fontSize: 14, fontWeight: 600, color: "#ffffff" }}>Real-time Interception Feed</span>
+            <span style={{ fontSize: 14, fontWeight: 600, color: "var(--apple-text-main)" }}>Real-time Interception Feed</span>
           </div>
           <span style={{ fontSize: 11, color: "var(--apple-text-muted)" }}>{incidents.length} events</span>
         </div>
@@ -516,7 +516,7 @@ export default function Dashboard() {
                   <tr key={inc.id || idx}>
                     <td>
                       <div style={{ display: "flex", flexDirection: "column" }}>
-                        <span style={{ fontWeight: 600, color: "#ffffff" }}>{inc.userName}</span>
+                        <span style={{ fontWeight: 600, color: "var(--apple-text-main)" }}>{inc.userName}</span>
                         <span style={{ fontSize: 11, color: "var(--apple-text-muted)" }}>{inc.endpointHost}</span>
                       </div>
                     </td>

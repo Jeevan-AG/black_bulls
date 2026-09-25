@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Lock, Unlock, Shield, Download, CheckCircle, AlertTriangle } from "lucide-react";
+import { Lock, Unlock, Shield, Download, CheckCircle, AlertTriangle, Sun, Moon, Sparkles } from "lucide-react";
 import api from "../utils/api";
+import { getStoredTheme, applyTheme } from "../utils/theme";
 
 const Settings = () => {
+  const [currentTheme, setCurrentTheme] = useState(() => getStoredTheme());
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -15,6 +17,11 @@ const Settings = () => {
   const [isProjectActive, setIsProjectActive] = useState(true);
 
   useEffect(() => {
+    const handleThemeChange = (e) => {
+      if (e.detail?.theme) setCurrentTheme(e.detail.theme);
+    };
+    window.addEventListener("vantix:theme-change", handleThemeChange);
+
     const fetchSettings = async () => {
       try {
         const token = sessionStorage.getItem("vantixAdminToken");
@@ -37,7 +44,16 @@ const Settings = () => {
       }
     };
     fetchSettings();
+
+    return () => {
+      window.removeEventListener("vantix:theme-change", handleThemeChange);
+    };
   }, []);
+
+  const handleSelectTheme = (newTheme) => {
+    applyTheme(newTheme);
+    setCurrentTheme(newTheme);
+  };
 
   const toggleProjectStatus = async () => {
     if (!window.confirm(`Are you sure you want to ${isProjectActive ? "TERMINATE" : "RESTORE"} project access?`)) return;
@@ -93,35 +109,150 @@ const Settings = () => {
     >
       {/* Header */}
       <div>
-        <h1 style={{ fontSize: 28, fontWeight: 700, color: "#ffffff", margin: 0, letterSpacing: "-0.02em" }}>
+        <h1 style={{ fontSize: 28, fontWeight: 700, color: "var(--apple-text-main)", margin: 0, letterSpacing: "-0.02em" }}>
           Settings
         </h1>
         <p style={{ fontSize: 13, color: "var(--apple-text-muted)", margin: "4px 0 0 0" }}>
-          Security administration, password & system status
+          Security administration, workspace appearance & system status
         </p>
+      </div>
+
+      {/* Theme & Appearance Card */}
+      <div className="apple-card">
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+          <Sparkles size={18} color="#e11d48" />
+          <h3 style={{ fontSize: 16, fontWeight: 600, color: "var(--apple-text-main)", margin: 0 }}>
+            Workspace Theme & Appearance
+          </h3>
+        </div>
+        <p style={{ fontSize: 13, color: "var(--apple-text-sub)", margin: "0 0 18px 0" }}>
+          Customize your interface appearance. Toggle between dark cyberpunk mode and clean light daylight mode.
+        </p>
+
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 16 }}>
+          {/* Dark Mode Option */}
+          <div
+            onClick={() => handleSelectTheme("dark")}
+            style={{
+              padding: 18,
+              borderRadius: 14,
+              border: `2px solid ${currentTheme === "dark" ? "#e11d48" : "var(--apple-border)"}`,
+              background: currentTheme === "dark" ? "rgba(225, 29, 72, 0.09)" : "transparent",
+              cursor: "pointer",
+              transition: "all 0.2s ease",
+              display: "flex",
+              flexDirection: "column",
+              gap: 12,
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <Moon size={18} color="#f43f5e" />
+                <span style={{ fontSize: 14, fontWeight: 700, color: "var(--apple-text-main)" }}>Dark Mode</span>
+              </div>
+              {currentTheme === "dark" && (
+                <span className="apple-pill red" style={{ fontSize: 10, padding: "2px 8px" }}>Active</span>
+              )}
+            </div>
+
+            {/* Dark UI Preview */}
+            <div
+              style={{
+                height: 56,
+                borderRadius: 8,
+                background: "#060709",
+                border: "1px solid rgba(225, 29, 72, 0.3)",
+                padding: "8px 12px",
+                display: "flex",
+                flexDirection: "column",
+                gap: 6,
+              }}
+            >
+              <div style={{ height: 6, width: "45%", background: "#e11d48", borderRadius: 3 }} />
+              <div style={{ display: "flex", gap: 8 }}>
+                <div style={{ height: 22, flex: 1, background: "rgba(20, 21, 28, 0.95)", borderRadius: 4, border: "1px solid rgba(255,255,255,0.08)" }} />
+                <div style={{ height: 22, flex: 1, background: "rgba(20, 21, 28, 0.95)", borderRadius: 4, border: "1px solid rgba(255,255,255,0.08)" }} />
+              </div>
+            </div>
+
+            <p style={{ fontSize: 12, color: "var(--apple-text-muted)", margin: 0 }}>
+              Cyberpunk high-contrast theme optimized for command center operations.
+            </p>
+          </div>
+
+          {/* Light Mode Option */}
+          <div
+            onClick={() => handleSelectTheme("light")}
+            style={{
+              padding: 18,
+              borderRadius: 14,
+              border: `2px solid ${currentTheme === "light" ? "#e11d48" : "var(--apple-border)"}`,
+              background: currentTheme === "light" ? "rgba(225, 29, 72, 0.09)" : "transparent",
+              cursor: "pointer",
+              transition: "all 0.2s ease",
+              display: "flex",
+              flexDirection: "column",
+              gap: 12,
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <Sun size={18} color="#f59e0b" />
+                <span style={{ fontSize: 14, fontWeight: 700, color: "var(--apple-text-main)" }}>Light Mode</span>
+              </div>
+              {currentTheme === "light" && (
+                <span className="apple-pill red" style={{ fontSize: 10, padding: "2px 8px" }}>Active</span>
+              )}
+            </div>
+
+            {/* Light UI Preview */}
+            <div
+              style={{
+                height: 56,
+                borderRadius: 8,
+                background: "#f3f5f8",
+                border: "1px solid rgba(0, 0, 0, 0.12)",
+                padding: "8px 12px",
+                display: "flex",
+                flexDirection: "column",
+                gap: 6,
+              }}
+            >
+              <div style={{ height: 6, width: "45%", background: "#e11d48", borderRadius: 3 }} />
+              <div style={{ display: "flex", gap: 8 }}>
+                <div style={{ height: 22, flex: 1, background: "#ffffff", borderRadius: 4, border: "1px solid rgba(0,0,0,0.1)" }} />
+                <div style={{ height: 22, flex: 1, background: "#ffffff", borderRadius: 4, border: "1px solid rgba(0,0,0,0.1)" }} />
+              </div>
+            </div>
+
+            <p style={{ fontSize: 12, color: "var(--apple-text-muted)", margin: 0 }}>
+              Crisp daylight mode with bright canvas and clear, high-contrast typography.
+            </p>
+          </div>
+        </div>
       </div>
 
       {/* Organization Overview Card */}
       <div className="apple-card" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 20 }}>
         <div>
           <div style={{ fontSize: 11, fontWeight: 600, color: "var(--apple-text-muted)", textTransform: "uppercase" }}>Admin Identity</div>
-          <div style={{ fontSize: 16, fontWeight: 600, color: "#ffffff", marginTop: 4 }}>{orgInfo.email || "admin@vantix.corp"}</div>
+          <div style={{ fontSize: 16, fontWeight: 600, color: "var(--apple-text-main)", marginTop: 4 }}>{orgInfo.email || "admin@vantix.corp"}</div>
         </div>
 
         <div>
           <div style={{ fontSize: 11, fontWeight: 600, color: "var(--apple-text-muted)", textTransform: "uppercase" }}>Registered Identities</div>
-          <div style={{ fontSize: 16, fontWeight: 600, color: "#38bdf8", marginTop: 4 }}>{orgInfo.employeeCount} Employees</div>
+          <div style={{ fontSize: 16, fontWeight: 600, color: "var(--apple-cyan)", marginTop: 4 }}>{orgInfo.employeeCount} Employees</div>
         </div>
 
         <div>
           <div style={{ fontSize: 11, fontWeight: 600, color: "var(--apple-text-muted)", textTransform: "uppercase" }}>Vantix Core</div>
-          <div style={{ fontSize: 16, fontWeight: 600, color: "#10b981", marginTop: 4 }}>v1.0.0 Production</div>
+          <div style={{ fontSize: 16, fontWeight: 600, color: "var(--apple-emerald)", marginTop: 4 }}>v1.0.0 Production</div>
         </div>
       </div>
 
       {/* Password Management Card */}
       <div className="apple-card" style={{ maxWidth: 540 }}>
-        <h3 style={{ fontSize: 16, fontWeight: 600, color: "#ffffff", marginBottom: 16 }}>Change Admin Password</h3>
+        <h3 style={{ fontSize: 16, fontWeight: 600, color: "var(--apple-text-main)", marginBottom: 16 }}>Change Admin Password</h3>
 
         {pwError && <div style={{ padding: "8px 12px", background: "rgba(244, 63, 94, 0.15)", border: "1px solid rgba(244, 63, 94, 0.3)", color: "#f43f5e", borderRadius: 8, fontSize: 12, marginBottom: 12 }}>{pwError}</div>}
         {pwSuccess && <div style={{ padding: "8px 12px", background: "rgba(16, 185, 129, 0.15)", border: "1px solid rgba(16, 185, 129, 0.3)", color: "#34d399", borderRadius: 8, fontSize: 12, marginBottom: 12 }}>{pwSuccess}</div>}
