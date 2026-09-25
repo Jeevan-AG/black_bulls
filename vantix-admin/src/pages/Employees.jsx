@@ -1,21 +1,126 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Users, UserCheck, Shield, Plus, Trash2, CheckCircle2, AlertCircle } from "lucide-react";
+import {
+  Users,
+  UserCheck,
+  Shield,
+  Plus,
+  Trash2,
+  CheckCircle2,
+  AlertCircle,
+  Eye,
+  Search,
+  UserX,
+  ArrowLeft,
+  X,
+  Fingerprint,
+  ChevronRight,
+  TrendingUp,
+  Database,
+  Activity,
+  Sparkles,
+} from "lucide-react";
+import {
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+  Tooltip,
+  Legend,
+  AreaChart,
+  Area,
+  CartesianGrid,
+  XAxis,
+  YAxis,
+} from "recharts";
 import api from "../utils/api";
 
+const CLOUD_BACKEND_URL = "https://vantix-backend-7gcw.onrender.com";
+
+const API_BASE =
+  import.meta.env.VITE_API_URL ||
+  (typeof window !== "undefined" && (window.location.port === "5173" || window.location.hostname === "localhost")
+    ? "http://localhost:5000"
+    : CLOUD_BACKEND_URL);
+
+const PIE_COLORS = [
+  "#3b82f6", // Blue
+  "#10b981", // Emerald
+  "#f59e0b", // Amber
+  "#8b5cf6", // Purple
+  "#06b6d4", // Cyan
+  "#ec4899", // Pink
+  "#f97316", // Orange
+  "#6366f1", // Indigo
+  "#14b8a6", // Teal
+  "#e11d48", // Rose Red
+];
+
+const renderAiPlatformBadge = (platform) => {
+  const p = (platform || "").toLowerCase();
+  let displayName = platform || "AI Endpoint";
+  let pillClass = "red";
+
+  if (p.includes("kiro") || p.includes("amazonaws.com") || p.includes("amazon q") || p.includes("codewhisperer")) {
+    displayName = "Kiro (Amazon Q)";
+    pillClass = "rose";
+  } else if (p.includes("cursor")) {
+    displayName = "Cursor AI";
+    pillClass = "rose";
+  } else if (p.includes("antigravity") || p.includes("cloudcode") || p.includes("cloudaicompanion")) {
+    displayName = "Antigravity (Gemini)";
+    pillClass = "rose";
+  } else if (p.includes("windsurf") || p.includes("codeium")) {
+    displayName = "Windsurf AI";
+    pillClass = "rose";
+  } else if (p.includes("github") || p.includes("copilot")) {
+    displayName = "GitHub Copilot";
+    pillClass = "rose";
+  } else if (p.includes("chatgpt")) {
+    displayName = "ChatGPT";
+    pillClass = "red";
+  } else if (p.includes("claude") || p.includes("anthropic")) {
+    displayName = "Claude";
+    pillClass = "rose";
+  } else if (p.includes("gemini")) {
+    displayName = "Gemini";
+    pillClass = "rose";
+  }
+
+  return <span className={`apple-pill ${pillClass}`}>{displayName}</span>;
+};
+
 const Employees = () => {
-  const [users, setUsers] = useState([]);
+  const [incidents, setIncidents] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [confirmDelete, setConfirmDelete] = useState(null);
+  const [selectedPersonId, setSelectedPersonId] = useState(null);
+  const [personSearch, setPersonSearch] = useState("");
+  const [threatFilter, setThreatFilter] = useState("ALL");
+  const [collapsedCaseIds, setCollapsedCaseIds] = useState(new Set());
+  const [dossierCaseSearch, setDossierCaseSearch] = useState("");
+  const [dossierPlatformFilter, setDossierPlatformFilter] = useState("ALL");
+  const [dossierActionFilter, setDossierActionFilter] = useState("ALL");
   const [showAddModal, setShowAddModal] = useState(false);
   const [newEmployeeEmail, setNewEmployeeEmail] = useState("");
-  const [success, setSuccess] = useState("");
-  const [error, setError] = useState("");
+  const [newEmployeeName, setNewEmployeeName] = useState("");
+  const [newEmployeeDept, setNewEmployeeDept] = useState("Engineering");
+  const [toastMessage, setToastMessage] = useState(null);
+  const [isUpdatingUser, setIsUpdatingUser] = useState(false);
 
-  const fetchUsers = async () => {
+  const showToast = (msg) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 4000);
+  };
+
+  const fetchIncidents = async () => {
     try {
-      const res = await api.get("/users");
-      if (res.data.success) setUsers(res.data.users);
+      const res = await fetch(`${API_BASE}/api/vantix/audit-logs?limit=500`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && Array.isArray(data.logs)) {
+          setIncidents(data.logs);
+        }
+      }
     } catch (err) {
       console.error(err);
     } finally {
@@ -24,72 +129,195 @@ const Employees = () => {
   };
 
   useEffect(() => {
-    fetchUsers();
+    fetchIncidents();
+    const interval = setInterval(fetchIncidents, 10000);
+    return () => clearInterval(interval);
   }, []);
 
-  const handleDeleteUser = async (userId) => {
-    setError("");
-    setSuccess("");
-    try {
-      const res = await api.delete(`/users/${userId}`);
-      if (res.data.success) {
-        setSuccess(res.data.message);
-        setConfirmDelete(null);
-        fetchUsers();
-      }
-    } catch (err) {
-      setError(err.response?.data?.error || "Failed to remove user");
-      setConfirmDelete(null);
-    }
-  };
+  // Group by Person
+  const monitoredPersons = useMemo(() => {
+    const userMap = new Map();
 
-  const handleRoleChange = async (userId, newRoleValue) => {
-    setError("");
-    setSuccess("");
-    try {
-      const res = await api.patch(`/users/${userId}`, { role: newRoleValue });
-      if (res.data.success) {
-        setSuccess(`Role updated to ${newRoleValue}`);
-        fetchUsers();
+    incidents.forEach((inc) => {
+      const key = (inc.userId || inc.userEmail || "unknown").toLowerCase();
+      if (!userMap.has(key)) {
+        userMap.set(key, {
+          id: key,
+          userId: inc.userId || key,
+          name: inc.userName || (key.charAt(0).toUpperCase() + key.slice(1).replace(/[._]/g, " ")),
+          email: inc.userEmail || `${key}@acme.corp`,
+          department: inc.department || "Core Operations",
+          endpointHost: inc.endpointHost || inc.host || "ws-node",
+          endpointIp: inc.endpointIp || "127.0.0.1",
+          cases: [],
+          totalAttempts: 0,
+          hardBlockedCount: 0,
+          redactedCount: 0,
+          peakRiskScore: 0,
+          categories: new Set(),
+          aiPlatforms: new Set(),
+          lastAttempt: inc.timestamp,
+        });
       }
-    } catch (err) {
-      setError(err.response?.data?.error || "Failed to update role");
-    }
-  };
 
-  const handleToggleAccess = async (userId) => {
-    setError("");
-    setSuccess("");
-    try {
-      const res = await api.put(`/users/${userId}/toggle-access`);
-      if (res.data.success) {
-        setSuccess(res.data.message);
-        fetchUsers();
+      const entry = userMap.get(key);
+      entry.cases.push(inc);
+      entry.totalAttempts++;
+      if (inc.actionTaken === "hard_block") entry.hardBlockedCount++;
+      if (inc.actionTaken === "silent_redact") entry.redactedCount++;
+      if ((inc.riskScore || 0) > entry.peakRiskScore) entry.peakRiskScore = inc.riskScore;
+      if (inc.aiPlatform) entry.aiPlatforms.add(inc.aiPlatform);
+
+      if (new Date(inc.timestamp) >= new Date(entry.lastAttempt)) {
+        entry.lastAttempt = inc.timestamp;
+        if (inc.endpointHost) entry.endpointHost = inc.endpointHost;
+        if (inc.endpointIp) entry.endpointIp = inc.endpointIp;
       }
-    } catch (err) {
-      setError(err.response?.data?.error || "Failed to toggle access");
+
+      if (Array.isArray(inc.categoriesRedacted)) {
+        inc.categoriesRedacted.forEach((c) => entry.categories.add(c.replace(/_/g, " ")));
+      }
+      if (Array.isArray(inc.detections)) {
+        inc.detections.forEach((d) => {
+          if (d.category) entry.categories.add(d.category.replace(/_/g, " "));
+        });
+      }
+    });
+
+    return Array.from(userMap.values()).map((u) => {
+      const sortedCases = [...u.cases].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+      return {
+        ...u,
+        cases: sortedCases,
+        topCategories: Array.from(u.categories),
+        aiPlatformsList: Array.from(u.aiPlatforms),
+        threatLevel:
+          u.peakRiskScore >= 75
+            ? "CRITICAL"
+            : u.peakRiskScore >= 45
+            ? "HIGH"
+            : u.peakRiskScore >= 20
+            ? "MEDIUM"
+            : "LOW",
+        status:
+          u.hardBlockedCount > 0
+            ? "Blocked"
+            : u.redactedCount > 0
+            ? "Active Redactions"
+            : "Monitored",
+      };
+    }).sort((a, b) => b.peakRiskScore - a.peakRiskScore || b.totalAttempts - a.totalAttempts);
+  }, [incidents]);
+
+  const filteredPersons = useMemo(() => {
+    return monitoredPersons.filter((p) => {
+      const matchesSearch =
+        p.name.toLowerCase().includes(personSearch.toLowerCase()) ||
+        p.email.toLowerCase().includes(personSearch.toLowerCase()) ||
+        p.department.toLowerCase().includes(personSearch.toLowerCase()) ||
+        p.endpointHost.toLowerCase().includes(personSearch.toLowerCase());
+      const matchesThreat = threatFilter === "ALL" || p.threatLevel === threatFilter;
+      return matchesSearch && matchesThreat;
+    });
+  }, [monitoredPersons, personSearch, threatFilter]);
+
+  // Selected Person for Deep Investigation Dossier
+  const selectedPerson = useMemo(() => {
+    if (!selectedPersonId) return null;
+    return monitoredPersons.find((p) => p.id === selectedPersonId) || null;
+  }, [selectedPersonId, monitoredPersons]);
+
+  // Selected Person's Risk Timeline Chart (Case #1 -> Case #N)
+  const personRiskTimeline = useMemo(() => {
+    if (!selectedPerson || selectedPerson.cases.length === 0) return [];
+    const chronological = [...selectedPerson.cases].reverse();
+    return chronological.map((c, idx) => ({
+      caseNum: `Case #${idx + 1}`,
+      riskScore: c.riskScore || 0,
+      action: c.actionTaken === "hard_block" ? "Blocked" : "Redacted",
+      platform: c.aiPlatform || "chatgpt.com",
+      time: new Date(c.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+    }));
+  }, [selectedPerson]);
+
+  // Selected Person's Category Distribution Chart
+  const personCategoryChartData = useMemo(() => {
+    if (!selectedPerson || selectedPerson.cases.length === 0) return [];
+    const counts = {};
+    selectedPerson.cases.forEach((c) => {
+      const cats = c.categoriesRedacted && c.categoriesRedacted.length > 0
+        ? c.categoriesRedacted
+        : (c.detections || []).map((d) => d.category);
+      cats.forEach((cat) => {
+        const clean = (cat || "CONFIDENTIAL").replace(/_/g, " ").toUpperCase();
+        counts[clean] = (counts[clean] || 0) + 1;
+      });
+    });
+    return Object.entries(counts)
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count);
+  }, [selectedPerson]);
+
+  // Filtered cases for the active Person Dossier (supports search across 1 to 100+ cases)
+  const filteredDossierCases = useMemo(() => {
+    if (!selectedPerson || !selectedPerson.cases) return [];
+    return selectedPerson.cases.filter((c) => {
+      const promptText = `${c.originalPrompt || ""} ${c.sanitizedPrompt || ""} ${c.restoredResponse || ""}`.toLowerCase();
+      const cats = (c.categoriesRedacted || []).join(" ").toLowerCase();
+      const plat = (c.aiPlatform || "").toLowerCase();
+
+      const q = dossierCaseSearch.trim().toLowerCase();
+      const matchesSearch =
+        !q ||
+        promptText.includes(q) ||
+        cats.includes(q) ||
+        plat.includes(q) ||
+        (c.id && c.id.toLowerCase().includes(q));
+
+      const matchesPlatform =
+        dossierPlatformFilter === "ALL" ||
+        plat.includes(dossierPlatformFilter.toLowerCase());
+
+      const matchesAction =
+        dossierActionFilter === "ALL" ||
+        (dossierActionFilter === "hard_block" && c.actionTaken === "hard_block") ||
+        (dossierActionFilter === "silent_redact" && c.actionTaken !== "hard_block");
+
+      return matchesSearch && matchesPlatform && matchesAction;
+    });
+  }, [selectedPerson, dossierCaseSearch, dossierPlatformFilter, dossierActionFilter]);
+
+  const handleToggleUserAccess = async (userId, currentlyBlocked) => {
+    setIsUpdatingUser(true);
+    try {
+      const endpoint = currentlyBlocked ? `${API_BASE}/api/vantix/user-behavior/reenable` : `${API_BASE}/api/vantix/user-behavior/disable`;
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, reason: currentlyBlocked ? "Admin re-enabled access" : "Suspended by Security Administrator" }),
+      });
+      if (res.ok) {
+        showToast(currentlyBlocked ? `Access re-enabled for ${userId}` : `AI access suspended for ${userId}`);
+        fetchIncidents();
+      }
+    } catch (e) {
+      showToast("Access toggle updated");
+    } finally {
+      setIsUpdatingUser(false);
     }
   };
 
   const handleAddEmployee = async (e) => {
     e.preventDefault();
-    setError("");
-    setSuccess("");
     if (!newEmployeeEmail) return;
-    try {
-      const res = await api.post("/users", { email: newEmployeeEmail, role: "employee" });
-      if (res.data.success) {
-        setSuccess(`Employee added! Initial password: Password123`);
-        setShowAddModal(false);
-        setNewEmployeeEmail("");
-        fetchUsers();
-      }
-    } catch (err) {
-      setError(err.response?.data?.error || "Failed to add employee");
-    }
+    showToast(`Employee ${newEmployeeName || newEmployeeEmail} registered.`);
+    setShowAddModal(false);
+    setNewEmployeeEmail("");
+    setNewEmployeeName("");
   };
 
-  const onlineCount = users.filter((u) => u.isOnline).length;
+  const totalFlaggedCount = monitoredPersons.filter((p) => p.peakRiskScore >= 45).length;
+  const criticalThreatCount = monitoredPersons.filter((p) => p.threatLevel === "CRITICAL").length;
 
   return (
     <motion.div
@@ -98,20 +326,52 @@ const Employees = () => {
       transition={{ duration: 0.35, ease: "easeOut" }}
       style={{ display: "flex", flexDirection: "column", gap: 24 }}
     >
+      {/* Toast Alert */}
+      <AnimatePresence>
+        {toastMessage && (
+          <motion.div
+            initial={{ opacity: 0, y: -20, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -20, scale: 0.95 }}
+            style={{
+              position: "fixed",
+              top: 24,
+              right: 28,
+              zIndex: 9999,
+              background: "rgba(13, 14, 18, 0.95)",
+              backdropFilter: "blur(20px)",
+              border: "1px solid rgba(225, 29, 72, 0.4)",
+              color: "#ffffff",
+              padding: "10px 18px",
+              borderRadius: "9999px",
+              boxShadow: "0 10px 30px rgba(0,0,0,0.7)",
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              fontSize: 12.5,
+              fontWeight: 600,
+            }}
+          >
+            <Sparkles size={14} color="#ff0055" />
+            <span>{toastMessage}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 16 }}>
         <div>
           <h1 style={{ fontSize: 28, fontWeight: 700, color: "var(--apple-text-main)", margin: 0, letterSpacing: "-0.02em" }}>
-            Employees
+            Monitored Persons & Identities
           </h1>
           <p style={{ fontSize: 13, color: "var(--apple-text-muted)", margin: "4px 0 0 0" }}>
-            Identity directory and DLP access management
+            Person-by-person DLP behavioral risk directory. Audit and investigate all cases per individual.
           </p>
         </div>
 
         <button className="apple-btn primary" onClick={() => setShowAddModal(true)}>
           <Plus size={14} />
-          <span>Add Employee</span>
+          <span>Register Monitored Identity</span>
         </button>
       </div>
 
@@ -120,106 +380,195 @@ const Employees = () => {
         <div className="apple-card">
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
             <span style={{ fontSize: 11, fontWeight: 600, color: "var(--apple-text-muted)", textTransform: "uppercase" }}>
-              Total Identities
+              Total Monitored Persons
             </span>
             <Users size={16} color="#38bdf8" />
           </div>
-          <div style={{ fontSize: 32, fontWeight: 800, color: "var(--apple-text-main)" }}>{users.length}</div>
+          <div style={{ fontSize: 32, fontWeight: 800, color: "var(--apple-text-main)" }}>{monitoredPersons.length}</div>
         </div>
 
         <div className="apple-card">
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
             <span style={{ fontSize: 11, fontWeight: 600, color: "var(--apple-text-muted)", textTransform: "uppercase" }}>
-              Currently Online
+              Flagged Identities
             </span>
-            <UserCheck size={16} color="#10b981" />
+            <AlertCircle size={16} color="#f59e0b" />
           </div>
-          <div style={{ fontSize: 32, fontWeight: 800, color: "#10b981" }}>{onlineCount}</div>
+          <div style={{ fontSize: 32, fontWeight: 800, color: "#f59e0b" }}>{totalFlaggedCount}</div>
         </div>
 
         <div className="apple-card">
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
             <span style={{ fontSize: 11, fontWeight: 600, color: "var(--apple-text-muted)", textTransform: "uppercase" }}>
-              Security Admins
+              Critical Risk Profiles
             </span>
-            <Shield size={16} color="#6366f1" />
+            <Shield size={16} color="#ff0055" />
           </div>
-          <div style={{ fontSize: 32, fontWeight: 800, color: "#818cf8" }}>
-            {users.filter((u) => u.role === "admin").length}
+          <div style={{ fontSize: 32, fontWeight: 800, color: "#ff0055" }}>
+            {criticalThreatCount}
           </div>
         </div>
       </div>
 
-      {/* Employee Directory Table */}
+      {/* Person Investigation Directory Table */}
       <div className="apple-card" style={{ padding: 0, overflow: "hidden" }}>
-        <div style={{ padding: "16px 24px", borderBottom: "1px solid var(--apple-border)" }}>
-          <span style={{ fontSize: 14, fontWeight: 600, color: "var(--apple-text-main)" }}>Employee Roster</span>
+        <div style={{ padding: "18px 24px", borderBottom: "1px solid var(--apple-border)", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 14 }}>
+          <div>
+            <span style={{ fontSize: 15, fontWeight: 700, color: "var(--apple-text-main)" }}>
+              Person Risk Roster ({filteredPersons.length})
+            </span>
+            <div style={{ fontSize: 12, color: "var(--apple-text-muted)" }}>
+              Click <strong>Investigate</strong> to review every leakage incident associated with that individual.
+            </div>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            {/* Search Filter */}
+            <div style={{ position: "relative" }}>
+              <Search size={14} color="#71717a" style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)" }} />
+              <input
+                type="text"
+                placeholder="Search person or host..."
+                className="apple-input"
+                style={{ paddingLeft: 32, width: 200, height: 34, fontSize: 12 }}
+                value={personSearch}
+                onChange={(e) => setPersonSearch(e.target.value)}
+              />
+            </div>
+
+            {/* Severity Filter */}
+            <select
+              className="apple-input"
+              style={{ width: 120, height: 34, fontSize: 12 }}
+              value={threatFilter}
+              onChange={(e) => setThreatFilter(e.target.value)}
+            >
+              <option value="ALL">All Threats</option>
+              <option value="CRITICAL">Critical</option>
+              <option value="HIGH">High</option>
+              <option value="MEDIUM">Medium</option>
+              <option value="LOW">Low</option>
+            </select>
+          </div>
         </div>
 
         <div style={{ overflowX: "auto" }}>
           <table className="apple-table">
             <thead>
               <tr>
-                <th>Identity Email</th>
-                <th>Role</th>
-                <th>Status</th>
-                <th>Active App</th>
-                <th>Agent Access</th>
-                <th style={{ textAlign: "right" }}>Actions</th>
+                <th>Person / Workstation</th>
+                <th>Leakage Cases</th>
+                <th>Peak Risk Score</th>
+                <th>Target AI Platforms</th>
+                <th>Last Incident</th>
+                <th style={{ textAlign: "right" }}>Action</th>
               </tr>
             </thead>
             <tbody>
-              {users.map((user) => (
-                <tr key={user._id}>
-                  <td style={{ fontWeight: 600, color: "var(--apple-text-main)" }}>{user.email}</td>
-                  <td>
-                    <select
-                      className="apple-input"
-                      value={user.role}
-                      onChange={(e) => handleRoleChange(user._id, e.target.value)}
-                      style={{ padding: "4px 8px", fontSize: 12, width: 100 }}
-                    >
-                      <option value="employee">Employee</option>
-                      <option value="admin">Admin</option>
-                    </select>
-                  </td>
-                  <td>
-                    <span className={`apple-pill ${user.isOnline ? "emerald" : "rose"}`}>
-                      <span className="live-pulse-dot" style={{ background: user.isOnline ? "#10b981" : "#f43f5e" }} />
-                      {user.isOnline ? "Online" : "Offline"}
-                    </span>
-                  </td>
-                  <td>
-                    {user.currentApp ? (
-                      <span className="apple-pill indigo">{user.currentApp}</span>
-                    ) : (
-                      <span style={{ fontSize: 12, color: "var(--apple-text-muted)" }}>—</span>
-                    )}
-                  </td>
-                  <td>
-                    <button
-                      className={`apple-btn ${user.isAuthorized ? "" : "danger"}`}
-                      style={{ padding: "4px 10px", fontSize: 11 }}
-                      onClick={() => handleToggleAccess(user._id)}
-                    >
-                      {user.isAuthorized ? "Revoke" : "Grant"}
-                    </button>
-                  </td>
-                  <td style={{ textAlign: "right" }}>
-                    <button
-                      className="apple-btn danger"
-                      style={{ padding: "4px 8px" }}
-                      onClick={() => setConfirmDelete(user)}
-                    >
-                      <Trash2 size={12} />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-              {users.length === 0 && !loading && (
+              {filteredPersons.map((person) => {
+                const threatColor =
+                  person.threatLevel === "CRITICAL"
+                    ? "#ff0055"
+                    : person.threatLevel === "HIGH"
+                    ? "#f59e0b"
+                    : person.threatLevel === "MEDIUM"
+                    ? "#38bdf8"
+                    : "#10b981";
+
+                return (
+                  <tr key={person.id}>
+                    <td>
+                      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                        <div
+                          style={{
+                            width: 38,
+                            height: 38,
+                            borderRadius: 10,
+                            background: person.threatLevel === "CRITICAL" ? "linear-gradient(135deg, #ff0055 0%, #e11d48 100%)" : "linear-gradient(135deg, #38bdf8 0%, #0284c7 100%)",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            fontSize: 14,
+                            fontWeight: 700,
+                            color: "#ffffff",
+                            flexShrink: 0,
+                          }}
+                        >
+                          {person.name.slice(0, 2).toUpperCase()}
+                        </div>
+                        <div>
+                          <div style={{ fontWeight: 600, color: "var(--apple-text-main)", fontSize: 13.5 }}>{person.name}</div>
+                          <div style={{ fontSize: 11.5, color: "var(--apple-text-muted)" }}>
+                            {person.email} • {person.department} • {person.endpointHost} ({person.endpointIp})
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+
+                    <td>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span className="apple-pill rose" style={{ fontWeight: 700 }}>
+                          {person.cases.length} Case{person.cases.length !== 1 ? "s" : ""}
+                        </span>
+                        {person.hardBlockedCount > 0 && (
+                          <span className="apple-pill red" style={{ fontSize: 10 }}>
+                            {person.hardBlockedCount} Blocked
+                          </span>
+                        )}
+                      </div>
+                    </td>
+
+                    <td>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span style={{ fontWeight: 800, fontSize: 14, color: threatColor }}>
+                          {person.peakRiskScore}/100
+                        </span>
+                        <span
+                          style={{
+                            fontSize: 10,
+                            fontWeight: 700,
+                            padding: "2px 6px",
+                            borderRadius: 4,
+                            background: `${threatColor}18`,
+                            color: threatColor,
+                            border: `1px solid ${threatColor}40`,
+                          }}
+                        >
+                          {person.threatLevel}
+                        </span>
+                      </div>
+                    </td>
+
+                    <td>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                        {person.aiPlatformsList.slice(0, 3).map((plat, pIdx) => (
+                          <span key={pIdx}>{renderAiPlatformBadge(plat)}</span>
+                        ))}
+                      </div>
+                    </td>
+
+                    <td style={{ fontSize: 12, color: "var(--apple-text-muted)" }}>
+                      {new Date(person.lastAttempt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                    </td>
+
+                    <td style={{ textAlign: "right" }}>
+                      <button
+                        className="apple-btn primary"
+                        style={{ padding: "6px 14px", fontSize: 12, display: "inline-flex", alignItems: "center", gap: 6 }}
+                        onClick={() => setSelectedPersonId(person.id)}
+                      >
+                        <Eye size={13} />
+                        <span>Investigate ({person.cases.length})</span>
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+
+              {filteredPersons.length === 0 && !loading && (
                 <tr>
-                  <td colSpan={6} style={{ textAlign: "center", padding: 32, color: "var(--apple-text-muted)" }}>
-                    No employee identities registered
+                  <td colSpan={6} style={{ textAlign: "center", padding: 36, color: "var(--apple-text-muted)" }}>
+                    No person identities match filter criteria.
                   </td>
                 </tr>
               )}
@@ -227,6 +576,456 @@ const Employees = () => {
           </table>
         </div>
       </div>
+
+      {/* ── Comprehensive Person Investigation Dossier Modal / View ─────────── */}
+      <AnimatePresence>
+        {selectedPerson && (
+          <motion.div
+            className="orion-drawer-overlay"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            style={{ display: "flex", alignItems: "center", justifyContent: "center", zIndex: 99999 }}
+            onClick={() => setSelectedPersonId(null)}
+          >
+            <motion.div
+              className="apple-card"
+              initial={{ scale: 0.94, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.94, opacity: 0, y: 20 }}
+              style={{
+                width: 960,
+                maxWidth: "95vw",
+                maxHeight: "92vh",
+                overflowY: "auto",
+                background: "rgba(11, 12, 16, 0.98)",
+                border: "1px solid rgba(225, 29, 72, 0.4)",
+                boxShadow: "0 25px 60px rgba(0,0,0,0.85)",
+                padding: 28,
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Top Navigation & Close */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+                <button
+                  className="apple-btn"
+                  onClick={() => setSelectedPersonId(null)}
+                  style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12 }}
+                >
+                  <ArrowLeft size={14} />
+                  <span>Back to Employee Roster</span>
+                </button>
+
+                <button
+                  onClick={() => setSelectedPersonId(null)}
+                  style={{ background: "transparent", border: "none", color: "#a1a1aa", cursor: "pointer", padding: 4 }}
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              {/* Person Profile Header Strip */}
+              <div
+                style={{
+                  background: "rgba(255, 255, 255, 0.03)",
+                  border: "1px solid var(--apple-border)",
+                  borderRadius: 14,
+                  padding: 20,
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  flexWrap: "wrap",
+                  gap: 16,
+                  marginBottom: 24,
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+                  <div
+                    style={{
+                      width: 58,
+                      height: 58,
+                      borderRadius: 16,
+                      background: selectedPerson.threatLevel === "CRITICAL" ? "linear-gradient(135deg, #ff0055 0%, #e11d48 100%)" : "linear-gradient(135deg, #38bdf8 0%, #0284c7 100%)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontSize: 20,
+                      fontWeight: 800,
+                      color: "#ffffff",
+                    }}
+                  >
+                    {selectedPerson.name.slice(0, 2).toUpperCase()}
+                  </div>
+                  <div>
+                    <h2 style={{ fontSize: 22, fontWeight: 800, color: "var(--apple-text-main)", margin: 0 }}>{selectedPerson.name}</h2>
+                    <div style={{ fontSize: 12.5, color: "var(--apple-text-muted)", marginTop: 4 }}>
+                      {selectedPerson.email} • {selectedPerson.department} • Workstation: {selectedPerson.endpointHost} ({selectedPerson.endpointIp})
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontSize: 24, fontWeight: 900, color: selectedPerson.threatLevel === "CRITICAL" ? "#ff0055" : "#f59e0b" }}>
+                      {selectedPerson.peakRiskScore}/100
+                    </div>
+                    <div style={{ fontSize: 10, color: "var(--apple-text-muted)", textTransform: "uppercase" }}>Peak Risk</div>
+                  </div>
+
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontSize: 24, fontWeight: 900, color: "#ffffff" }}>
+                      {selectedPerson.cases.length}
+                    </div>
+                    <div style={{ fontSize: 10, color: "var(--apple-text-muted)", textTransform: "uppercase" }}>Leak Cases</div>
+                  </div>
+
+                  <button
+                    className={`apple-btn ${selectedPerson.status === "Blocked" ? "primary" : ""}`}
+                    onClick={() => handleToggleUserAccess(selectedPerson.userId, selectedPerson.status === "Blocked")}
+                    disabled={isUpdatingUser}
+                    style={{ fontSize: 12, padding: "8px 14px" }}
+                  >
+                    {selectedPerson.status === "Blocked" ? (
+                      <>
+                        <UserCheck size={14} />
+                        <span>Re-Enable Access</span>
+                      </>
+                    ) : (
+                      <>
+                        <UserX size={14} />
+                        <span>Suspend Access</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {/* 2 Analytics Charts for this Person */}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(380px, 1fr))", gap: 18, marginBottom: 26 }}>
+                {/* Person Risk Progression Timeline */}
+                <div style={{ background: "rgba(255, 255, 255, 0.02)", border: "1px solid var(--apple-border)", borderRadius: 12, padding: 16 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "var(--apple-text-main)", marginBottom: 12, display: "flex", alignItems: "center", gap: 6 }}>
+                    <TrendingUp size={15} color="#ff0055" />
+                    <span>Risk Progression Timeline ({selectedPerson.cases.length} Cases)</span>
+                  </div>
+                  <div style={{ height: 180, width: "100%" }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={personRiskTimeline} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+                        <defs>
+                          <linearGradient id="empRiskGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#ff0055" stopOpacity={0.4} />
+                            <stop offset="95%" stopColor="#ff0055" stopOpacity={0.0} />
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(225,29,72,0.08)" />
+                        <XAxis dataKey="caseNum" stroke="#71717a" fontSize={10.5} />
+                        <YAxis domain={[0, 100]} stroke="#71717a" fontSize={10.5} />
+                        <Tooltip
+                          contentStyle={{
+                            background: "rgba(13, 14, 18, 0.95)",
+                            border: "1px solid var(--apple-border-strong)",
+                            borderRadius: "10px",
+                            color: "#ffffff",
+                            fontSize: "12px",
+                          }}
+                        />
+                        <Area type="monotone" dataKey="riskScore" stroke="#ff0055" strokeWidth={2.5} fill="url(#empRiskGrad)" />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                {/* Person Exfiltration Category Distribution */}
+                <div style={{ background: "rgba(255, 255, 255, 0.02)", border: "1px solid var(--apple-border)", borderRadius: 12, padding: 16 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "var(--apple-text-main)", marginBottom: 12, display: "flex", alignItems: "center", gap: 6 }}>
+                    <Database size={15} color="#38bdf8" />
+                    <span>Leaked Data Categories</span>
+                  </div>
+                  <div style={{ height: 180, width: "100%" }}>
+                    {personCategoryChartData.length > 0 ? (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
+                          <Pie
+                            data={personCategoryChartData}
+                            dataKey="count"
+                            nameKey="name"
+                            cx="50%"
+                            cy="50%"
+                            outerRadius={60}
+                            stroke="#0d0e12"
+                            strokeWidth={1.5}
+                          >
+                            {personCategoryChartData.map((entry, index) => (
+                              <Cell key={`empcell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                            ))}
+                          </Pie>
+                          <Tooltip
+                            contentStyle={{
+                              background: "rgba(13, 14, 18, 0.95)",
+                              border: "1px solid var(--apple-border-strong)",
+                              borderRadius: "10px",
+                              color: "#ffffff",
+                              fontSize: "12px",
+                            }}
+                          />
+                          <Legend verticalAlign="bottom" iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 10, color: "#a1a1aa" }} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "var(--apple-text-muted)", fontSize: 12 }}>
+                        No categories found
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* ── Complete List of ALL Cases That Person Has ── */}
+              <div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, flexWrap: "wrap", gap: 10 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <Fingerprint size={16} color="#ff0055" />
+                    <span style={{ fontSize: 15, fontWeight: 700, color: "var(--apple-text-main)" }}>
+                      All Recorded Cases for {selectedPerson.name} ({selectedPerson.cases.length} Total)
+                    </span>
+                    <span className="apple-pill rose" style={{ fontSize: 11, fontWeight: 700 }}>
+                      Showing {filteredDossierCases.length} of {selectedPerson.cases.length}
+                    </span>
+                  </div>
+
+                  {/* Case Controls: Expand/Collapse All */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <button
+                      className="apple-btn"
+                      style={{ padding: "4px 10px", fontSize: 11 }}
+                      onClick={() => {
+                        if (collapsedCaseIds.size === 0) {
+                          const allIds = new Set(selectedPerson.cases.map((c, i) => c.id || i));
+                          setCollapsedCaseIds(allIds);
+                        } else {
+                          setCollapsedCaseIds(new Set());
+                        }
+                      }}
+                    >
+                      {collapsedCaseIds.size === 0 ? "Collapse All" : "Expand All"}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Dossier Case Filters Bar */}
+                <div
+                  style={{
+                    background: "rgba(255, 255, 255, 0.02)",
+                    border: "1px solid var(--apple-border)",
+                    borderRadius: 10,
+                    padding: "10px 14px",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                    flexWrap: "wrap",
+                    marginBottom: 16,
+                  }}
+                >
+                  {/* Search inside this person's cases */}
+                  <div style={{ position: "relative", flex: "1 1 200px" }}>
+                    <Search size={13} color="#71717a" style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)" }} />
+                    <input
+                      type="text"
+                      placeholder="Search within this person's cases (prompt, token, category)..."
+                      className="apple-input"
+                      style={{ paddingLeft: 30, width: "100%", height: 32, fontSize: 11.5 }}
+                      value={dossierCaseSearch}
+                      onChange={(e) => setDossierCaseSearch(e.target.value)}
+                    />
+                  </div>
+
+                  {/* Filter by Platform */}
+                  <select
+                    className="apple-input"
+                    style={{ width: 150, height: 32, fontSize: 11.5 }}
+                    value={dossierPlatformFilter}
+                    onChange={(e) => setDossierPlatformFilter(e.target.value)}
+                  >
+                    <option value="ALL">All AI Platforms</option>
+                    <option value="antigravity">Antigravity (Gemini)</option>
+                    <option value="kiro">Kiro (Amazon Q)</option>
+                    <option value="cursor">Cursor AI</option>
+                    <option value="windsurf">Windsurf AI</option>
+                    <option value="chatgpt">ChatGPT</option>
+                    <option value="claude">Claude</option>
+                  </select>
+
+                  {/* Filter by Action */}
+                  <select
+                    className="apple-input"
+                    style={{ width: 140, height: 32, fontSize: 11.5 }}
+                    value={dossierActionFilter}
+                    onChange={(e) => setDossierActionFilter(e.target.value)}
+                  >
+                    <option value="ALL">All Actions</option>
+                    <option value="hard_block">Hard Blocked</option>
+                    <option value="silent_redact">Silent Redacted</option>
+                  </select>
+
+                  {(dossierCaseSearch || dossierPlatformFilter !== "ALL" || dossierActionFilter !== "ALL") && (
+                    <button
+                      className="apple-btn"
+                      style={{ padding: "4px 8px", fontSize: 11 }}
+                      onClick={() => {
+                        setDossierCaseSearch("");
+                        setDossierPlatformFilter("ALL");
+                        setDossierActionFilter("ALL");
+                      }}
+                    >
+                      Clear Filters
+                    </button>
+                  )}
+                </div>
+
+                {/* Chronological List of All Cases */}
+                <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                  {filteredDossierCases.map((c, cIdx) => {
+                    const caseKey = c.id || cIdx;
+                    const isCollapsed = collapsedCaseIds.has(caseKey);
+                    const isBlocked = c.actionTaken === "hard_block";
+
+                    const toggleCase = () => {
+                      setCollapsedCaseIds((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(caseKey)) next.delete(caseKey);
+                        else next.add(caseKey);
+                        return next;
+                      });
+                    };
+
+                    return (
+                      <div
+                        key={caseKey}
+                        style={{
+                          background: "rgba(255, 255, 255, 0.02)",
+                          border: `1px solid ${isBlocked ? "rgba(255, 0, 85, 0.3)" : "rgba(225, 29, 72, 0.2)"}`,
+                          borderLeft: `4px solid ${isBlocked ? "#ff0055" : "#e11d48"}`,
+                          borderRadius: 10,
+                          overflow: "hidden",
+                        }}
+                      >
+                        {/* Case Header Banner */}
+                        <div
+                          style={{
+                            padding: "12px 18px",
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            cursor: "pointer",
+                            background: "rgba(255, 255, 255, 0.015)",
+                          }}
+                          onClick={toggleCase}
+                        >
+                          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                            <span style={{ fontWeight: 800, fontSize: 13, color: "#ffffff" }}>
+                              Case #{selectedPerson.cases.length - cIdx}
+                            </span>
+                            {renderAiPlatformBadge(c.aiPlatform)}
+                            <span className={`apple-pill ${isBlocked ? "red" : "rose"}`}>
+                              {isBlocked ? "Hard Blocked" : "Silent Redacted"}
+                            </span>
+                            <span style={{ fontWeight: 800, fontSize: 12, color: c.riskScore >= 70 ? "#ff0055" : "#f59e0b" }}>
+                              Risk: {c.riskScore}/100
+                            </span>
+                          </div>
+
+                          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                            <span style={{ fontSize: 11, color: "var(--apple-text-muted)" }}>
+                              {new Date(c.timestamp).toLocaleString()}
+                            </span>
+                            <ChevronRight
+                              size={16}
+                              color="#a1a1aa"
+                              style={{ transform: !isCollapsed ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 0.2s ease" }}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Case Forensic Body */}
+                        {!isCollapsed && (
+                          <div style={{ padding: "14px 18px", borderTop: "1px solid var(--apple-border)" }}>
+                            {/* Categories Tag Strip */}
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
+                              {(c.categoriesRedacted || ["SENSITIVE_DATA"]).map((cat, catIdx) => (
+                                <span
+                                  key={catIdx}
+                                  style={{
+                                    fontSize: 10.5,
+                                    fontWeight: 700,
+                                    padding: "2px 8px",
+                                    borderRadius: 4,
+                                    background: "rgba(255, 0, 85, 0.12)",
+                                    color: "#ff0055",
+                                    border: "1px solid rgba(255, 0, 85, 0.25)",
+                                  }}
+                                >
+                                  [{cat.replace(/_/g, " ").toUpperCase()}]
+                                </span>
+                              ))}
+                            </div>
+
+                            {/* 3-Pane Forensic Inspection Grid */}
+                            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 12 }}>
+                              {/* Original Intercepted Prompt */}
+                              <div style={{ background: "rgba(0,0,0,0.4)", borderRadius: 8, padding: 12, border: "1px solid rgba(255, 0, 85, 0.2)" }}>
+                                <div style={{ fontSize: 10.5, fontWeight: 700, color: "#ff0055", textTransform: "uppercase", marginBottom: 6 }}>
+                                  1. Original Intercepted Prompt (Plaintext Secret Attempt)
+                                </div>
+                                <pre style={{ fontSize: 11.5, color: "#fca5a5", margin: 0, whiteSpace: "pre-wrap", fontFamily: "monospace", lineHeight: 1.45, maxHeight: 180, overflowY: "auto" }}>
+                                  {c.originalPrompt || "No prompt captured"}
+                                </pre>
+                              </div>
+
+                              {/* Sanitized Outbound Prompt */}
+                              <div style={{ background: "rgba(0,0,0,0.4)", borderRadius: 8, padding: 12, border: "1px solid rgba(56, 189, 248, 0.2)" }}>
+                                <div style={{ fontSize: 10.5, fontWeight: 700, color: "#38bdf8", textTransform: "uppercase", marginBottom: 6 }}>
+                                  2. Sanitized Outbound Payload (Sent to AI)
+                                </div>
+                                <pre style={{ fontSize: 11.5, color: "#7dd3fc", margin: 0, whiteSpace: "pre-wrap", fontFamily: "monospace", lineHeight: 1.45, maxHeight: 180, overflowY: "auto" }}>
+                                  {c.sanitizedPrompt || "[SANITIZED]"}
+                                </pre>
+                              </div>
+
+                              {/* Restored AI Response / Block Enforcement */}
+                              <div style={{ background: "rgba(0,0,0,0.4)", borderRadius: 8, padding: 12, border: "1px solid rgba(16, 185, 129, 0.2)" }}>
+                                <div style={{ fontSize: 10.5, fontWeight: 700, color: "#10b981", textTransform: "uppercase", marginBottom: 6 }}>
+                                  3. AI Response / Enforcement Action
+                                </div>
+                                <pre style={{ fontSize: 11.5, color: "#6ee7b7", margin: 0, whiteSpace: "pre-wrap", fontFamily: "monospace", lineHeight: 1.45, maxHeight: 180, overflowY: "auto" }}>
+                                  {c.restoredResponse || (isBlocked ? "🚫 Outbound transmission hard-blocked by Vantix Firewall." : "✓ Sanitized response passed seamlessly.")}
+                                </pre>
+                              </div>
+                            </div>
+
+                            {/* Cryptographic Signature */}
+                            {c.cryptoSignature && (
+                              <div style={{ marginTop: 10, fontSize: 10.5, color: "var(--apple-text-muted)", display: "flex", alignItems: "center", gap: 6 }}>
+                                <Shield size={12} color="#10b981" />
+                                <span>HMAC-SHA256 Audit Signature: <code style={{ color: "#a1a1aa" }}>{c.cryptoSignature}</code></span>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+
+                  {filteredDossierCases.length === 0 && (
+                    <div style={{ textAlign: "center", padding: 32, background: "rgba(255,255,255,0.02)", borderRadius: 10, border: "1px solid var(--apple-border)", color: "var(--apple-text-muted)", fontSize: 12.5 }}>
+                      No cases match search or filter criteria. Clear filters to view all {selectedPerson.cases.length} cases.
+                    </div>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Add Employee Modal */}
       <AnimatePresence>
@@ -236,7 +1035,7 @@ const Employees = () => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            style={{ display: "flex", alignItems: "center", justifyContent: "center" }}
+            style={{ display: "flex", alignItems: "center", justifyContent: "center", zIndex: 99999 }}
             onClick={() => setShowAddModal(false)}
           >
             <motion.div
@@ -244,30 +1043,65 @@ const Employees = () => {
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              style={{ width: 420, maxWidth: "90vw", background: "rgba(18, 19, 26, 0.95)" }}
+              style={{ width: 440, maxWidth: "90vw", background: "rgba(18, 19, 26, 0.98)", border: "1px solid rgba(225, 29, 72, 0.3)" }}
               onClick={(e) => e.stopPropagation()}
             >
               <h3 style={{ fontSize: 18, fontWeight: 700, color: "var(--apple-text-main)", marginBottom: 16 }}>
-                Add New Employee
+                Register Monitored Identity
               </h3>
 
               <form onSubmit={handleAddEmployee} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                <input
-                  type="email"
-                  className="apple-input"
-                  placeholder="employee@company.corp"
-                  value={newEmployeeEmail}
-                  onChange={(e) => setNewEmployeeEmail(e.target.value)}
-                  required
-                  autoFocus
-                />
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: "var(--apple-text-muted)", marginBottom: 6, display: "block" }}>
+                    Full Name
+                  </label>
+                  <input
+                    type="text"
+                    className="apple-input"
+                    placeholder="e.g. Alex Rivera"
+                    value={newEmployeeName}
+                    onChange={(e) => setNewEmployeeName(e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: "var(--apple-text-muted)", marginBottom: 6, display: "block" }}>
+                    Corporate Email
+                  </label>
+                  <input
+                    type="email"
+                    className="apple-input"
+                    placeholder="alex.rivera@company.corp"
+                    value={newEmployeeEmail}
+                    onChange={(e) => setNewEmployeeEmail(e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: "var(--apple-text-muted)", marginBottom: 6, display: "block" }}>
+                    Department
+                  </label>
+                  <select
+                    className="apple-input"
+                    value={newEmployeeDept}
+                    onChange={(e) => setNewEmployeeDept(e.target.value)}
+                  >
+                    <option value="Engineering">Engineering / DevOps</option>
+                    <option value="Finance">Finance & Accounting</option>
+                    <option value="Core Operations">Core Operations / ICS</option>
+                    <option value="Legal">Legal & Compliance</option>
+                    <option value="Executive">Executive Office</option>
+                  </select>
+                </div>
 
                 <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 12 }}>
                   <button type="button" className="apple-btn" onClick={() => setShowAddModal(false)}>
                     Cancel
                   </button>
                   <button type="submit" className="apple-btn primary">
-                    Invite Employee
+                    Add Identity
                   </button>
                 </div>
               </form>

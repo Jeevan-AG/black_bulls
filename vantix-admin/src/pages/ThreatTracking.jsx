@@ -7,6 +7,9 @@ import {
   Terminal,
   Sparkles,
   ChevronRight,
+  Shield,
+  Fingerprint,
+  Eye,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -52,11 +55,49 @@ const PIE_COLORS = [
   "#e11d48", // Rose Red
 ];
 
+const renderAiPlatformBadge = (platform) => {
+  const p = (platform || "").toLowerCase();
+  let displayName = platform || "AI Endpoint";
+  let pillClass = "red";
+
+  if (p.includes("kiro") || p.includes("amazonaws.com") || p.includes("amazon q") || p.includes("codewhisperer")) {
+    displayName = "Kiro (Amazon Q)";
+    pillClass = "rose";
+  } else if (p.includes("cursor")) {
+    displayName = "Cursor AI";
+    pillClass = "rose";
+  } else if (p.includes("antigravity") || p.includes("cloudcode") || p.includes("cloudaicompanion")) {
+    displayName = "Antigravity (Gemini)";
+    pillClass = "rose";
+  } else if (p.includes("windsurf") || p.includes("codeium")) {
+    displayName = "Windsurf AI";
+    pillClass = "rose";
+  } else if (p.includes("github") || p.includes("copilot")) {
+    displayName = "GitHub Copilot";
+    pillClass = "rose";
+  } else if (p.includes("chatgpt")) {
+    displayName = "ChatGPT";
+    pillClass = "red";
+  } else if (p.includes("claude") || p.includes("anthropic")) {
+    displayName = "Claude";
+    pillClass = "rose";
+  } else if (p.includes("gemini")) {
+    displayName = "Gemini";
+    pillClass = "rose";
+  }
+
+  return <span className={`apple-pill ${pillClass}`}>{displayName}</span>;
+};
+
 export default function ThreatTracking() {
   const [incidents, setIncidents] = useState([]);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [threatFilter, setThreatFilter] = useState("ALL");
+  const [collapsedCaseIds, setCollapsedCaseIds] = useState(new Set());
+  const [dossierCaseSearch, setDossierCaseSearch] = useState("");
+  const [dossierPlatformFilter, setDossierPlatformFilter] = useState("ALL");
+  const [dossierActionFilter, setDossierActionFilter] = useState("ALL");
   const [toastMessage, setToastMessage] = useState(null);
 
   const wsRef = useRef(null);
@@ -68,14 +109,14 @@ export default function ThreatTracking() {
 
   const fetchLiveData = async () => {
     try {
-      const auditRes = await fetch(`${API_BASE}/api/vantix/audit-logs`);
+      const auditRes = await fetch(`${API_BASE}/api/vantix/audit-logs?limit=500`);
       if (auditRes.ok) {
         const auditJson = await auditRes.json();
         if (auditJson.success && Array.isArray(auditJson.logs) && auditJson.logs.length > 0) {
           setIncidents((prev) => {
             const merged = [...prev];
             auditJson.logs.forEach((log) => {
-              if (log.userId && !merged.some((m) => m.id === log.id || (m.timestamp === log.timestamp && m.userId === log.userId))) {
+              if (log.userId && !merged.some((m) => m.id === log.id || (m.timestamp === log.timestamp && m.userId === log.userId && m.originalPrompt === log.originalPrompt))) {
                 merged.unshift({
                   id: log.id || `audit-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
                   userId: log.userId,
@@ -91,6 +132,8 @@ export default function ThreatTracking() {
                   detections: log.detections || [],
                   originalPrompt: log.originalPrompt || log.promptSnippet || "Outbound prompt intercepted",
                   sanitizedPrompt: log.sanitizedPrompt || "[SANITIZED]",
+                  restoredResponse: log.restoredResponse || "",
+                  cryptoSignature: log.cryptoSignature || "",
                   timestamp: log.timestamp || new Date().toISOString(),
                 });
               }
@@ -133,6 +176,8 @@ export default function ThreatTracking() {
                   detections: inc.detections || [],
                   originalPrompt: inc.originalPrompt || "Intercepted prompt",
                   sanitizedPrompt: inc.sanitizedPrompt || "[REDACTED]",
+                  restoredResponse: inc.restoredResponse || "",
+                  cryptoSignature: inc.cryptoSignature || "",
                   timestamp: inc.timestamp || new Date().toISOString(),
                 },
                 ...prev,
@@ -233,6 +278,35 @@ export default function ThreatTracking() {
       riskScore: inc.riskScore || 0,
     }));
   }, [selectedEmployee]);
+
+  // Filtered cases for the active Flagged Identity (supports search across any number of cases)
+  const filteredDossierCases = useMemo(() => {
+    if (!selectedEmployee || !selectedEmployee.incidentsList) return [];
+    return selectedEmployee.incidentsList.filter((c) => {
+      const promptText = `${c.originalPrompt || ""} ${c.sanitizedPrompt || ""} ${c.restoredResponse || ""}`.toLowerCase();
+      const cats = (c.categoriesRedacted || []).join(" ").toLowerCase();
+      const plat = (c.aiPlatform || "").toLowerCase();
+
+      const q = dossierCaseSearch.trim().toLowerCase();
+      const matchesSearch =
+        !q ||
+        promptText.includes(q) ||
+        cats.includes(q) ||
+        plat.includes(q) ||
+        (c.id && c.id.toLowerCase().includes(q));
+
+      const matchesPlatform =
+        dossierPlatformFilter === "ALL" ||
+        plat.includes(dossierPlatformFilter.toLowerCase());
+
+      const matchesAction =
+        dossierActionFilter === "ALL" ||
+        (dossierActionFilter === "hard_block" && c.actionTaken === "hard_block") ||
+        (dossierActionFilter === "silent_redact" && c.actionTaken !== "hard_block");
+
+      return matchesSearch && matchesPlatform && matchesAction;
+    });
+  }, [selectedEmployee, dossierCaseSearch, dossierPlatformFilter, dossierActionFilter]);
 
   return (
     <motion.div
@@ -507,59 +581,244 @@ export default function ThreatTracking() {
 
           {/* Chronological Prompt Forensics Log */}
           <div className="apple-card" style={{ padding: 24 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 20 }}>
-              <Terminal size={16} color="#ff0055" />
-              <span style={{ fontSize: 15, fontWeight: 600, color: "var(--apple-text-main)" }}>Chronological Prompt Forensics</span>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, flexWrap: "wrap", gap: 10 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <Terminal size={16} color="#ff0055" />
+                <span style={{ fontSize: 15, fontWeight: 700, color: "var(--apple-text-main)" }}>
+                  All Recorded Cases for {selectedEmployee.name} ({selectedEmployee.incidentsList.length} Total)
+                </span>
+                <span className="apple-pill rose" style={{ fontSize: 11, fontWeight: 700 }}>
+                  Showing {filteredDossierCases.length} of {selectedEmployee.incidentsList.length}
+                </span>
+              </div>
+
+              {/* Case Controls: Expand/Collapse All */}
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <button
+                  className="apple-btn"
+                  style={{ padding: "4px 10px", fontSize: 11 }}
+                  onClick={() => {
+                    if (collapsedCaseIds.size === 0) {
+                      const allIds = new Set(selectedEmployee.incidentsList.map((c, i) => c.id || i));
+                      setCollapsedCaseIds(allIds);
+                    } else {
+                      setCollapsedCaseIds(new Set());
+                    }
+                  }}
+                >
+                  {collapsedCaseIds.size === 0 ? "Collapse All" : "Expand All"}
+                </button>
+              </div>
             </div>
 
-            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-              {selectedEmployee.incidentsList.map((inc, idx) => {
+            {/* Dossier Case Filters Bar */}
+            <div
+              style={{
+                background: "rgba(255, 255, 255, 0.02)",
+                border: "1px solid var(--apple-border)",
+                borderRadius: 10,
+                padding: "10px 14px",
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                flexWrap: "wrap",
+                marginBottom: 16,
+              }}
+            >
+              {/* Search inside this person's cases */}
+              <div style={{ position: "relative", flex: "1 1 200px" }}>
+                <Search size={13} color="#71717a" style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)" }} />
+                <input
+                  type="text"
+                  placeholder="Search within this person's cases (prompt, token, category)..."
+                  className="apple-input"
+                  style={{ paddingLeft: 30, width: "100%", height: 32, fontSize: 11.5 }}
+                  value={dossierCaseSearch}
+                  onChange={(e) => setDossierCaseSearch(e.target.value)}
+                />
+              </div>
+
+              {/* Filter by Platform */}
+              <select
+                className="apple-input"
+                style={{ width: 150, height: 32, fontSize: 11.5 }}
+                value={dossierPlatformFilter}
+                onChange={(e) => setDossierPlatformFilter(e.target.value)}
+              >
+                <option value="ALL">All AI Platforms</option>
+                <option value="antigravity">Antigravity (Gemini)</option>
+                <option value="kiro">Kiro (Amazon Q)</option>
+                <option value="cursor">Cursor AI</option>
+                <option value="windsurf">Windsurf AI</option>
+                <option value="chatgpt">ChatGPT</option>
+                <option value="claude">Claude</option>
+              </select>
+
+              {/* Filter by Action */}
+              <select
+                className="apple-input"
+                style={{ width: 140, height: 32, fontSize: 11.5 }}
+                value={dossierActionFilter}
+                onChange={(e) => setDossierActionFilter(e.target.value)}
+              >
+                <option value="ALL">All Actions</option>
+                <option value="hard_block">Hard Blocked</option>
+                <option value="silent_redact">Silent Redacted</option>
+              </select>
+
+              {(dossierCaseSearch || dossierPlatformFilter !== "ALL" || dossierActionFilter !== "ALL") && (
+                <button
+                  className="apple-btn"
+                  style={{ padding: "4px 8px", fontSize: 11 }}
+                  onClick={() => {
+                    setDossierCaseSearch("");
+                    setDossierPlatformFilter("ALL");
+                    setDossierActionFilter("ALL");
+                  }}
+                >
+                  Clear Filters
+                </button>
+              )}
+            </div>
+
+            {/* Chronological List of Cases */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              {filteredDossierCases.map((inc, idx) => {
+                const caseKey = inc.id || idx;
+                const isCollapsed = collapsedCaseIds.has(caseKey);
                 const isBlocked = inc.actionTaken === "hard_block";
+
+                const toggleCase = () => {
+                  setCollapsedCaseIds((prev) => {
+                    const next = new Set(prev);
+                    if (next.has(caseKey)) next.delete(caseKey);
+                    else next.add(caseKey);
+                    return next;
+                  });
+                };
+
                 return (
                   <div
-                    key={inc.id || idx}
+                    key={caseKey}
                     style={{
-                      background: "var(--apple-card-hover)",
-                      border: "1px solid var(--apple-border)",
-                      borderRadius: 14,
-                      padding: 16,
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: 12,
+                      background: "rgba(255, 255, 255, 0.02)",
+                      border: `1px solid ${isBlocked ? "rgba(255, 0, 85, 0.3)" : "rgba(225, 29, 72, 0.2)"}`,
+                      borderLeft: `4px solid ${isBlocked ? "#ff0055" : "#e11d48"}`,
+                      borderRadius: 10,
+                      overflow: "hidden",
                     }}
                   >
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        <span style={{ fontSize: 12, fontWeight: 700, color: "var(--apple-text-main)" }}>INCIDENT #{selectedEmployee.incidentsList.length - idx}</span>
-                        <span className="apple-pill red">{inc.aiPlatform || "chatgpt.com"}</span>
-                        <span style={{ fontSize: 11, color: "var(--apple-text-muted)" }}>
-                          {new Date(inc.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                    {/* Case Header Banner */}
+                    <div
+                      style={{
+                        padding: "12px 18px",
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        cursor: "pointer",
+                        background: "rgba(255, 255, 255, 0.015)",
+                      }}
+                      onClick={toggleCase}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                        <span style={{ fontWeight: 800, fontSize: 13, color: "#ffffff" }}>
+                          Case #{selectedEmployee.incidentsList.length - idx}
+                        </span>
+                        {renderAiPlatformBadge(inc.aiPlatform)}
+                        <span className={`apple-pill ${isBlocked ? "red" : "rose"}`}>
+                          {isBlocked ? "Hard Blocked" : "Silent Redacted"}
+                        </span>
+                        <span style={{ fontWeight: 800, fontSize: 12, color: inc.riskScore >= 70 ? "#ff0055" : "#f59e0b" }}>
+                          Risk: {inc.riskScore}/100
                         </span>
                       </div>
 
-                      <span className={`apple-pill ${isBlocked ? "red" : "rose"}`}>
-                        {isBlocked ? "Hard Blocked" : "Silent Redacted"}
-                      </span>
-                    </div>
-
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                      <div style={{ background: "rgba(255, 0, 85, 0.05)", border: "1px solid rgba(255, 0, 85, 0.2)", borderRadius: 10, padding: 12 }}>
-                        <div style={{ fontSize: 10, fontWeight: 700, color: "#ff0055", textTransform: "uppercase", marginBottom: 6 }}>Outbound Prompt Attempt</div>
-                        <div style={{ fontSize: 12, fontFamily: "monospace", color: "#e5e7eb", lineHeight: 1.5, whiteSpace: "pre-wrap" }}>
-                          {inc.originalPrompt}
-                        </div>
-                      </div>
-
-                      <div style={{ background: "rgba(225, 29, 72, 0.05)", border: "1px solid rgba(225, 29, 72, 0.2)", borderRadius: 10, padding: 12 }}>
-                        <div style={{ fontSize: 10, fontWeight: 700, color: "#e11d48", textTransform: "uppercase", marginBottom: 6 }}>Firewall Enforcement Result</div>
-                        <div style={{ fontSize: 12, fontFamily: "monospace", color: "#fca5a5", lineHeight: 1.5, whiteSpace: "pre-wrap" }}>
-                          {inc.sanitizedPrompt}
-                        </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                        <span style={{ fontSize: 11, color: "var(--apple-text-muted)" }}>
+                          {new Date(inc.timestamp).toLocaleString()}
+                        </span>
+                        <ChevronRight
+                          size={16}
+                          color="#a1a1aa"
+                          style={{ transform: !isCollapsed ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 0.2s ease" }}
+                        />
                       </div>
                     </div>
+
+                    {/* Case Forensic Body */}
+                    {!isCollapsed && (
+                      <div style={{ padding: "14px 18px", borderTop: "1px solid var(--apple-border)" }}>
+                        {/* Categories Tag Strip */}
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
+                          {(inc.categoriesRedacted || ["SENSITIVE_DATA"]).map((cat, catIdx) => (
+                            <span
+                              key={catIdx}
+                              style={{
+                                fontSize: 10.5,
+                                fontWeight: 700,
+                                padding: "2px 8px",
+                                borderRadius: 4,
+                                background: "rgba(255, 0, 85, 0.12)",
+                                color: "#ff0055",
+                                border: "1px solid rgba(255, 0, 85, 0.25)",
+                              }}
+                            >
+                              [{cat.replace(/_/g, " ").toUpperCase()}]
+                            </span>
+                          ))}
+                        </div>
+
+                        {/* 3-Pane Forensic Inspection Grid */}
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 12 }}>
+                          {/* Original Intercepted Prompt */}
+                          <div style={{ background: "rgba(0,0,0,0.4)", borderRadius: 8, padding: 12, border: "1px solid rgba(255, 0, 85, 0.2)" }}>
+                            <div style={{ fontSize: 10.5, fontWeight: 700, color: "#ff0055", textTransform: "uppercase", marginBottom: 6 }}>
+                              1. Original Intercepted Prompt (Plaintext Secret Attempt)
+                            </div>
+                            <pre style={{ fontSize: 11.5, color: "#fca5a5", margin: 0, whiteSpace: "pre-wrap", fontFamily: "monospace", lineHeight: 1.45, maxHeight: 180, overflowY: "auto" }}>
+                              {inc.originalPrompt || "No prompt captured"}
+                            </pre>
+                          </div>
+
+                          {/* Sanitized Outbound Prompt */}
+                          <div style={{ background: "rgba(0,0,0,0.4)", borderRadius: 8, padding: 12, border: "1px solid rgba(56, 189, 248, 0.2)" }}>
+                            <div style={{ fontSize: 10.5, fontWeight: 700, color: "#38bdf8", textTransform: "uppercase", marginBottom: 6 }}>
+                              2. Sanitized Outbound Payload (Sent to AI)
+                            </div>
+                            <pre style={{ fontSize: 11.5, color: "#7dd3fc", margin: 0, whiteSpace: "pre-wrap", fontFamily: "monospace", lineHeight: 1.45, maxHeight: 180, overflowY: "auto" }}>
+                              {inc.sanitizedPrompt || "[SANITIZED]"}
+                            </pre>
+                          </div>
+
+                          {/* Restored AI Response / Block Enforcement */}
+                          <div style={{ background: "rgba(0,0,0,0.4)", borderRadius: 8, padding: 12, border: "1px solid rgba(16, 185, 129, 0.2)" }}>
+                            <div style={{ fontSize: 10.5, fontWeight: 700, color: "#10b981", textTransform: "uppercase", marginBottom: 6 }}>
+                              3. AI Response / Enforcement Action
+                            </div>
+                            <pre style={{ fontSize: 11.5, color: "#6ee7b7", margin: 0, whiteSpace: "pre-wrap", fontFamily: "monospace", lineHeight: 1.45, maxHeight: 180, overflowY: "auto" }}>
+                              {inc.restoredResponse || (isBlocked ? "🚫 Outbound transmission hard-blocked by Vantix Firewall." : "✓ Sanitized response passed seamlessly.")}
+                            </pre>
+                          </div>
+                        </div>
+
+                        {/* Cryptographic Signature */}
+                        {inc.cryptoSignature && (
+                          <div style={{ marginTop: 10, fontSize: 10.5, color: "var(--apple-text-muted)", display: "flex", alignItems: "center", gap: 6 }}>
+                            <Shield size={12} color="#10b981" />
+                            <span>HMAC-SHA256 Audit Signature: <code style={{ color: "#a1a1aa" }}>{inc.cryptoSignature}</code></span>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 );
               })}
+
+              {filteredDossierCases.length === 0 && (
+                <div style={{ textAlign: "center", padding: 32, background: "rgba(255,255,255,0.02)", borderRadius: 10, border: "1px solid var(--apple-border)", color: "var(--apple-text-muted)", fontSize: 12.5 }}>
+                  No cases match search or filter criteria. Clear filters to view all {selectedEmployee.incidentsList.length} cases.
+                </div>
+              )}
             </div>
           </div>
         </div>

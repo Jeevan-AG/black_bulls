@@ -12,6 +12,18 @@ import {
   Terminal,
   Zap,
   Info,
+  User,
+  ArrowLeft,
+  Search,
+  Eye,
+  AlertTriangle,
+  CheckCircle,
+  ChevronRight,
+  X,
+  UserX,
+  UserCheck,
+  TrendingUp,
+  Fingerprint,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -25,6 +37,8 @@ import {
   XAxis,
   YAxis,
   CartesianGrid,
+  AreaChart,
+  Area,
 } from "recharts";
 
 const CLOUD_BACKEND_URL = "https://vantix-backend-7gcw.onrender.com";
@@ -162,9 +176,19 @@ export default function Dashboard() {
   const [incidents, setIncidents] = useState([]);
   const [toastMessage, setToastMessage] = useState(null);
 
+  // Person Investigation State
+  const [selectedPersonId, setSelectedPersonId] = useState(null);
+  const [personSearch, setPersonSearch] = useState("");
+  const [threatFilter, setThreatFilter] = useState("ALL");
+  const [collapsedCaseIds, setCollapsedCaseIds] = useState(new Set());
+  const [dossierCaseSearch, setDossierCaseSearch] = useState("");
+  const [dossierPlatformFilter, setDossierPlatformFilter] = useState("ALL");
+  const [dossierActionFilter, setDossierActionFilter] = useState("ALL");
+  const [isUpdatingUser, setIsUpdatingUser] = useState(false);
+
   // Simulation Modal State
   const [showSimModal, setShowSimModal] = useState(false);
-  const [simEmployee, setSimEmployee] = useState("employee");
+  const [simEmployee, setSimEmployee] = useState("mohammed");
   const [simLeakType, setSimLeakType] = useState("aws_keys");
   const [simCustomPrompt, setSimCustomPrompt] = useState("");
   const [isSimulating, setIsSimulating] = useState(false);
@@ -178,14 +202,14 @@ export default function Dashboard() {
 
   const fetchLiveData = async () => {
     try {
-      const auditRes = await fetch(`${API_BASE}/api/vantix/audit-logs`);
+      const auditRes = await fetch(`${API_BASE}/api/vantix/audit-logs?limit=500`);
       if (auditRes.ok) {
         const auditJson = await auditRes.json();
         if (auditJson.success && Array.isArray(auditJson.logs) && auditJson.logs.length > 0) {
           setIncidents((prev) => {
             const merged = [...prev];
             auditJson.logs.forEach((log) => {
-              if (log.userId && !merged.some((m) => m.id === log.id || (m.timestamp === log.timestamp && m.userId === log.userId))) {
+              if (log.userId && !merged.some((m) => m.id === log.id || (m.timestamp === log.timestamp && m.userId === log.userId && m.originalPrompt === log.originalPrompt))) {
                 merged.unshift({
                   id: log.id || `audit-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
                   userId: log.userId,
@@ -201,6 +225,8 @@ export default function Dashboard() {
                   detections: log.detections || [],
                   originalPrompt: log.originalPrompt || log.promptSnippet || "Outbound prompt intercepted",
                   sanitizedPrompt: log.sanitizedPrompt || "[SANITIZED]",
+                  restoredResponse: log.restoredResponse || "",
+                  cryptoSignature: log.cryptoSignature || "",
                   timestamp: log.timestamp || new Date().toISOString(),
                 });
               }
@@ -243,6 +269,8 @@ export default function Dashboard() {
                 detections: packet.detections || [],
                 originalPrompt: packet.originalPrompt || "Outbound prompt intercepted",
                 sanitizedPrompt: packet.sanitizedPrompt || "[SANITIZED]",
+                restoredResponse: packet.restoredResponse || "",
+                cryptoSignature: packet.cryptoSignature || "",
                 timestamp: packet.timestamp || new Date().toISOString(),
               };
 
@@ -281,6 +309,159 @@ export default function Dashboard() {
   const totalBlocked = incidents.filter((i) => i.actionTaken === "hard_block").length;
   const totalRedacted = incidents.filter((i) => i.actionTaken === "silent_redact").length;
 
+  // ── Group Incidents by Person / Identity ─────────────────────────────────────
+  const monitoredPersons = useMemo(() => {
+    const userMap = new Map();
+
+    incidents.forEach((inc) => {
+      const key = (inc.userId || inc.userEmail || "unknown").toLowerCase();
+      if (!userMap.has(key)) {
+        userMap.set(key, {
+          id: key,
+          userId: inc.userId || key,
+          name: inc.userName || (key.charAt(0).toUpperCase() + key.slice(1).replace(/[._]/g, " ")),
+          email: inc.userEmail || `${key}@acme.corp`,
+          department: inc.department || "Core Engineering",
+          endpointHost: inc.endpointHost || "ws-node",
+          endpointIp: inc.endpointIp || "127.0.0.1",
+          cases: [],
+          totalAttempts: 0,
+          hardBlockedCount: 0,
+          redactedCount: 0,
+          peakRiskScore: 0,
+          categories: new Set(),
+          aiPlatforms: new Set(),
+          lastAttempt: inc.timestamp,
+        });
+      }
+
+      const entry = userMap.get(key);
+      entry.cases.push(inc);
+      entry.totalAttempts++;
+      if (inc.actionTaken === "hard_block") entry.hardBlockedCount++;
+      if (inc.actionTaken === "silent_redact") entry.redactedCount++;
+      if ((inc.riskScore || 0) > entry.peakRiskScore) entry.peakRiskScore = inc.riskScore;
+      if (inc.aiPlatform) entry.aiPlatforms.add(inc.aiPlatform);
+
+      if (new Date(inc.timestamp) >= new Date(entry.lastAttempt)) {
+        entry.lastAttempt = inc.timestamp;
+        if (inc.endpointHost) entry.endpointHost = inc.endpointHost;
+        if (inc.endpointIp) entry.endpointIp = inc.endpointIp;
+      }
+
+      if (Array.isArray(inc.categoriesRedacted)) {
+        inc.categoriesRedacted.forEach((c) => entry.categories.add(c.replace(/_/g, " ")));
+      }
+      if (Array.isArray(inc.detections)) {
+        inc.detections.forEach((d) => {
+          if (d.category) entry.categories.add(d.category.replace(/_/g, " "));
+        });
+      }
+    });
+
+    return Array.from(userMap.values()).map((u) => {
+      const sortedCases = [...u.cases].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+      return {
+        ...u,
+        cases: sortedCases,
+        topCategories: Array.from(u.categories),
+        aiPlatformsList: Array.from(u.aiPlatforms),
+        threatLevel:
+          u.peakRiskScore >= 75
+            ? "CRITICAL"
+            : u.peakRiskScore >= 45
+            ? "HIGH"
+            : u.peakRiskScore >= 20
+            ? "MEDIUM"
+            : "LOW",
+        status:
+          u.hardBlockedCount > 0
+            ? "Blocked"
+            : u.redactedCount > 0
+            ? "Active Redactions"
+            : "Monitored",
+      };
+    }).sort((a, b) => b.peakRiskScore - a.peakRiskScore || b.totalAttempts - a.totalAttempts);
+  }, [incidents]);
+
+  const filteredPersons = useMemo(() => {
+    return monitoredPersons.filter((p) => {
+      const matchesSearch =
+        p.name.toLowerCase().includes(personSearch.toLowerCase()) ||
+        p.email.toLowerCase().includes(personSearch.toLowerCase()) ||
+        p.department.toLowerCase().includes(personSearch.toLowerCase()) ||
+        p.endpointHost.toLowerCase().includes(personSearch.toLowerCase());
+      const matchesThreat = threatFilter === "ALL" || p.threatLevel === threatFilter;
+      return matchesSearch && matchesThreat;
+    });
+  }, [monitoredPersons, personSearch, threatFilter]);
+
+  // Selected Person for Deep Investigation Dossier
+  const selectedPerson = useMemo(() => {
+    if (!selectedPersonId) return null;
+    return monitoredPersons.find((p) => p.id === selectedPersonId) || null;
+  }, [selectedPersonId, monitoredPersons]);
+
+  // Selected Person's Risk Timeline Chart (Case #1 -> Case #N)
+  const personRiskTimeline = useMemo(() => {
+    if (!selectedPerson || selectedPerson.cases.length === 0) return [];
+    const chronological = [...selectedPerson.cases].reverse();
+    return chronological.map((c, idx) => ({
+      caseNum: `Case #${idx + 1}`,
+      riskScore: c.riskScore || 0,
+      action: c.actionTaken === "hard_block" ? "Blocked" : "Redacted",
+      platform: c.aiPlatform || "chatgpt.com",
+      time: new Date(c.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+    }));
+  }, [selectedPerson]);
+
+  // Selected Person's Category Distribution Chart
+  const personCategoryChartData = useMemo(() => {
+    if (!selectedPerson || selectedPerson.cases.length === 0) return [];
+    const counts = {};
+    selectedPerson.cases.forEach((c) => {
+      const cats = c.categoriesRedacted && c.categoriesRedacted.length > 0
+        ? c.categoriesRedacted
+        : (c.detections || []).map((d) => d.category);
+      cats.forEach((cat) => {
+        const clean = (cat || "CONFIDENTIAL").replace(/_/g, " ").toUpperCase();
+        counts[clean] = (counts[clean] || 0) + 1;
+      });
+    });
+    return Object.entries(counts)
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count);
+  }, [selectedPerson]);
+
+  // Filtered cases for the active Person Dossier (supports search across 1 to 100+ cases)
+  const filteredDossierCases = useMemo(() => {
+    if (!selectedPerson || !selectedPerson.cases) return [];
+    return selectedPerson.cases.filter((c) => {
+      const promptText = `${c.originalPrompt || ""} ${c.sanitizedPrompt || ""} ${c.restoredResponse || ""}`.toLowerCase();
+      const cats = (c.categoriesRedacted || []).join(" ").toLowerCase();
+      const plat = (c.aiPlatform || "").toLowerCase();
+
+      const q = dossierCaseSearch.trim().toLowerCase();
+      const matchesSearch =
+        !q ||
+        promptText.includes(q) ||
+        cats.includes(q) ||
+        plat.includes(q) ||
+        (c.id && c.id.toLowerCase().includes(q));
+
+      const matchesPlatform =
+        dossierPlatformFilter === "ALL" ||
+        plat.includes(dossierPlatformFilter.toLowerCase());
+
+      const matchesAction =
+        dossierActionFilter === "ALL" ||
+        (dossierActionFilter === "hard_block" && c.actionTaken === "hard_block") ||
+        (dossierActionFilter === "silent_redact" && c.actionTaken !== "hard_block");
+
+      return matchesSearch && matchesPlatform && matchesAction;
+    });
+  }, [selectedPerson, dossierCaseSearch, dossierPlatformFilter, dossierActionFilter]);
+
   const globalCategoryChartData = useMemo(() => {
     const counts = {};
     incidents.forEach((inc) => {
@@ -305,6 +486,26 @@ export default function Dashboard() {
       { name: "Monitored Pass", count: Math.max(0, totalIntercepts - totalBlocked - totalRedacted), fill: "#10b981" },
     ];
   }, [totalIntercepts, totalBlocked, totalRedacted]);
+
+  const handleToggleUserAccess = async (userId, currentlyBlocked) => {
+    setIsUpdatingUser(true);
+    try {
+      const endpoint = currentlyBlocked ? `${API_BASE}/api/vantix/user-behavior/reenable` : `${API_BASE}/api/vantix/user-behavior/disable`;
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, reason: currentlyBlocked ? "Admin re-enabled access" : "Suspended by Security Administrator" }),
+      });
+      if (res.ok) {
+        showToast(currentlyBlocked ? `Access re-enabled for ${userId}` : `AI access suspended for ${userId}`);
+        fetchLiveData();
+      }
+    } catch (e) {
+      showToast("Access toggle updated");
+    } finally {
+      setIsUpdatingUser(false);
+    }
+  };
 
   const handleSimulate = async () => {
     setIsSimulating(true);
@@ -387,10 +588,26 @@ export default function Dashboard() {
       </AnimatePresence>
 
       {/* Header */}
-      <div>
-        <h1 style={{ fontSize: 28, fontWeight: 700, color: "var(--apple-text-main)", margin: 0, letterSpacing: "-0.02em" }}>
-          Operation Centre
-        </h1>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 16 }}>
+        <div>
+          <h1 style={{ fontSize: 28, fontWeight: 700, color: "var(--apple-text-main)", margin: 0, letterSpacing: "-0.02em" }}>
+            Operation Centre
+          </h1>
+          <p style={{ fontSize: 13, color: "var(--apple-text-muted)", margin: "4px 0 0 0" }}>
+            Real-time Autonomous AI Data Firewall & Insider Risk Intelligence
+          </p>
+        </div>
+
+        <div style={{ display: "flex", gap: 10 }}>
+          <button className="apple-btn" onClick={() => setShowSimModal(true)}>
+            <Play size={14} />
+            <span>Simulate Exfiltration</span>
+          </button>
+          <button className="apple-btn" onClick={handleExportAudit}>
+            <Download size={14} />
+            <span>Export Forensic Logs</span>
+          </button>
+        </div>
       </div>
 
       {/* 4 Square Cyberpunk KPI Scorecards */}
@@ -426,13 +643,13 @@ export default function Dashboard() {
         />
 
         <KpiSquareStatCard
-          label="Block Rate"
-          value={`${totalIntercepts > 0 ? Math.round((totalBlocked / totalIntercepts) * 100) : 0}%`}
-          icon={<Zap size={26} color="#10b981" />}
-          color="#10b981"
-          borderTopColor="#10b981"
-          bgGradient="linear-gradient(145deg, rgba(16, 185, 129, 0.08) 0%, rgba(13, 14, 18, 0.85) 100%)"
-          tooltip="Enforcement protection ratio calculated as total hard-blocked violations divided by total inspected events."
+          label="Monitored Persons"
+          value={monitoredPersons.length}
+          icon={<User size={26} color="#38bdf8" />}
+          color="#38bdf8"
+          borderTopColor="#38bdf8"
+          bgGradient="linear-gradient(145deg, rgba(56, 189, 248, 0.08) 0%, rgba(13, 14, 18, 0.85) 100%)"
+          tooltip="Unique user identities monitored across enterprise workstations, IDEs, and browser sessions."
         />
       </div>
 
@@ -522,6 +739,174 @@ export default function Dashboard() {
         </div>
       </div>
 
+      {/* ── Monitored Persons & Flagged Identities Directory ────────────────────── */}
+      <div className="apple-card" style={{ padding: 0, overflow: "hidden" }}>
+        <div style={{ padding: "18px 24px", borderBottom: "1px solid var(--apple-border)", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 14 }}>
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <User size={18} color="#ff0055" />
+              <span style={{ fontSize: 16, fontWeight: 700, color: "var(--apple-text-main)" }}>Monitored Persons & Threat Cases</span>
+            </div>
+            <p style={{ fontSize: 12, color: "var(--apple-text-muted)", margin: "4px 0 0 0" }}>
+              Identity-correlated behavioral risk tracking. Click <strong>Investigate</strong> on any person to audit all their leakage cases.
+            </p>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            {/* Search Filter */}
+            <div style={{ position: "relative" }}>
+              <Search size={14} color="#71717a" style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)" }} />
+              <input
+                type="text"
+                placeholder="Search person or host..."
+                className="apple-input"
+                style={{ paddingLeft: 32, width: 190, height: 34, fontSize: 12 }}
+                value={personSearch}
+                onChange={(e) => setPersonSearch(e.target.value)}
+              />
+            </div>
+
+            {/* Severity Filter */}
+            <select
+              className="apple-input"
+              style={{ width: 120, height: 34, fontSize: 12 }}
+              value={threatFilter}
+              onChange={(e) => setThreatFilter(e.target.value)}
+            >
+              <option value="ALL">All Threats</option>
+              <option value="CRITICAL">Critical</option>
+              <option value="HIGH">High</option>
+              <option value="MEDIUM">Medium</option>
+              <option value="LOW">Low</option>
+            </select>
+          </div>
+        </div>
+
+        <div style={{ overflowX: "auto" }}>
+          <table className="apple-table">
+            <thead>
+              <tr>
+                <th>Person / Workstation</th>
+                <th>Leakage Cases</th>
+                <th>Peak Risk Score</th>
+                <th>Target AI Platforms</th>
+                <th>Last Incident</th>
+                <th style={{ textAlign: "right" }}>Forensic Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredPersons.map((person) => {
+                const threatColor =
+                  person.threatLevel === "CRITICAL"
+                    ? "#ff0055"
+                    : person.threatLevel === "HIGH"
+                    ? "#f59e0b"
+                    : person.threatLevel === "MEDIUM"
+                    ? "#38bdf8"
+                    : "#10b981";
+
+                return (
+                  <tr key={person.id}>
+                    <td>
+                      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                        <div
+                          style={{
+                            width: 38,
+                            height: 38,
+                            borderRadius: 10,
+                            background: person.threatLevel === "CRITICAL" ? "linear-gradient(135deg, #ff0055 0%, #e11d48 100%)" : "linear-gradient(135deg, #38bdf8 0%, #0284c7 100%)",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            fontSize: 14,
+                            fontWeight: 700,
+                            color: "#ffffff",
+                            flexShrink: 0,
+                          }}
+                        >
+                          {person.name.slice(0, 2).toUpperCase()}
+                        </div>
+                        <div>
+                          <div style={{ fontWeight: 600, color: "var(--apple-text-main)", fontSize: 13.5 }}>{person.name}</div>
+                          <div style={{ fontSize: 11.5, color: "var(--apple-text-muted)" }}>
+                            {person.email} • {person.department} • {person.endpointHost} ({person.endpointIp})
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+
+                    <td>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span className="apple-pill rose" style={{ fontWeight: 700 }}>
+                          {person.cases.length} Case{person.cases.length !== 1 ? "s" : ""}
+                        </span>
+                        {person.hardBlockedCount > 0 && (
+                          <span className="apple-pill red" style={{ fontSize: 10 }}>
+                            {person.hardBlockedCount} Blocked
+                          </span>
+                        )}
+                      </div>
+                    </td>
+
+                    <td>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span style={{ fontWeight: 800, fontSize: 14, color: threatColor }}>
+                          {person.peakRiskScore}/100
+                        </span>
+                        <span
+                          style={{
+                            fontSize: 10,
+                            fontWeight: 700,
+                            padding: "2px 6px",
+                            borderRadius: 4,
+                            background: `${threatColor}18`,
+                            color: threatColor,
+                            border: `1px solid ${threatColor}40`,
+                          }}
+                        >
+                          {person.threatLevel}
+                        </span>
+                      </div>
+                    </td>
+
+                    <td>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                        {person.aiPlatformsList.slice(0, 3).map((plat, pIdx) => (
+                          <span key={pIdx}>{renderAiPlatformBadge(plat)}</span>
+                        ))}
+                      </div>
+                    </td>
+
+                    <td style={{ fontSize: 12, color: "var(--apple-text-muted)" }}>
+                      {new Date(person.lastAttempt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                    </td>
+
+                    <td style={{ textAlign: "right" }}>
+                      <button
+                        className="apple-btn primary"
+                        style={{ padding: "6px 14px", fontSize: 12, display: "inline-flex", alignItems: "center", gap: 6 }}
+                        onClick={() => setSelectedPersonId(person.id)}
+                      >
+                        <Eye size={13} />
+                        <span>Investigate ({person.cases.length})</span>
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+
+              {filteredPersons.length === 0 && (
+                <tr>
+                  <td colSpan={6} style={{ textAlign: "center", padding: 36, color: "var(--apple-text-muted)" }}>
+                    No persons matching search or filter criteria.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       {/* Live Interception Stream Feed */}
       <div className="apple-card" style={{ padding: 0, overflow: "hidden" }}>
         <div style={{ padding: "18px 24px", borderBottom: "1px solid var(--apple-border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -529,7 +914,7 @@ export default function Dashboard() {
             <Terminal size={16} color="#ff0055" />
             <span style={{ fontSize: 14, fontWeight: 600, color: "var(--apple-text-main)" }}>Real-time Interception Feed</span>
           </div>
-          <span style={{ fontSize: 11, color: "var(--apple-text-muted)" }}>{incidents.length} events</span>
+          <span style={{ fontSize: 11, color: "var(--apple-text-muted)" }}>{incidents.length} events logged</span>
         </div>
 
         <div style={{ overflowX: "auto" }}>
@@ -541,10 +926,11 @@ export default function Dashboard() {
                 <th>Enforcement Action</th>
                 <th>Risk Score</th>
                 <th>Timestamp</th>
+                <th style={{ textAlign: "right" }}>Action</th>
               </tr>
             </thead>
             <tbody>
-              {incidents.slice(0, 7).map((inc, idx) => {
+              {incidents.slice(0, 8).map((inc, idx) => {
                 const isBlocked = inc.actionTaken === "hard_block";
                 return (
                   <tr key={inc.id || idx}>
@@ -570,12 +956,21 @@ export default function Dashboard() {
                     <td style={{ fontSize: 12, color: "var(--apple-text-muted)" }}>
                       {new Date(inc.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
                     </td>
+                    <td style={{ textAlign: "right" }}>
+                      <button
+                        className="apple-btn"
+                        style={{ padding: "4px 10px", fontSize: 11 }}
+                        onClick={() => setSelectedPersonId((inc.userId || inc.userEmail || "unknown").toLowerCase())}
+                      >
+                        Investigate
+                      </button>
+                    </td>
                   </tr>
                 );
               })}
               {incidents.length === 0 && (
                 <tr>
-                  <td colSpan={5} style={{ textAlign: "center", padding: 32, color: "var(--apple-text-muted)" }}>
+                  <td colSpan={6} style={{ textAlign: "center", padding: 32, color: "var(--apple-text-muted)" }}>
                     No interceptions recorded yet
                   </td>
                 </tr>
@@ -585,6 +980,458 @@ export default function Dashboard() {
         </div>
       </div>
 
+      {/* ── Comprehensive Person Investigation Dossier Modal / View ─────────── */}
+      <AnimatePresence>
+        {selectedPerson && (
+          <motion.div
+            className="orion-drawer-overlay"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            style={{ display: "flex", alignItems: "center", justifyContent: "center", zIndex: 99999 }}
+            onClick={() => setSelectedPersonId(null)}
+          >
+            <motion.div
+              className="apple-card"
+              initial={{ scale: 0.94, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.94, opacity: 0, y: 20 }}
+              style={{
+                width: 960,
+                maxWidth: "95vw",
+                maxHeight: "92vh",
+                overflowY: "auto",
+                background: "rgba(11, 12, 16, 0.98)",
+                border: "1px solid rgba(225, 29, 72, 0.4)",
+                boxShadow: "0 25px 60px rgba(0,0,0,0.85)",
+                padding: 28,
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Top Navigation & Close */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+                <button
+                  className="apple-btn"
+                  onClick={() => setSelectedPersonId(null)}
+                  style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12 }}
+                >
+                  <ArrowLeft size={14} />
+                  <span>Back to Overview</span>
+                </button>
+
+                <button
+                  onClick={() => setSelectedPersonId(null)}
+                  style={{ background: "transparent", border: "none", color: "#a1a1aa", cursor: "pointer", padding: 4 }}
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              {/* Person Profile Header Strip */}
+              <div
+                style={{
+                  background: "rgba(255, 255, 255, 0.03)",
+                  border: "1px solid var(--apple-border)",
+                  borderRadius: 14,
+                  padding: 20,
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  flexWrap: "wrap",
+                  gap: 16,
+                  marginBottom: 24,
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+                  <div
+                    style={{
+                      width: 58,
+                      height: 58,
+                      borderRadius: 16,
+                      background: selectedPerson.threatLevel === "CRITICAL" ? "linear-gradient(135deg, #ff0055 0%, #e11d48 100%)" : "linear-gradient(135deg, #38bdf8 0%, #0284c7 100%)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontSize: 20,
+                      fontWeight: 800,
+                      color: "#ffffff",
+                    }}
+                  >
+                    {selectedPerson.name.slice(0, 2).toUpperCase()}
+                  </div>
+                  <div>
+                    <h2 style={{ fontSize: 22, fontWeight: 800, color: "var(--apple-text-main)", margin: 0 }}>{selectedPerson.name}</h2>
+                    <div style={{ fontSize: 12.5, color: "var(--apple-text-muted)", marginTop: 4 }}>
+                      {selectedPerson.email} • {selectedPerson.department} • Workstation: {selectedPerson.endpointHost} ({selectedPerson.endpointIp})
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontSize: 24, fontWeight: 900, color: selectedPerson.threatLevel === "CRITICAL" ? "#ff0055" : "#f59e0b" }}>
+                      {selectedPerson.peakRiskScore}/100
+                    </div>
+                    <div style={{ fontSize: 10, color: "var(--apple-text-muted)", textTransform: "uppercase" }}>Peak Risk</div>
+                  </div>
+
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontSize: 24, fontWeight: 900, color: "#ffffff" }}>
+                      {selectedPerson.cases.length}
+                    </div>
+                    <div style={{ fontSize: 10, color: "var(--apple-text-muted)", textTransform: "uppercase" }}>Leak Cases</div>
+                  </div>
+
+                  <button
+                    className={`apple-btn ${selectedPerson.status === "Blocked" ? "primary" : ""}`}
+                    onClick={() => handleToggleUserAccess(selectedPerson.userId, selectedPerson.status === "Blocked")}
+                    disabled={isUpdatingUser}
+                    style={{ fontSize: 12, padding: "8px 14px" }}
+                  >
+                    {selectedPerson.status === "Blocked" ? (
+                      <>
+                        <UserCheck size={14} />
+                        <span>Re-Enable Access</span>
+                      </>
+                    ) : (
+                      <>
+                        <UserX size={14} />
+                        <span>Suspend Access</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {/* 2 Analytics Charts for this Person */}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(380px, 1fr))", gap: 18, marginBottom: 26 }}>
+                {/* Person Risk Progression Timeline */}
+                <div style={{ background: "rgba(255, 255, 255, 0.02)", border: "1px solid var(--apple-border)", borderRadius: 12, padding: 16 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "var(--apple-text-main)", marginBottom: 12, display: "flex", alignItems: "center", gap: 6 }}>
+                    <TrendingUp size={15} color="#ff0055" />
+                    <span>Risk Progression Timeline ({selectedPerson.cases.length} Cases)</span>
+                  </div>
+                  <div style={{ height: 180, width: "100%" }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={personRiskTimeline} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+                        <defs>
+                          <linearGradient id="personRiskGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#ff0055" stopOpacity={0.4} />
+                            <stop offset="95%" stopColor="#ff0055" stopOpacity={0.0} />
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(225,29,72,0.08)" />
+                        <XAxis dataKey="caseNum" stroke="#71717a" fontSize={10.5} />
+                        <YAxis domain={[0, 100]} stroke="#71717a" fontSize={10.5} />
+                        <Tooltip
+                          contentStyle={{
+                            background: "rgba(13, 14, 18, 0.95)",
+                            border: "1px solid var(--apple-border-strong)",
+                            borderRadius: "10px",
+                            color: "#ffffff",
+                            fontSize: "12px",
+                          }}
+                        />
+                        <Area type="monotone" dataKey="riskScore" stroke="#ff0055" strokeWidth={2.5} fill="url(#personRiskGrad)" />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                {/* Person Exfiltration Category Distribution */}
+                <div style={{ background: "rgba(255, 255, 255, 0.02)", border: "1px solid var(--apple-border)", borderRadius: 12, padding: 16 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "var(--apple-text-main)", marginBottom: 12, display: "flex", alignItems: "center", gap: 6 }}>
+                    <Database size={15} color="#38bdf8" />
+                    <span>Leaked Data Categories</span>
+                  </div>
+                  <div style={{ height: 180, width: "100%" }}>
+                    {personCategoryChartData.length > 0 ? (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
+                          <Pie
+                            data={personCategoryChartData}
+                            dataKey="count"
+                            nameKey="name"
+                            cx="50%"
+                            cy="50%"
+                            outerRadius={60}
+                            stroke="#0d0e12"
+                            strokeWidth={1.5}
+                          >
+                            {personCategoryChartData.map((entry, index) => (
+                              <Cell key={`pcell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                            ))}
+                          </Pie>
+                          <Tooltip
+                            contentStyle={{
+                              background: "rgba(13, 14, 18, 0.95)",
+                              border: "1px solid var(--apple-border-strong)",
+                              borderRadius: "10px",
+                              color: "#ffffff",
+                              fontSize: "12px",
+                            }}
+                          />
+                          <Legend verticalAlign="bottom" iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 10, color: "#a1a1aa" }} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "var(--apple-text-muted)", fontSize: 12 }}>
+                        No categories found
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* ── Complete List of ALL Cases That Person Has (Any number of cases!) ── */}
+              <div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, flexWrap: "wrap", gap: 10 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <Fingerprint size={16} color="#ff0055" />
+                    <span style={{ fontSize: 15, fontWeight: 700, color: "var(--apple-text-main)" }}>
+                      All Recorded Cases for {selectedPerson.name} ({selectedPerson.cases.length} Total)
+                    </span>
+                    <span className="apple-pill rose" style={{ fontSize: 11, fontWeight: 700 }}>
+                      Showing {filteredDossierCases.length} of {selectedPerson.cases.length}
+                    </span>
+                  </div>
+
+                  {/* Case Controls: Expand/Collapse All */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <button
+                      className="apple-btn"
+                      style={{ padding: "4px 10px", fontSize: 11 }}
+                      onClick={() => {
+                        if (collapsedCaseIds.size === 0) {
+                          // Collapse all
+                          const allIds = new Set(selectedPerson.cases.map((c, i) => c.id || i));
+                          setCollapsedCaseIds(allIds);
+                        } else {
+                          // Expand all
+                          setCollapsedCaseIds(new Set());
+                        }
+                      }}
+                    >
+                      {collapsedCaseIds.size === 0 ? "Collapse All" : "Expand All"}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Dossier Case Filters Bar */}
+                <div
+                  style={{
+                    background: "rgba(255, 255, 255, 0.02)",
+                    border: "1px solid var(--apple-border)",
+                    borderRadius: 10,
+                    padding: "10px 14px",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                    flexWrap: "wrap",
+                    marginBottom: 16,
+                  }}
+                >
+                  {/* Search inside this person's cases */}
+                  <div style={{ position: "relative", flex: "1 1 200px" }}>
+                    <Search size={13} color="#71717a" style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)" }} />
+                    <input
+                      type="text"
+                      placeholder="Search within this person's cases (prompt, token, category)..."
+                      className="apple-input"
+                      style={{ paddingLeft: 30, width: "100%", height: 32, fontSize: 11.5 }}
+                      value={dossierCaseSearch}
+                      onChange={(e) => setDossierCaseSearch(e.target.value)}
+                    />
+                  </div>
+
+                  {/* Filter by Platform */}
+                  <select
+                    className="apple-input"
+                    style={{ width: 150, height: 32, fontSize: 11.5 }}
+                    value={dossierPlatformFilter}
+                    onChange={(e) => setDossierPlatformFilter(e.target.value)}
+                  >
+                    <option value="ALL">All AI Platforms</option>
+                    <option value="antigravity">Antigravity (Gemini)</option>
+                    <option value="kiro">Kiro (Amazon Q)</option>
+                    <option value="cursor">Cursor AI</option>
+                    <option value="windsurf">Windsurf AI</option>
+                    <option value="chatgpt">ChatGPT</option>
+                    <option value="claude">Claude</option>
+                  </select>
+
+                  {/* Filter by Action */}
+                  <select
+                    className="apple-input"
+                    style={{ width: 140, height: 32, fontSize: 11.5 }}
+                    value={dossierActionFilter}
+                    onChange={(e) => setDossierActionFilter(e.target.value)}
+                  >
+                    <option value="ALL">All Actions</option>
+                    <option value="hard_block">Hard Blocked</option>
+                    <option value="silent_redact">Silent Redacted</option>
+                  </select>
+
+                  {(dossierCaseSearch || dossierPlatformFilter !== "ALL" || dossierActionFilter !== "ALL") && (
+                    <button
+                      className="apple-btn"
+                      style={{ padding: "4px 8px", fontSize: 11 }}
+                      onClick={() => {
+                        setDossierCaseSearch("");
+                        setDossierPlatformFilter("ALL");
+                        setDossierActionFilter("ALL");
+                      }}
+                    >
+                      Clear Filters
+                    </button>
+                  )}
+                </div>
+
+                {/* Chronological List of All Cases */}
+                <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                  {filteredDossierCases.map((c, cIdx) => {
+                    const caseKey = c.id || cIdx;
+                    const isCollapsed = collapsedCaseIds.has(caseKey);
+                    const isBlocked = c.actionTaken === "hard_block";
+
+                    const toggleCase = () => {
+                      setCollapsedCaseIds((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(caseKey)) next.delete(caseKey);
+                        else next.add(caseKey);
+                        return next;
+                      });
+                    };
+
+                    return (
+                      <div
+                        key={caseKey}
+                        style={{
+                          background: "rgba(255, 255, 255, 0.02)",
+                          border: `1px solid ${isBlocked ? "rgba(255, 0, 85, 0.3)" : "rgba(225, 29, 72, 0.2)"}`,
+                          borderLeft: `4px solid ${isBlocked ? "#ff0055" : "#e11d48"}`,
+                          borderRadius: 10,
+                          overflow: "hidden",
+                        }}
+                      >
+                        {/* Case Header Banner */}
+                        <div
+                          style={{
+                            padding: "12px 18px",
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            cursor: "pointer",
+                            background: "rgba(255, 255, 255, 0.015)",
+                          }}
+                          onClick={toggleCase}
+                        >
+                          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                            <span style={{ fontWeight: 800, fontSize: 13, color: "#ffffff" }}>
+                              Case #{selectedPerson.cases.length - cIdx}
+                            </span>
+                            {renderAiPlatformBadge(c.aiPlatform)}
+                            <span className={`apple-pill ${isBlocked ? "red" : "rose"}`}>
+                              {isBlocked ? "Hard Blocked" : "Silent Redacted"}
+                            </span>
+                            <span style={{ fontWeight: 800, fontSize: 12, color: c.riskScore >= 70 ? "#ff0055" : "#f59e0b" }}>
+                              Risk: {c.riskScore}/100
+                            </span>
+                          </div>
+
+                          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                            <span style={{ fontSize: 11, color: "var(--apple-text-muted)" }}>
+                              {new Date(c.timestamp).toLocaleString()}
+                            </span>
+                            <ChevronRight
+                              size={16}
+                              color="#a1a1aa"
+                              style={{ transform: !isCollapsed ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 0.2s ease" }}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Case Forensic Body */}
+                        {!isCollapsed && (
+                          <div style={{ padding: "14px 18px", borderTop: "1px solid var(--apple-border)" }}>
+                            {/* Categories Tag Strip */}
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
+                              {(c.categoriesRedacted || ["SENSITIVE_DATA"]).map((cat, catIdx) => (
+                                <span
+                                  key={catIdx}
+                                  style={{
+                                    fontSize: 10.5,
+                                    fontWeight: 700,
+                                    padding: "2px 8px",
+                                    borderRadius: 4,
+                                    background: "rgba(255, 0, 85, 0.12)",
+                                    color: "#ff0055",
+                                    border: "1px solid rgba(255, 0, 85, 0.25)",
+                                  }}
+                                >
+                                  [{cat.replace(/_/g, " ").toUpperCase()}]
+                                </span>
+                              ))}
+                            </div>
+
+                            {/* 3-Pane Forensic Inspection Grid */}
+                            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 12 }}>
+                              {/* Original Intercepted Prompt */}
+                              <div style={{ background: "rgba(0,0,0,0.4)", borderRadius: 8, padding: 12, border: "1px solid rgba(255, 0, 85, 0.2)" }}>
+                                <div style={{ fontSize: 10.5, fontWeight: 700, color: "#ff0055", textTransform: "uppercase", marginBottom: 6 }}>
+                                  1. Original Intercepted Prompt (Plaintext Secret Attempt)
+                                </div>
+                                <pre style={{ fontSize: 11.5, color: "#fca5a5", margin: 0, whiteSpace: "pre-wrap", fontFamily: "monospace", lineHeight: 1.45, maxHeight: 180, overflowY: "auto" }}>
+                                  {c.originalPrompt || "No prompt captured"}
+                                </pre>
+                              </div>
+
+                              {/* Sanitized Outbound Prompt */}
+                              <div style={{ background: "rgba(0,0,0,0.4)", borderRadius: 8, padding: 12, border: "1px solid rgba(56, 189, 248, 0.2)" }}>
+                                <div style={{ fontSize: 10.5, fontWeight: 700, color: "#38bdf8", textTransform: "uppercase", marginBottom: 6 }}>
+                                  2. Sanitized Outbound Payload (Sent to AI)
+                                </div>
+                                <pre style={{ fontSize: 11.5, color: "#7dd3fc", margin: 0, whiteSpace: "pre-wrap", fontFamily: "monospace", lineHeight: 1.45, maxHeight: 180, overflowY: "auto" }}>
+                                  {c.sanitizedPrompt || "[SANITIZED]"}
+                                </pre>
+                              </div>
+
+                              {/* Restored AI Response / Block Enforcement */}
+                              <div style={{ background: "rgba(0,0,0,0.4)", borderRadius: 8, padding: 12, border: "1px solid rgba(16, 185, 129, 0.2)" }}>
+                                <div style={{ fontSize: 10.5, fontWeight: 700, color: "#10b981", textTransform: "uppercase", marginBottom: 6 }}>
+                                  3. AI Response / Enforcement Action
+                                </div>
+                                <pre style={{ fontSize: 11.5, color: "#6ee7b7", margin: 0, whiteSpace: "pre-wrap", fontFamily: "monospace", lineHeight: 1.45, maxHeight: 180, overflowY: "auto" }}>
+                                  {c.restoredResponse || (isBlocked ? "🚫 Outbound transmission hard-blocked by Vantix Firewall." : "✓ Sanitized response passed seamlessly.")}
+                                </pre>
+                              </div>
+                            </div>
+
+                            {/* Cryptographic Signature */}
+                            {c.cryptoSignature && (
+                              <div style={{ marginTop: 10, fontSize: 10.5, color: "var(--apple-text-muted)", display: "flex", alignItems: "center", gap: 6 }}>
+                                <Shield size={12} color="#10b981" />
+                                <span>HMAC-SHA256 Audit Signature: <code style={{ color: "#a1a1aa" }}>{c.cryptoSignature}</code></span>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+
+                  {filteredDossierCases.length === 0 && (
+                    <div style={{ textAlign: "center", padding: 32, background: "rgba(255,255,255,0.02)", borderRadius: 10, border: "1px solid var(--apple-border)", color: "var(--apple-text-muted)", fontSize: 12.5 }}>
+                      No cases match search or filter criteria. Clear filters to view all {selectedPerson.cases.length} cases.
+                    </div>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Apple Simulation Modal */}
       <AnimatePresence>
         {showSimModal && (
@@ -593,7 +1440,7 @@ export default function Dashboard() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            style={{ display: "flex", alignItems: "center", justifyContent: "center" }}
+            style={{ display: "flex", alignItems: "center", justifyContent: "center", zIndex: 99999 }}
             onClick={() => setShowSimModal(false)}
           >
             <motion.div
@@ -618,7 +1465,7 @@ export default function Dashboard() {
                     value={simEmployee}
                     onChange={(e) => setSimEmployee(e.target.value)}
                   >
-                    <option value="employee">Current Workstation User</option>
+                    <option value="mohammed">Mohammed (Current Workstation)</option>
                     <option value="sarah_chen">Sarah Chen (DevOps)</option>
                     <option value="david_miller">David Miller (Finance)</option>
                   </select>
