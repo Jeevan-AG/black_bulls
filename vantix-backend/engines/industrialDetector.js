@@ -135,9 +135,9 @@ const INDUSTRIAL_PATTERNS = {
   // Credentials
   NATURAL_LANGUAGE_CREDENTIAL: {
     patterns: [
-      /(?:(?:my|the|our|test|sample|here\s+is\s+(?:my|the))\s+)?(?:aws|openai|anthropic|api|secret|access|private)\s*(?:access\s*)?key\s*(?:is|[:=]|\s+)\s*['"]?([^\s"'.,;]{4,})['"]?/gi,
+      /(?:(?:my|the|our|test|sample|here\s+is\s+(?:my|the))\s+)?(?:aws|openai|anthropic|api|secret|access|private)\s*(?:access\s*)?(?:key|id|secret|token)\s*(?:is|[:=]|\s+)\s*['"]?([^\s"'.,;]{4,})['"]?/gi,
       /(?:(?:my|the|our|test|sample|here\s+is\s+(?:my|the))\s+)?(?:password|token|secret|credential|api_key)\s*(?:is|[:=]|\s+)\s*['"]?([^\s"'.,;]{4,})['"]?/gi,
-      /\b(?:aws_key|secret_key|api_key|access_key)\s*(?:is|[:=]|\s+)\s*['"]?([^\s"'.,;]{4,})['"]?/gi,
+      /\b(?:aws_key|aws_id|secret_key|api_key|access_key)\s*(?:is|[:=]|\s+)\s*['"]?([^\s"'.,;]{4,})['"]?/gi,
     ],
     category: "CREDENTIAL",
     label: "Exposed Credential",

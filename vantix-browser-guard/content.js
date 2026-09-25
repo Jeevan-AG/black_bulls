@@ -292,12 +292,12 @@ function registerTokenMappings(mappings) {
 const LOCAL_SENSITIVE_PATTERNS = [
   // 1. Natural Language Keys & Secrets
   {
-    regex: /(?:(?:my|the|our|test|sample|here\s+is\s+(?:my|the))\s+)?(?:aws|amazon)\s*(?:access\s*)?key\s*(?:is|[:=]|\s+)\s*['"]?([^\s"'.,;]{4,})['"]?/gi,
+    regex: /(?:(?:my|the|our|test|sample|here\s+is\s+(?:my|the))\s+)?(?:aws|amazon)\s*(?:access\s*)?(?:key|id|secret|token)\s*(?:is|[:=]|\s+)\s*['"]?([^\s"'.,;]{4,})['"]?/gi,
     type: "AWS_KEY",
     isSecret: true,
   },
   {
-    regex: /(?:(?:my|the|our|test|sample|here\s+is\s+(?:my|the))\s+)?(?:openai|chatgpt)\s*(?:api\s*)?key\s*(?:is|[:=]|\s+)\s*['"]?([^\s"'.,;]{4,})['"]?/gi,
+    regex: /(?:(?:my|the|our|test|sample|here\s+is\s+(?:my|the))\s+)?(?:openai|chatgpt)\s*(?:api\s*)?(?:key|id|secret|token)\s*(?:is|[:=]|\s+)\s*['"]?([^\s"'.,;]{4,})['"]?/gi,
     type: "OPENAI_API_KEY",
     isSecret: true,
   },

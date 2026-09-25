@@ -107,10 +107,16 @@ setup_browser_policies() {
     "*.claude.ai",
     "*.anthropic.com",
     "*.google.com",
+    "*.googleapis.com",
     "*.deepseek.com",
     "*.perplexity.ai",
     "*.kiro.dev",
-    "*.amazonaws.com"
+    "*.amazonaws.com",
+    "*.cursor.com",
+    "*.cursor.sh",
+    "*.codeium.com",
+    "*.windsurf.ai",
+    "*.githubcopilot.com"
   ]
 }
 EOF
@@ -124,18 +130,29 @@ setup_iptables() {
   # 1. Clean existing Vantix rules first (idempotent)
   iptables -t nat -D OUTPUT -p tcp --dport 443 -m owner ! --uid-owner 0 -j REDIRECT --to-port "$PROXY_PORT" 2>/dev/null || true
   iptables -D OUTPUT -p udp --dport 443 -m owner ! --uid-owner 0 -j DROP 2>/dev/null || true
+  ip6tables -t nat -D OUTPUT -p tcp --dport 443 -m owner ! --uid-owner 0 -j REDIRECT --to-port "$PROXY_PORT" 2>/dev/null || true
+  ip6tables -D OUTPUT -p tcp --dport 443 -m owner ! --uid-owner 0 -j REJECT --reject-with tcp-reset 2>/dev/null || true
+  ip6tables -D OUTPUT -p udp --dport 443 -m owner ! --uid-owner 0 -j DROP 2>/dev/null || true
 
   # 2. Redirect all outbound HTTPS from non-root users to Vantix proxy
   iptables -t nat -A OUTPUT -p tcp --dport 443 -m owner ! --uid-owner 0 -j REDIRECT --to-port "$PROXY_PORT"
 
-  # 3. Block UDP 443 for non-root users (forces Chrome/Edge to fall back from QUIC to inspected TCP)
+  # 3. Block UDP 443 for non-root users (forces Chrome/Edge/IDEs to fall back from QUIC to inspected TCP)
   iptables -A OUTPUT -p udp --dport 443 -m owner ! --uid-owner 0 -j DROP
+
+  # 4. Handle IPv6: Force non-root outbound HTTPS to IPv4 (which hits Vantix proxy)
+  ip6tables -t nat -A OUTPUT -p tcp --dport 443 -m owner ! --uid-owner 0 -j REDIRECT --to-port "$PROXY_PORT" 2>/dev/null || \
+  ip6tables -A OUTPUT -p tcp --dport 443 -m owner ! --uid-owner 0 -j REJECT --reject-with tcp-reset 2>/dev/null || true
+  ip6tables -A OUTPUT -p udp --dport 443 -m owner ! --uid-owner 0 -j DROP 2>/dev/null || true
 }
 
 # ─── Helper: Remove iptables rules ──────────────────────────────────────────
 remove_iptables() {
   iptables -t nat -D OUTPUT -p tcp --dport 443 -m owner ! --uid-owner 0 -j REDIRECT --to-port "$PROXY_PORT" 2>/dev/null || true
   iptables -D OUTPUT -p udp --dport 443 -m owner ! --uid-owner 0 -j DROP 2>/dev/null || true
+  ip6tables -t nat -D OUTPUT -p tcp --dport 443 -m owner ! --uid-owner 0 -j REDIRECT --to-port "$PROXY_PORT" 2>/dev/null || true
+  ip6tables -D OUTPUT -p tcp --dport 443 -m owner ! --uid-owner 0 -j REJECT --reject-with tcp-reset 2>/dev/null || true
+  ip6tables -D OUTPUT -p udp --dport 443 -m owner ! --uid-owner 0 -j DROP 2>/dev/null || true
 }
 
 # ─── Load .env file variables ────────────────────────────────────────────────
