@@ -259,117 +259,8 @@ const cleanAiResponseText = (raw) => {
   return clean || raw;
 };
 
-const INITIAL_SEED_INCIDENTS = [
-  {
-    id: "audit-seed-01",
-    userId: "mohammed",
-    userName: "Mohammed (Workstation Node)",
-    userEmail: "mohammed@acme.corp",
-    department: "Cloud Engineering & AI Platform",
-    endpointHost: "mohammed-Latitude-5400",
-    endpointIp: "127.0.0.1",
-    aiPlatform: "Cursor AI",
-    actionTaken: "silent_redact",
-    riskScore: 85,
-    categoriesRedacted: ["AWS_KEY", "SECRET_KEY"],
-    detections: [
-      { category: "AWS_KEY", value: "AKIAIOSFODNN7EXAMPLE", severity: "CRITICAL", label: "AWS Access Key ID" },
-      { category: "SECRET_KEY", value: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY", severity: "CRITICAL", label: "AWS Secret Access Key" },
-    ],
-    originalPrompt: "Help me debug our S3 bucket upload script with AWS credentials: AKIAIOSFODNN7EXAMPLE and secret key wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY to deploy assets.",
-    sanitizedPrompt: "Help me debug our S3 bucket upload script with AWS credentials: [AWS_KEY_1] and secret key [AWS_SECRET_1] to deploy assets.",
-    restoredResponse: "Here is the optimized S3 upload handler using boto3 with your credentials verified.",
-    cryptoSignature: "e9b41a877d9c6c518b52822d3b2b414f52f36070a75f0a391515ef483e582844",
-    timestamp: new Date(Date.now() - 3 * 60 * 1000).toISOString(),
-  },
-  {
-    id: "audit-seed-02",
-    userId: "mohammed",
-    userName: "Mohammed (Workstation Node)",
-    userEmail: "mohammed@acme.corp",
-    department: "Cloud Engineering & AI Platform",
-    endpointHost: "mohammed-Latitude-5400",
-    endpointIp: "127.0.0.1",
-    aiPlatform: "Kiro (Amazon Q)",
-    actionTaken: "silent_redact",
-    riskScore: 78,
-    categoriesRedacted: ["PHONE_NUMBER", "EMAIL_ADDRESS"],
-    detections: [
-      { category: "PHONE_NUMBER", value: "+1-555-019-2834", severity: "HIGH", label: "Executive Mobile Phone" },
-    ],
-    originalPrompt: "Can you draft an onboarding email to contact the lead engineer at +1-555-019-2834 regarding cluster provisioning?",
-    sanitizedPrompt: "Can you draft an onboarding email to contact the lead engineer at [PHONE_NUMBER_1] regarding cluster provisioning?",
-    restoredResponse: "Certainly! Here is the drafted onboarding message containing contact phone +1-555-019-2834.",
-    cryptoSignature: "7a8bc98ef5099238e4a9032cb455f4109b823e59048a12dc6032bc9000aeb64a",
-    timestamp: new Date(Date.now() - 14 * 60 * 1000).toISOString(),
-  },
-  {
-    id: "audit-seed-03",
-    userId: "mohammed",
-    userName: "Mohammed (Workstation Node)",
-    userEmail: "mohammed@acme.corp",
-    department: "Cloud Engineering & AI Platform",
-    endpointHost: "mohammed-Latitude-5400",
-    endpointIp: "127.0.0.1",
-    aiPlatform: "Antigravity (Gemini)",
-    actionTaken: "silent_redact",
-    riskScore: 65,
-    categoriesRedacted: ["INTERNAL_IP", "JWT_TOKEN"],
-    detections: [
-      { category: "INTERNAL_IP", value: "10.240.12.88", severity: "MEDIUM", label: "VPC Internal IP" },
-    ],
-    originalPrompt: "Check latency to database microservice hosted at 10.240.12.88 on port 5432 and optimize connection pooling.",
-    sanitizedPrompt: "Check latency to database microservice hosted at [INTERNAL_IP_1] on port 5432 and optimize connection pooling.",
-    restoredResponse: "To optimize latency for 10.240.12.88:5432, configure pgbouncer pool mode to transaction with max_client_conn set to 200.",
-    cryptoSignature: "3d7b92f019a823ccbe70912384f501239aa8271038e91823bb5019284fa90123",
-    timestamp: new Date(Date.now() - 32 * 60 * 1000).toISOString(),
-  },
-  {
-    id: "audit-seed-04",
-    userId: "sarah_chen",
-    userName: "Sarah Chen",
-    userEmail: "sarah.chen@acme.corp",
-    department: "DevOps & Infrastructure",
-    endpointHost: "ws-srv-devops-01",
-    endpointIp: "10.0.4.18",
-    aiPlatform: "ChatGPT",
-    actionTaken: "hard_block",
-    riskScore: 95,
-    categoriesRedacted: ["SCADA_REGISTER", "CRITICAL_INFRASTRUCTURE"],
-    detections: [
-      { category: "SCADA_REGISTER", value: "Turbine-PLC-0x4001", severity: "CRITICAL", label: "SCADA Modbus Register" },
-    ],
-    originalPrompt: "Override turbine governor control setting register Turbine-PLC-0x4001 with forced manual bypass value 0xFFFF.",
-    sanitizedPrompt: "[EXFILTRATION_BLOCKED]",
-    restoredResponse: "🚫 Outbound transmission hard-blocked by Vantix Firewall. Reason: Critical SCADA PLC manipulation attempt.",
-    cryptoSignature: "bf1082a938e5509182377489ab10398ef71029384bb501928374a501928374ab",
-    timestamp: new Date(Date.now() - 55 * 60 * 1000).toISOString(),
-  },
-  {
-    id: "audit-seed-05",
-    userId: "david_miller",
-    userName: "David Miller",
-    userEmail: "david.miller@acme.corp",
-    department: "Finance & Treasury",
-    endpointHost: "ws-fin-lead-04",
-    endpointIp: "10.0.8.42",
-    aiPlatform: "Claude",
-    actionTaken: "silent_redact",
-    riskScore: 82,
-    categoriesRedacted: ["PCI_CREDIT_CARD", "IBAN"],
-    detections: [
-      { category: "PCI_CREDIT_CARD", value: "4532-8910-2394-1102", severity: "HIGH", label: "PCI Visa Card Number" },
-    ],
-    originalPrompt: "Format the quarterly vendor reconciliation for corporate card 4532-8910-2394-1102 and prepare ledger rows.",
-    sanitizedPrompt: "Format the quarterly vendor reconciliation for corporate card [CREDIT_CARD_1] and prepare ledger rows.",
-    restoredResponse: "Reconciliation schedule formatted for card ending in 1102 with tax categories organized.",
-    cryptoSignature: "1928374abf1082a938e5509182377489ab10398ef71029384bb501928374ab10",
-    timestamp: new Date(Date.now() - 90 * 60 * 1000).toISOString(),
-  }
-];
-
 export default function ThreatTracking() {
-  const [incidents, setIncidents] = useState(INITIAL_SEED_INCIDENTS);
+  const [incidents, setIncidents] = useState([]);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [threatFilter, setThreatFilter] = useState("ALL");
@@ -391,39 +282,34 @@ export default function ThreatTracking() {
       const auditRes = await fetch(`${API_BASE}/api/vantix/audit-logs?limit=500`);
       if (auditRes.ok) {
         const auditJson = await auditRes.json();
-        if (auditJson.success && Array.isArray(auditJson.logs) && auditJson.logs.length > 0) {
-          setIncidents((prev) => {
-            const merged = [...prev];
-            auditJson.logs.forEach((log) => {
-              const uid = log.userId || log.user || "employee";
-              const rawPrompt = log.originalPrompt || log.promptSnippet || "Outbound prompt intercepted";
-              const rawSanitized = log.sanitizedPrompt || "[SANITIZED]";
-              const rawAiResponse = log.restoredResponse || "";
+        if (auditJson.success && Array.isArray(auditJson.logs)) {
+          const formatted = auditJson.logs.map((log) => {
+            const uid = log.userId || log.user || "employee";
+            const rawPrompt = log.originalPrompt || log.promptSnippet || "Outbound prompt intercepted";
+            const rawSanitized = log.sanitizedPrompt || "[SANITIZED]";
+            const rawAiResponse = log.restoredResponse || "";
 
-              if (!merged.some((m) => m.id === log.id || (m.timestamp === log.timestamp && m.userId === uid && m.originalPrompt === rawPrompt))) {
-                merged.unshift({
-                  id: log.id || `audit-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-                  userId: uid,
-                  userName: log.userName || uid.charAt(0).toUpperCase() + uid.slice(1).replace(/[._]/g, " "),
-                  userEmail: log.userEmail || `${uid}@acme.corp`,
-                  department: log.department || (uid.includes("chen") ? "Cloud Infrastructure & DevOps" : uid.includes("david") ? "Finance & Treasury" : "Engineering & AI Systems"),
-                  endpointHost: log.endpointHost || log.host || `${uid}-workstation`,
-                  endpointIp: log.endpointIp || "127.0.0.1",
-                  aiPlatform: log.aiPlatform || "chatgpt.com",
-                  actionTaken: log.actionTaken || (log.riskScore >= 70 ? "hard_block" : log.riskScore >= 30 ? "silent_redact" : "pass"),
-                  riskScore: log.riskScore !== undefined ? log.riskScore : 0,
-                  categoriesRedacted: log.categoriesRedacted || ["CONFIDENTIAL_DATA"],
-                  detections: log.detections || [],
-                  originalPrompt: cleanPromptText(rawPrompt),
-                  sanitizedPrompt: cleanPromptText(rawSanitized),
-                  restoredResponse: cleanAiResponseText(rawAiResponse),
-                  cryptoSignature: log.cryptoSignature || "",
-                  timestamp: log.timestamp || new Date().toISOString(),
-                });
-              }
-            });
-            return merged;
+            return {
+              id: log.id || `audit-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+              userId: uid,
+              userName: log.userName || uid.charAt(0).toUpperCase() + uid.slice(1).replace(/[._]/g, " "),
+              userEmail: log.userEmail || `${uid}@acme.corp`,
+              department: log.department || "Cloud Engineering & AI Platform",
+              endpointHost: log.endpointHost || log.host || `${uid}-workstation`,
+              endpointIp: log.endpointIp || "127.0.0.1",
+              aiPlatform: log.aiPlatform || "chatgpt.com",
+              actionTaken: log.actionTaken || (log.riskScore >= 70 ? "hard_block" : log.riskScore >= 30 ? "silent_redact" : "pass"),
+              riskScore: log.riskScore !== undefined ? log.riskScore : 0,
+              categoriesRedacted: log.categoriesRedacted || ["CONFIDENTIAL_DATA"],
+              detections: log.detections || [],
+              originalPrompt: cleanPromptText(rawPrompt),
+              sanitizedPrompt: cleanPromptText(rawSanitized),
+              restoredResponse: cleanAiResponseText(rawAiResponse),
+              cryptoSignature: log.cryptoSignature || "",
+              timestamp: log.timestamp || new Date().toISOString(),
+            };
           });
+          setIncidents(formatted);
         }
       }
     } catch (err) {
@@ -433,7 +319,7 @@ export default function ThreatTracking() {
 
   useEffect(() => {
     fetchLiveData();
-    const interval = setInterval(fetchLiveData, 5000);
+    const interval = setInterval(fetchLiveData, 8000);
 
     const connectWs = () => {
       try {
