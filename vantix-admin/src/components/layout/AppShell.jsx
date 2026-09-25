@@ -1,51 +1,171 @@
-import React from 'react';
-import { NavLink } from 'react-router-dom';
-import { Search, User, Sliders } from 'lucide-react';
+import React, { useState, useEffect } from "react";
+import { NavLink, Link } from "react-router-dom";
+import {
+  Activity,
+  ShieldAlert,
+  Users,
+  Sliders,
+  LogOut,
+  Shield,
+} from "lucide-react";
 
 const AppShell = ({ children, onLogout }) => {
+  const [adminEmail, setAdminEmail] = useState("admin@vantix.corp");
+
+  useEffect(() => {
+    try {
+      const token = sessionStorage.getItem("vantixAdminToken");
+      if (token && token.includes(".")) {
+        const payload = JSON.parse(atob(token.split(".")[1]));
+        if (payload?.email) {
+          setAdminEmail(payload.email);
+        }
+      }
+    } catch {
+      // Fallback
+    }
+  }, []);
+
   return (
     <div className="app-shell">
-      <div className="orion-global-bg"></div>
-      
-      <header className="orion-topnav">
-        <div className="orion-brand">
-          <div className="orion-brand-icon" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--brand-purple)', color: 'white' }}>V</div>
-          VANTIX
+      {/* Ambient Cyber Radar Background */}
+      <div className="vantix-radar-bg" />
+
+      {/* Industrial SOC Command Header */}
+      <header className="vantix-header">
+        <div style={{ display: "flex", alignItems: "center", gap: "24px" }}>
+          <Link to="/" className="brand-wrapper">
+            <div className="brand-logo-hex">
+              <Shield size={18} color="#22d3ee" strokeWidth={2.2} />
+            </div>
+            <div className="brand-text-block">
+              <div className="brand-title">
+                VANTIX
+                <span className="brand-tag">SOC V2</span>
+              </div>
+              <div className="brand-subtitle">
+                AI DLP ENCLAVE FIREWALL
+              </div>
+            </div>
+          </Link>
+
+          {/* Navigation Items */}
+          <nav className="vantix-nav">
+            <NavLink
+              to="/"
+              end
+              className={({ isActive }) =>
+                `vantix-nav-item ${isActive ? "active" : ""}`
+              }
+            >
+              <Activity size={15} />
+              <span>SOC Stream</span>
+            </NavLink>
+
+            <NavLink
+              to="/rules"
+              className={({ isActive }) =>
+                `vantix-nav-item ${isActive ? "active" : ""}`
+              }
+            >
+              <ShieldAlert size={15} />
+              <span>DLP Policies</span>
+            </NavLink>
+
+            <NavLink
+              to="/employees"
+              className={({ isActive }) =>
+                `vantix-nav-item ${isActive ? "active" : ""}`
+              }
+            >
+              <Users size={15} />
+              <span>Fleet Endpoints</span>
+            </NavLink>
+
+            <NavLink
+              to="/settings"
+              className={({ isActive }) =>
+                `vantix-nav-item ${isActive ? "active" : ""}`
+              }
+            >
+              <Sliders size={15} />
+              <span>Settings</span>
+            </NavLink>
+          </nav>
         </div>
 
-        <nav className="orion-nav-links">
-          <NavLink to="/" end className={({isActive}) => isActive ? 'active' : ''} data-active={window.location.pathname === '/'}>SOC Overview</NavLink>
-          <NavLink to="/rules" data-active={window.location.pathname.includes('/rules')}>DLP Rules</NavLink>
-          <NavLink to="/settings" data-active={window.location.pathname.includes('/settings')}>Settings</NavLink>
-        </nav>
+        {/* Real-time Telemetry & Profile Actions */}
+        <div className="vantix-header-actions">
+          {/* TEE Enclave Status */}
+          <div className="enclave-badge" title="Cryptographic TEE Enclave Hardware Verified">
+            <span className="beacon-dot" />
+            <span>TEE ACTIVE</span>
+          </div>
 
-        <div className="orion-actions">
-          <button
-            onClick={onLogout}
-            title="Sign Out of Admin Console"
+          {/* Admin User / Logout */}
+          <div
             style={{
               display: "flex",
               alignItems: "center",
-              gap: "8px",
-              background: "rgba(239, 68, 68, 0.1)",
-              border: "1px solid rgba(239, 68, 68, 0.25)",
-              color: "#f87171",
-              padding: "6px 14px",
-              borderRadius: "8px",
-              fontSize: "12px",
-              fontWeight: "600",
-              cursor: "pointer",
-              transition: "all 0.2s ease"
+              gap: "10px",
+              paddingLeft: "10px",
+              borderLeft: "1px solid var(--border-subtle)",
             }}
-            onMouseOver={(e) => { e.currentTarget.style.background = "rgba(239, 68, 68, 0.2)"; }}
-            onMouseOut={(e) => { e.currentTarget.style.background = "rgba(239, 68, 68, 0.1)"; }}
           >
-            <User size={14} />
-            <span>Logout</span>
-          </button>
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "flex-end",
+                gap: "1px",
+              }}
+            >
+              <span
+                style={{
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "11px",
+                  fontWeight: 600,
+                  color: "var(--text-primary)",
+                  maxWidth: "160px",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {adminEmail}
+              </span>
+              <span
+                style={{
+                  fontSize: "9px",
+                  fontFamily: "var(--font-mono)",
+                  color: "var(--cyan-primary)",
+                  letterSpacing: "0.04em",
+                  fontWeight: 600,
+                }}
+              >
+                ROOT AUDITOR
+              </span>
+            </div>
+
+            <button
+              onClick={onLogout}
+              className="btn btn--danger"
+              style={{
+                padding: "5px 10px",
+                fontSize: "11px",
+                height: "30px",
+                gap: "5px",
+              }}
+              title="Terminate Admin Session"
+            >
+              <LogOut size={12} />
+              <span>Exit</span>
+            </button>
+          </div>
         </div>
       </header>
 
+      {/* Main Command View */}
       <main className="main-content">
         {children}
       </main>

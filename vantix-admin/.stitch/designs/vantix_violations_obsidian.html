@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Vantix - Violations Dashboard</title>
+<!-- Tailwind CSS (Include forms and container queries plugins) -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Google Fonts -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind Config injected dynamically by the system via System Prompt (Do not modify here, use the injected script block below as standard practice) -->
+<script id="tailwind-config">
+  tailwind.config = {
+    darkMode: "class",
+    theme: {
+      extend: {
+        "colors": {
+                "on-primary-fixed-variant": "#2f2ebe",
+                "surface-container-high": "#2a2a2c",
+                "text-secondary": "#94a3b8",
+                "tertiary-fixed": "#ffdcc5",
+                "on-tertiary-container": "#452000",
+                "on-surface-variant": "#c7c4d7",
+                "secondary": "#c4c1fb",
+                "on-secondary": "#2d2a5b",
+                "surface": "#131315",
+                "on-primary-container": "#0d0096",
+                "surface-container-highest": "#353437",
+                "on-background": "#e5e1e4",
+                "tertiary": "#ffb783",
+                "surface-container": "#201f21",
+                "primary-fixed-dim": "#c0c1ff",
+                "on-secondary-fixed": "#181445",
+                "error-container": "#93000a",
+                "background": "#131315",
+                "surface-container-low": "#121216",
+                "inverse-primary": "#494bd6",
+                "inverse-surface": "#e5e1e4",
+                "on-tertiary-fixed-variant": "#703700",
+                "inverse-on-surface": "#313032",
+                "primary": "#c0c1ff",
+                "on-secondary-fixed-variant": "#444173",
+                "on-primary": "#1000a9",
+                "text-primary": "#ffffff",
+                "on-secondary-container": "#b3afe9",
+                "outline": "#908fa0",
+                "on-surface": "#e5e1e4",
+                "on-tertiary-fixed": "#301400",
+                "on-primary-fixed": "#07006c",
+                "on-error-container": "#ffdad6",
+                "surface-bright": "#39393b",
+                "secondary-container": "#444173",
+                "tertiary-fixed-dim": "#ffb783",
+                "surface-tint": "#c0c1ff",
+                "primary-fixed": "#e1e0ff",
+                "secondary-fixed-dim": "#c4c1fb",
+                "error": "#ffb4ab",
+                "surface-dim": "#131315",
+                "tertiary-container": "#d97721",
+                "on-tertiary": "#4f2500",
+                "secondary-fixed": "#e3dfff",
+                "surface-variant": "#353437",
+                "primary-container": "#8083ff",
+                "border-glass": "rgba(255, 255, 255, 0.06)",
+                "surface-container-lowest": "#0e0e10",
+                "outline-variant": "#464554",
+                "on-error": "#690005"
+        },
+        "borderRadius": {
+                "DEFAULT": "0.25rem",
+                "lg": "0.5rem",
+                "xl": "0.75rem",
+                "full": "9999px"
+        },
+        "spacing": {
+                "margin-mobile": "16px",
+                "container-max": "1440px",
+                "margin-desktop": "40px",
+                "gutter": "24px",
+                "base": "4px"
+        },
+        "fontFamily": {
+                "headline-md": [
+                        "Inter"
+                ],
+                "body-md": [
+                        "Inter"
+                ],
+                "headline-lg-mobile": [
+                        "Inter"
+                ],
+                "headline-lg": [
+                        "Inter"
+                ],
+                "label-md": [
+                        "Inter"
+                ],
+                "headline-xl": [
+                        "Inter"
+                ],
+                "body-lg": [
+                        "Inter"
+                ]
+        },
+        "fontSize": {
+                "headline-md": [
+                        "20px",
+                        {
+                                "lineHeight": "28px",
+                                "letterSpacing": "-0.01em",
+                                "fontWeight": "600"
+                        }
+                ],
+                "body-md": [
+                        "14px",
+                        {
+                                "lineHeight": "20px",
+                                "letterSpacing": "0em",
+                                "fontWeight": "400"
+                        }
+                ],
+                "headline-lg-mobile": [
+                        "24px",
+                        {
+                                "lineHeight": "32px",
+                                "letterSpacing": "-0.01em",
+                                "fontWeight": "600"
+                        }
+                ],
+                "headline-lg": [
+                        "28px",
+                        {
+                                "lineHeight": "36px",
+                                "letterSpacing": "-0.02em",
+                                "fontWeight": "600"
+                        }
+                ],
+                "label-md": [
+                        "12px",
+                        {
+                                "lineHeight": "16px",
+                                "letterSpacing": "0.02em",
+                                "fontWeight": "500"
+                        }
+                ],
+                "headline-xl": [
+                        "36px",
+                        {
+                                "lineHeight": "44px",
+                                "letterSpacing": "-0.02em",
+                                "fontWeight": "600"
+                        }
+                ],
+                "body-lg": [
+                        "16px",
+                        {
+                                "lineHeight": "24px",
+                                "letterSpacing": "0em",
+                                "fontWeight": "400"
+                        }
+                ]
+        }
+},
+    },
+  }
+</script>
+<style>
+        /* Custom Styles to augment Tailwind */
+        .glass-card {
+            background-color: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2), 0 2px 4px -1px rgba(0, 0, 0, 0.1);
+        }
+        
+        .ambient-shadow {
+            box-shadow: 0 10px 25px -5px rgba(192, 193, 255, 0.1), 0 8px 10px -6px rgba(192, 193, 255, 0.1);
+        }
+
+        .pressed-state {
+            box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.2);
+        }
+
+        /* Subtle grid background for the canvas */
+        .bg-grid-pattern {
+            background-image: 
+                linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+            background-size: 24px 24px;
+        }
+
+        /* Custom Scrollbar for data tables */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(19, 19, 21, 0.5); 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #464554; 
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #908fa0; 
+        }
+    </style>
+</head>
+<body class="bg-[#0a0a0c] text-on-background font-body-md min-h-screen flex flex-col bg-grid-pattern antialiased selection:bg-primary-container/20 selection:text-primary">
+<!-- TopNavBar -->
+<nav class="bg-surface/80 backdrop-blur-xl dark:bg-[#0a0a0c]/80 docked full-width top-0 sticky border-b border-white/10 shadow-sm dark:shadow-none z-50">
+<div class="flex justify-between items-center w-full px-margin-mobile md:px-margin-desktop h-20 max-w-container-max mx-auto z-50">
+<!-- Brand & Logo -->
+<div class="flex items-center gap-gutter">
+<a class="font-headline-lg-mobile md:font-headline-lg text-headline-lg-mobile md:text-headline-lg font-bold text-primary tracking-tighter" href="#">
+                    Vantix
+                </a>
+</div>
+<!-- Navigation Links (Desktop) -->
+<div class="hidden md:flex items-center gap-2">
+<a class="px-3 py-2 rounded-lg text-on-surface-variant hover:text-primary hover:bg-primary-container/10 transition-all duration-200 Active: scale-95 transition-transform" href="#">Overview</a>
+<a class="px-3 py-2 rounded-lg text-on-surface-variant hover:text-primary hover:bg-primary-container/10 transition-all duration-200 Active: scale-95 transition-transform" href="#">Employees</a>
+<a class="px-3 py-2 rounded-lg text-on-surface-variant hover:text-primary hover:bg-primary-container/10 transition-all duration-200 Active: scale-95 transition-transform" href="#">Rules</a>
+<!-- Active State: Violations -->
+<a class="px-3 py-2 rounded-lg text-primary font-semibold border-b-2 border-primary pb-1 hover:bg-primary-container/10 transition-all duration-200 Active: scale-95 transition-transform" href="#">Violations</a>
+<a class="px-3 py-2 rounded-lg text-on-surface-variant hover:text-primary hover:bg-primary-container/10 transition-all duration-200 Active: scale-95 transition-transform" href="#">Reports</a>
+<a class="px-3 py-2 rounded-lg text-on-surface-variant hover:text-primary hover:bg-primary-container/10 transition-all duration-200 Active: scale-95 transition-transform" href="#">Settings</a>
+</div>
+<!-- Search & Profile -->
+<div class="flex items-center gap-4">
+<div class="relative hidden sm:block">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline text-[20px]" style="font-variation-settings: 'FILL' 0;">search</span>
+<input class="pl-10 pr-4 py-1.5 rounded-lg border border-white/10 bg-surface-container-low focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent pressed-state transition-all text-body-md font-body-md w-64 text-on-surface" placeholder="Search..." type="text"/>
+</div>
+<button class="relative w-10 h-10 rounded-full overflow-hidden border border-white/10 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2">
+<img alt="CISO Security Officer Profile" class="w-full h-full object-cover" data-alt="A high-quality, professional headshot of a Chief Information Security Officer (CISO) in their late 40s. They are wearing a sharp, tailored dark navy suit with a crisp white shirt, exuding authority and technical expertise. The lighting is dramatic yet professional, reminiscent of a high-end corporate portrait in a modern, glass-walled office building. The mood is serious and commanding. The aesthetic aligns with a premium, enterprise cybersecurity context, emphasizing precision and security." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCnq9qT4dDyyeZNTJNH4pR4y4EORSSQf3X2ngk7HzzIfzx2ivvAqXCtML6L41g2CN2EeU5nk3vvBIf7_WYd7xJdtLkCaWoC_i99uGp5IZleAQztuaB8Ad5oKi7Ns9EYEj0vJC5ye4kiFQfbU04XNHg0Hc-DxVXIH41K0MyoGZtOCakOabNGrz5etbOub072DylyqAzCLVcUEvMoFO9TmY_LlRtlDF6PKZ8yVgffWUuyYqARFAVXlwuA"/>
+</button>
+</div>
+</div>
+</nav>
+<!-- Main Content Canvas -->
+<main class="flex-1 w-full max-w-container-max mx-auto px-margin-mobile md:px-margin-desktop py-8 flex flex-col gap-gutter">
+<!-- Header Section -->
+<header class="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-2">
+<div>
+<h1 class="font-headline-xl text-headline-xl text-on-surface tracking-tight mb-1">Violations Overview</h1>
+<p class="font-body-md text-body-md text-on-surface-variant">Real-time analysis of data extrusion and rule triggers.</p>
+</div>
+<div class="flex gap-3">
+<button class="px-4 py-2 rounded-lg border border-white/10 bg-surface-container-low text-primary font-label-md text-label-md hover:bg-primary/5 transition-colors flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px]">download</span>
+                    Export Report
+                </button>
+<button class="px-4 py-2 rounded-lg bg-gradient-to-br from-primary to-primary-container text-on-primary font-label-md text-label-md hover:from-primary-container hover:to-primary transition-all ambient-shadow flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px]">tune</span>
+                    Filter
+                </button>
+</div>
+</header>
+<!-- Bento Grid Layout -->
+<div class="grid grid-cols-1 md:grid-cols-12 gap-gutter">
+<!-- Left Column: Quantity of Data (Span 3) -->
+<div class="md:col-span-3 flex flex-col gap-gutter">
+<div class="glass-card rounded-xl p-6 md:p-8 flex-1">
+<h2 class="font-headline-md text-headline-md text-on-surface mb-6 flex items-center gap-2">
+<span class="material-symbols-outlined text-primary">data_usage</span>
+                        Data Volume
+                    </h2>
+<div class="space-y-6">
+<!-- Stat 1 -->
+<div>
+<div class="flex justify-between items-end mb-2">
+<span class="font-label-md text-label-md text-on-surface-variant">Total Scanned</span>
+<span class="font-headline-md text-headline-md text-on-surface">4.2TB</span>
+</div>
+<div class="w-full bg-surface-variant rounded-full h-1.5">
+<div class="bg-primary h-1.5 rounded-full" style="width: 100%"></div>
+</div>
+</div>
+<!-- Stat 2 -->
+<div>
+<div class="flex justify-between items-end mb-2">
+<span class="font-label-md text-label-md text-on-surface-variant">Flagged Content</span>
+<span class="font-headline-md text-headline-md text-error">12GB</span>
+</div>
+<div class="w-full bg-surface-variant rounded-full h-1.5">
+<div class="bg-error h-1.5 rounded-full" style="width: 15%"></div>
+</div>
+</div>
+<!-- Stat 3 -->
+<div>
+<div class="flex justify-between items-end mb-2">
+<span class="font-label-md text-label-md text-on-surface-variant">Encrypted Payload</span>
+<span class="font-headline-md text-headline-md text-tertiary">1.1TB</span>
+</div>
+<div class="w-full bg-surface-variant rounded-full h-1.5">
+<div class="bg-tertiary h-1.5 rounded-full" style="width: 45%"></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Center Column: Main Visualization (Span 6) -->
+<div class="md:col-span-6 flex flex-col">
+<div class="glass-card rounded-xl p-6 md:p-8 flex-1 relative overflow-hidden min-h-[400px] flex flex-col items-center justify-center">
+<!-- Decorative background glow -->
+<div class="absolute inset-0 bg-gradient-to-b from-primary/5 to-transparent pointer-events-none"></div>
+<h2 class="absolute top-6 left-6 font-headline-md text-headline-md text-on-surface flex items-center gap-2">
+<span class="material-symbols-outlined text-primary">hub</span>
+                        Extrusion Vectors
+                    </h2>
+<!-- Central Hub Visualization concept using HTML/CSS structure -->
+<div class="relative w-64 h-64 mt-8">
+<!-- Center Node -->
+<div class="absolute inset-0 m-auto w-32 h-32 rounded-full bg-surface-container-low border-2 border-primary shadow-lg flex flex-col items-center justify-center z-10 ambient-shadow">
+<span class="font-headline-xl text-headline-xl text-primary leading-none">1,402</span>
+<span class="font-label-md text-label-md text-on-surface-variant mt-1">Total Events</span>
+</div>
+<!-- Spokes & Outer Nodes -->
+<!-- Email -->
+<div class="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-8 flex flex-col items-center gap-2">
+<div class="w-10 h-10 rounded-full bg-error-container/20 text-error border border-error/20 flex items-center justify-center">
+<span class="material-symbols-outlined text-[20px]">mail</span>
+</div>
+<span class="font-label-md text-label-md text-on-surface bg-surface-container-low/80 px-2 py-0.5 rounded backdrop-blur">Emails (342)</span>
+<!-- Connection Line -->
+<div class="absolute top-10 left-1/2 w-0.5 h-12 bg-error/30 -z-10"></div>
+</div>
+<!-- Phone -->
+<div class="absolute bottom-0 right-0 translate-x-4 translate-y-4 flex flex-col items-center gap-2">
+<div class="w-10 h-10 rounded-full bg-primary-container/20 text-primary border border-primary/20 flex items-center justify-center">
+<span class="material-symbols-outlined text-[20px]">phone</span>
+</div>
+<span class="font-label-md text-label-md text-on-surface bg-surface-container-low/80 px-2 py-0.5 rounded backdrop-blur">Phone (120)</span>
+<!-- Connection Line (Approximation) -->
+<div class="absolute top-[-30px] left-[-20px] w-16 h-0.5 bg-primary/30 rotate-45 -z-10"></div>
+</div>
+<!-- Credit Card -->
+<div class="absolute bottom-0 left-0 -translate-x-4 translate-y-4 flex flex-col items-center gap-2">
+<div class="w-10 h-10 rounded-full bg-tertiary-container/20 text-tertiary border border-tertiary/20 flex items-center justify-center">
+<span class="material-symbols-outlined text-[20px]">credit_card</span>
+</div>
+<span class="font-label-md text-label-md text-on-surface bg-surface-container-low/80 px-2 py-0.5 rounded backdrop-blur">CC (89)</span>
+<!-- Connection Line (Approximation) -->
+<div class="absolute top-[-30px] right-[-20px] w-16 h-0.5 bg-tertiary/30 -rotate-45 -z-10"></div>
+</div>
+<!-- API Key -->
+<div class="absolute top-1/2 right-0 translate-x-12 -translate-y-1/2 flex flex-col items-center gap-2">
+<div class="w-10 h-10 rounded-full bg-error-container/20 text-error border border-error/20 flex items-center justify-center">
+<span class="material-symbols-outlined text-[20px]">key</span>
+</div>
+<span class="font-label-md text-label-md text-on-surface bg-surface-container-low/80 px-2 py-0.5 rounded backdrop-blur">API Keys (511)</span>
+<!-- Connection Line (Approximation) -->
+<div class="absolute top-1/2 left-[-40px] w-10 h-0.5 bg-error/30 -z-10"></div>
+</div>
+<!-- Keyword -->
+<div class="absolute top-1/2 left-0 -translate-x-12 -translate-y-1/2 flex flex-col items-center gap-2">
+<div class="w-10 h-10 rounded-full bg-secondary-container/30 text-secondary border border-secondary/30 flex items-center justify-center">
+<span class="material-symbols-outlined text-[20px]">short_text</span>
+</div>
+<span class="font-label-md text-label-md text-on-surface bg-surface-container-low/80 px-2 py-0.5 rounded backdrop-blur">Keywords (340)</span>
+<!-- Connection Line (Approximation) -->
+<div class="absolute top-1/2 right-[-40px] w-10 h-0.5 bg-secondary/30 -z-10"></div>
+</div>
+</div>
+</div>
+</div>
+<!-- Right Column: Trends & Rules (Span 3) -->
+<div class="md:col-span-3 flex flex-col gap-gutter">
+<!-- Violation Trends -->
+<div class="glass-card rounded-xl p-6 flex-1">
+<h2 class="font-headline-md text-headline-md text-on-surface mb-4 flex items-center justify-between">
+<span class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary">trending_up</span>
+                            Trends
+                        </span>
+<span class="font-label-md text-label-md text-tertiary bg-tertiary-container/20 px-2 py-1 rounded">+12%</span>
+</h2>
+<!-- Placeholder for small chart image -->
+<div class="w-full h-32 rounded-lg overflow-hidden border border-white/10 mb-4 bg-surface-container-low">
+<img alt="Violation Trends Chart" class="w-full h-full object-cover opacity-80" data-alt="A sophisticated, high-resolution line chart visualization showing security violation trends over a 30-day period. The chart features a dark indigo primary line with a soft blue gradient fill below it, set against a pristine, light-mode background. The grid lines are subtle and precise. The aesthetic is highly technical, reflecting enterprise cybersecurity analytics, with crisp data points and a premium, corporate modernism style." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAolDysULazUn0O0URiWHRfb3u9Tq2VUxA4svNcsRPMw51zjBVR6Ae4oCza1p3Qr9LvTlZG6su-ScwW0N11Tx8shbIQjkntOuyGwcgLLe8gqGk6m9QmfJx_2THg27wOXkL6S1p_eTwRjrJLgI-20ouQL4WBmtIMoEUeK9-ANN2XRjKVKKP8wuDmczK1BwAlf8qh6XgUeTWWUPDaewO2stTEEUczZaa6Jkn2CaYyr3dD3z5wat-md7uDkFtCY1rb-hg6xQ"/>
+</div>
+<p class="font-body-md text-body-md text-on-surface-variant text-sm">Spike detected in API Key leaks across engineering repositories in the last 48 hours.</p>
+</div>
+<!-- Active Rules Triggered -->
+<div class="glass-card rounded-xl p-6 flex-1">
+<h2 class="font-headline-md text-headline-md text-on-surface mb-4 flex items-center gap-2">
+<span class="material-symbols-outlined text-primary">rule_folder</span>
+                        Top Rules
+                    </h2>
+<ul class="space-y-3">
+<li class="flex items-center justify-between p-2 rounded-md hover:bg-surface-container-high transition-colors">
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-error"></span>
+<span class="font-label-md text-label-md text-on-surface truncate w-32">AWS Credential Leak</span>
+</div>
+<span class="font-label-md text-label-md font-bold text-on-surface">412</span>
+</li>
+<li class="flex items-center justify-between p-2 rounded-md hover:bg-surface-container-high transition-colors">
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-error"></span>
+<span class="font-label-md text-label-md text-on-surface truncate w-32">PII - SSN Pattern</span>
+</div>
+<span class="font-label-md text-label-md font-bold text-on-surface">289</span>
+</li>
+<li class="flex items-center justify-between p-2 rounded-md hover:bg-surface-container-high transition-colors">
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-tertiary"></span>
+<span class="font-label-md text-label-md text-on-surface truncate w-32">Internal Source Code</span>
+</div>
+<span class="font-label-md text-label-md font-bold text-on-surface">156</span>
+</li>
+</ul>
+</div>
+</div>
+</div>
+</main>
+</body></html>

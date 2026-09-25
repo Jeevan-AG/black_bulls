@@ -1,272 +1,493 @@
-/* ─── Vantix Admin Authentication — Minimalist Enterprise Portal ────────────── */
+/* ═══════════════════════════════════════════════════════════════════════════
+   FINIX 26 — Industrial Security Cyber Portal & 3D Shield HUD
+   Clean Carbon Black & Neon Crimson Theme (No clutter lines)
+   ═══════════════════════════════════════════════════════════════════════════ */
 
-.auth-wrapper {
+.red-industrial-theme {
+  position: relative;
+  width: 100vw;
   min-height: 100vh;
-  min-height: 100dvh;
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  background-color: #070a12;
-  background-image: radial-gradient(circle at 50% 15%, #0f172a 0%, #050811 100%);
-  padding: 24px 16px;
-  box-sizing: border-box;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  color: #f8fafc;
+  background: radial-gradient(circle at 68% 45%, #160c0f 0%, #0e090c 40%, #08090b 75%, #050608 100%);
+  color: #e2e8f0;
+  font-family: 'Outfit', -apple-system, sans-serif;
   overflow-x: hidden;
-}
-
-.auth-container {
-  width: 100%;
-  max-width: 380px;
   display: flex;
   flex-direction: column;
-  box-sizing: border-box;
 }
 
-/* Header */
-.auth-brand-header {
-  text-align: center;
-  margin-bottom: 24px;
+/* ── Ambient Red Glow Behind Shield ─────────────────────────────────────── */
+.red-ambient-glow {
+  position: absolute;
+  top: 50%;
+  left: 68%;
+  transform: translate(-50%, -50%);
+  width: 700px;
+  height: 700px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 30, 56, 0.14) 0%, rgba(255, 30, 56, 0.03) 55%, transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+  filter: blur(45px);
 }
 
-.auth-logo-box {
-  width: 44px;
-  height: 44px;
-  margin: 0 auto 14px auto;
-  border-radius: 10px;
-  background: #0f172a;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+/* ── Top Header Navigation ──────────────────────────────────────────────── */
+.cyber-header {
+  position: relative;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 3rem 6rem 1rem;
+  max-width: 1720px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.cyber-logo-group {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  cursor: pointer;
+  user-select: none;
+  text-decoration: none;
+}
+
+.red-badge-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #ff1e38 0%, #880e1c 100%);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #38bdf8;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 0 15px rgba(255, 30, 56, 0.5);
 }
 
-.auth-brand-header h1 {
-  font-size: 20px;
+.finix-x {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 1.25rem;
+  font-weight: 900;
+  color: #ffffff;
+  line-height: 1;
+}
+
+.cyber-brand-name {
+  font-family: 'Space Grotesk', 'Outfit', sans-serif;
+  font-size: 1.45rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  color: #ffffff;
+  text-decoration: none;
+}
+
+.brand-badge-num {
+  font-size: 1.15rem;
+  font-weight: 900;
+  color: #ff2a4b;
+  letter-spacing: 0.08em;
+}
+
+.cyber-nav-links {
+  display: flex;
+  align-items: center;
+  gap: 3.5rem;
+}
+
+.cyber-nav-item {
+  color: #94a3b8;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+  text-decoration: none;
+  border: none;
+  outline: none;
+}
+
+.cyber-nav-item:hover {
+  color: #ff3b56;
+  text-shadow: 0 0 10px rgba(255, 42, 75, 0.4);
+}
+
+/* ── Main Hero Grid ─────────────────────────────────────────────────────── */
+.cyber-hero-grid {
+  position: relative;
+  z-index: 10;
+  flex: 1;
+  max-width: 1720px;
+  margin: 0 auto;
+  width: 100%;
+  padding: 1.5rem 6rem 4rem;
+  display: grid;
+  grid-template-columns: 1fr 1.25fr;
+  align-items: center;
+  gap: 3rem;
+}
+
+/* ── Hero Left Column ───────────────────────────────────────────────────── */
+.cyber-hero-left {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  max-width: 580px;
+}
+
+.cyber-title-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 1.2rem;
+}
+
+.cyber-hero-headline {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin: 0;
+  font-family: 'Space Grotesk', 'Chakra Petch', sans-serif;
+  font-size: clamp(3rem, 4.8vw, 4.4rem);
+  font-weight: 900;
+  line-height: 1.05;
+  letter-spacing: 0.03em;
+  color: #ffffff;
+  text-transform: uppercase;
+  text-decoration: none;
+}
+
+.text-crimson-gradient {
+  color: #ff1e38;
+  text-shadow: 0 0 25px rgba(255, 30, 56, 0.4);
+}
+
+.cyber-hero-description {
+  margin: 0;
+  font-size: 1.02rem;
+  line-height: 1.65;
+  color: #94a3b8;
+  font-weight: 400;
+  max-width: 500px;
+}
+
+/* Buttons */
+.cyber-hero-actions {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  margin-top: 0.4rem;
+}
+
+.red-explore-btn {
+  background: #ff1e38;
+  border: 1px solid #ff4763;
+  color: #ffffff;
+  font-size: 0.85rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  padding: 0.85rem 2.4rem;
+  border-radius: 9999px;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  box-shadow: 0 0 20px rgba(255, 30, 56, 0.4);
+}
+
+.red-explore-btn:hover {
+  background: #ff334f;
+  box-shadow: 0 0 30px rgba(255, 30, 56, 0.6);
+  transform: translateY(-2px);
+}
+
+.red-contact-btn {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  color: #e2e8f0;
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  padding: 0.85rem 2.2rem;
+  border-radius: 9999px;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.red-contact-btn:hover {
+  background: rgba(255, 30, 56, 0.12);
+  border-color: #ff1e38;
+  color: #ffffff;
+  transform: translateY(-2px);
+}
+
+/* ── Hero Right: 3D Shield Canvas ───────────────────────────────────────── */
+.cyber-hero-right {
+  position: relative;
+  width: 100%;
+  height: 680px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cyber-3d-wrapper {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+}
+
+.cyber-3d-canvas-container {
+  width: 100%;
+  height: 100%;
+  cursor: grab;
+}
+
+.cyber-3d-canvas-container:active {
+  cursor: grabbing;
+}
+
+/* ── Modal Overlay & Card ───────────────────────────────────────────────── */
+.cyber-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(6, 7, 10, 0.88);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  animation: modal-fade-in 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes modal-fade-in {
+  from { opacity: 0; transform: scale(0.97); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.red-modal-card {
+  position: relative;
+  width: 100%;
+  max-width: 440px;
+  background: #0f1218;
+  border: 1px solid rgba(255, 30, 56, 0.28);
+  border-radius: 20px;
+  padding: 2.2rem;
+  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.8), 0 0 35px rgba(255, 30, 56, 0.18);
+}
+
+.red-badge-glow {
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  background: rgba(255, 30, 56, 0.12);
+  border: 1px solid rgba(255, 30, 56, 0.35);
+  color: #ff1e38;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 1rem;
+}
+
+.red-modal-card h2 {
+  font-size: 1.35rem;
   font-weight: 700;
   color: #ffffff;
-  letter-spacing: -0.3px;
-  margin: 0 0 6px 0;
+  margin: 0 0 0.35rem;
 }
 
-.auth-brand-header p {
-  font-size: 13px;
+.red-modal-card p {
+  font-size: 0.85rem;
   color: #94a3b8;
   margin: 0;
-  line-height: 1.4;
 }
 
-/* Main Card */
-.auth-card {
-  background: #0d1322;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 12px;
-  padding: 26px 22px;
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
-  box-sizing: border-box;
-  width: 100%;
+.cyber-modal-close {
+  position: absolute;
+  top: 1.2rem;
+  right: 1.2rem;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #94a3b8;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
 }
 
-.auth-form {
+.cyber-modal-close:hover {
+  background: rgba(255, 255, 255, 0.14);
+  color: #ffffff;
+}
+
+.cyber-modal-form {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  width: 100%;
-  box-sizing: border-box;
+  gap: 1.15rem;
+  margin-top: 1rem;
 }
 
-.auth-field {
+.cyber-form-group {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  width: 100%;
-  box-sizing: border-box;
+  gap: 0.4rem;
 }
 
-.auth-label {
-  font-size: 12px;
+.cyber-form-group label {
+  font-size: 0.78rem;
   font-weight: 600;
   color: #cbd5e1;
+  letter-spacing: 0.04em;
 }
 
-.auth-input-wrapper {
+.cyber-input-wrapper {
   position: relative;
   display: flex;
   align-items: center;
-  width: 100%;
-  box-sizing: border-box;
 }
 
-.auth-input-icon {
+.cyber-input-icon {
   position: absolute;
-  left: 13px;
+  left: 0.9rem;
   color: #64748b;
   pointer-events: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
 }
 
-.auth-input {
+.cyber-input-wrapper input {
   width: 100%;
-  height: 42px;
-  padding: 0 40px 0 38px;
-  background: #141c30;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 8px;
+  padding: 0.75rem 0.9rem 0.75rem 2.4rem;
+  background: #090c10;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
   color: #ffffff;
-  font-size: 14px;
+  font-family: inherit;
+  font-size: 0.88rem;
   outline: none;
-  transition: border-color 0.15s ease, background-color 0.15s ease;
-  box-sizing: border-box;
+  transition: all 0.2s ease;
 }
 
-.auth-input:focus {
-  border-color: #38bdf8;
-  background: #17223b;
+.cyber-input-wrapper input:focus {
+  border-color: #ff1e38;
+  box-shadow: 0 0 0 3px rgba(255, 30, 56, 0.2);
 }
 
-.auth-input::placeholder {
-  color: #64748b;
-}
-
-.auth-password-toggle {
+.password-reveal-btn {
   position: absolute;
-  right: 10px;
+  right: 0.8rem;
   background: none;
   border: none;
   color: #64748b;
   cursor: pointer;
-  padding: 6px;
+  padding: 0.2rem;
   display: flex;
   align-items: center;
-  justify-content: center;
-  border-radius: 4px;
 }
 
-.auth-password-toggle:hover {
+.password-reveal-btn:hover {
   color: #cbd5e1;
 }
 
-/* Action Buttons */
-.auth-primary-btn {
-  width: 100%;
-  height: 42px;
+.cyber-error-alert {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #fca5a5;
+  padding: 0.65rem 0.85rem;
   border-radius: 8px;
+  font-size: 0.8rem;
+}
+
+.red-submit-btn {
+  background: #ff1e38;
   border: none;
-  background: #2563eb;
   color: #ffffff;
-  font-size: 13.5px;
-  font-weight: 600;
+  font-size: 0.88rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  padding: 0.85rem;
+  border-radius: 10px;
   cursor: pointer;
+  transition: all 0.2s ease;
+  margin-top: 0.5rem;
+  box-shadow: 0 0 15px rgba(255, 30, 56, 0.35);
+}
+
+.red-submit-btn:hover {
+  background: #ff334f;
+  box-shadow: 0 0 25px rgba(255, 30, 56, 0.55);
+}
+
+.cyber-modal-divider {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 8px;
-  transition: background-color 0.15s ease;
-  margin-top: 2px;
+  gap: 1rem;
+  color: #64748b;
+  font-size: 0.7rem;
+  font-family: monospace;
+  letter-spacing: 0.1em;
 }
 
-.auth-primary-btn:hover:not(:disabled) {
-  background: #1d4ed8;
-}
-
-.auth-primary-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.auth-divider {
-  display: flex;
-  align-items: center;
-  text-align: center;
-  color: #475569;
-  font-size: 11px;
-  margin: 4px 0;
-}
-
-.auth-divider::before,
-.auth-divider::after {
-  content: "";
+.cyber-modal-divider::before,
+.cyber-modal-divider::after {
+  content: '';
   flex: 1;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  height: 1px;
+  background: rgba(255, 255, 255, 0.08);
 }
 
-.auth-divider span {
-  padding: 0 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.auth-demo-btn {
-  width: 100%;
-  height: 40px;
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.02);
-  color: #94a3b8;
-  font-size: 12.5px;
-  font-weight: 500;
-  cursor: pointer;
+.cyber-demo-direct-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  transition: all 0.15s ease;
-}
-
-.auth-demo-btn:hover {
+  gap: 0.5rem;
   background: rgba(255, 255, 255, 0.06);
-  color: #ffffff;
-  border-color: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: #f1f5f9;
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 0.8rem;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
 }
 
-.auth-error-alert {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 12px;
-  border-radius: 8px;
-  background: rgba(244, 63, 94, 0.1);
-  border: 1px solid rgba(244, 63, 94, 0.25);
-  color: #fda4af;
-  font-size: 12px;
-  line-height: 1.4;
+.cyber-demo-direct-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.3);
 }
 
-.auth-footer {
-  margin-top: 24px;
-  text-align: center;
-  color: #475569;
-  font-size: 11.5px;
-}
-
-/* ─── Mobile Optimizations ─────────────────────────────────────────────────── */
-@media (max-width: 480px) {
-  .auth-wrapper {
-    padding: 16px 14px;
-    justify-content: flex-start;
-    padding-top: 48px;
+/* ── Responsiveness ─────────────────────────────────────────────────────── */
+@media (max-width: 1024px) {
+  .cyber-header {
+    padding: 2rem 2rem;
   }
 
-  .auth-card {
-    padding: 22px 16px;
+  .cyber-nav-links {
+    display: none;
   }
 
-  .auth-brand-header h1 {
-    font-size: 19px;
+  .cyber-hero-grid {
+    grid-template-columns: 1fr;
+    padding: 2rem;
+    text-align: center;
   }
 
-  .auth-input {
-    font-size: 16px; /* Prevents auto-zoom on mobile Safari */
-    height: 44px;
+  .cyber-hero-left {
+    align-items: center;
+    max-width: 100%;
   }
 
-  .auth-primary-btn {
-    height: 44px;
+  .cyber-hero-actions {
+    justify-content: center;
+  }
+
+  .cyber-hero-right {
+    height: 480px;
   }
 }

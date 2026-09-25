@@ -1,17 +1,17 @@
 ---
 name: Vantix Obsidian
 colors:
-  surface: '#020617'
-  surface-dim: '#020617'
+  surface: '#060a14'
+  surface-dim: '#060a14'
   surface-bright: '#0f172a'
-  surface-container-lowest: '#000000'
-  surface-container-low: '#010409'
-  surface-container: '#020617'
+  surface-container-lowest: '#030610'
+  surface-container-low: '#060a14'
+  surface-container: '#0a1020'
   surface-container-high: '#0f172a'
   surface-container-highest: '#1e293b'
-  on-surface: '#f8fafc'
+  on-surface: '#f1f5f9'
   on-surface-variant: '#94a3b8'
-  inverse-surface: '#f8fafc'
+  inverse-surface: '#f1f5f9'
   inverse-on-surface: '#0f172a'
   outline: '#334155'
   outline-variant: '#1e293b'
@@ -22,7 +22,7 @@ colors:
   on-primary-container: '#cffafe'
   inverse-primary: '#0891b2'
   secondary: '#64748b'
-  on-secondary: '#f8fafc'
+  on-secondary: '#f1f5f9'
   secondary-container: '#1e293b'
   on-secondary-container: '#cbd5e1'
   tertiary: '#f472b6'
@@ -37,61 +37,63 @@ colors:
   primary-fixed-dim: '#06b6d4'
   on-primary-fixed: '#083344'
   on-primary-fixed-variant: '#0e7490'
-  background: '#020617'
-  on-background: '#f8fafc'
+  background: '#060a14'
+  on-background: '#f1f5f9'
   surface-variant: '#1e293b'
 typography:
   metric-lg:
-    fontFamily: JetBrains Mono
+    fontFamily: Geist Mono
     fontSize: 56px
     fontWeight: '700'
     lineHeight: '1.0'
     letterSpacing: -0.04em
   h1:
-    fontFamily: JetBrains Mono
+    fontFamily: Outfit
     fontSize: 32px
-    fontWeight: '700'
+    fontWeight: '800'
     lineHeight: '1.1'
-    letterSpacing: -0.02em
+    letterSpacing: -0.03em
   card-title:
-    fontFamily: Inter
+    fontFamily: Geist Mono
     fontSize: 10px
-    fontWeight: '700'
+    fontWeight: '600'
     lineHeight: 14px
-    letterSpacing: 0.15em
+    letterSpacing: 0.06em
   body-md:
-    fontFamily: Inter
+    fontFamily: Outfit
     fontSize: 14px
     fontWeight: '400'
-    lineHeight: 20px
-    letterSpacing: 0em
+    lineHeight: 22px
+    letterSpacing: -0.01em
   label-sm:
-    fontFamily: JetBrains Mono
+    fontFamily: Geist Mono
     fontSize: 11px
     fontWeight: '500'
     lineHeight: 14px
-    letterSpacing: 0.05em
+    letterSpacing: 0.04em
 rounded:
-  sm: 4px
-  DEFAULT: 12px
-  md: 16px
+  sm: 6px
+  DEFAULT: 10px
+  md: 14px
   lg: 20px
   xl: 32px
   full: 9999px
 spacing:
   base: 4px
-  gutter: 24px
-  margin: 40px
-  card-padding: 32px
-  stack-md: 20px
+  gutter: 20px
+  margin: 32px
+  card-padding: 24px
+  stack-md: 18px
 ---\n
 ## Brand & Style
-Vantix Obsidian is a high-fidelity, "Stealth Ops" design system. It evolves the Sentinel aesthetic into a more aggressive, high-contrast environment designed for deep-focus security analysis. 
+Vantix Obsidian is a high-fidelity, "Stealth Ops" design system optimized for deep-focus security analysis. The aesthetic is clinical, precise, and engineered — like a well-calibrated satellite operations console.
 
-The primary characteristic is **Deep Contrast** — the background is absolute black-navy, making the **Arctic Cyan** telemetry pop with electric intensity. Glassmorphism is pushed further, with high blur levels (40px+) and ultra-thin, luminous borders that suggest a holographic interface.
+The primary characteristic is **Controlled Contrast** — the background is deep navy-charcoal (#060a14), making **Arctic Cyan** (#22d3ee) telemetry data pop with electric clarity. Glassmorphism is applied with restraint: moderate blur (16px), ultra-thin borders (rgba 0.06 opacity), and subtle tinted shadows that suggest depth without overwhelming data readability.
 
 ## Visual Language
-- **Stealth Backgrounds:** Using #020617 as the foundation.
-- **Luminous Borders:** 1px borders with subtle cyan glows for active states.
-- **Monospaced Data:** JetBrains Mono is the primary font for metrics and headers, reinforcing the "Technical/Engineered" feel.
-- **Aggressive Roundedness:** 12px standard radius for cards, creating a more sophisticated, "Premium Tech" silhouette.
+- **Deep Foundation:** Using #060a14 as the base surface — avoiding pure black.
+- **Luminous Borders:** 1px borders at 6% white opacity for structure; cyan accents at 25% for active states.
+- **Monospaced Data:** Geist Mono is the telemetry font for metrics, timestamps, and technical identifiers.
+- **Display Typography:** Outfit serves as the display/body font — track-tight, weight-driven hierarchy.
+- **Refined Roundedness:** 10px default radius for cards and containers; 6px for compact controls.
+- **Spring Physics:** All interactive transitions use cubic-bezier(0.16, 1, 0.3, 1) for weighty, premium feel.

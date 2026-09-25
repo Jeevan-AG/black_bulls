@@ -4,22 +4,19 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Vantix</title>
+    <title>Vantix — Enterprise AI DLP & Security Operations Command</title>
+    <meta name="description" content="Vantix Security Operations Center — Real-time AI Data Loss Prevention, Exfiltration Interception & Enterprise Threat Intelligence." />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700;800&family=Geist+Mono:wght@400;500;600;700&family=Michroma&family=Outfit:wght@300;400;500;600;700;800;900&family=Space+Grotesk:wght@500;600;700;800&display=swap" rel="stylesheet">
     <script>
       (function initTheme() {
-        const saved = localStorage.getItem("theme") || "light";
-        document.documentElement.classList.add(`theme-${saved}`);
+        document.documentElement.classList.add('theme-dark');
+        document.documentElement.classList.add('dark');
       })();
-      window.toggleTheme = function() {
-        const current = localStorage.getItem("theme") || "light";
-        const next = current === "light" ? "dark" : "light";
-        localStorage.setItem("theme", next);
-        document.documentElement.classList.remove(`theme-${current}`);
-        document.documentElement.classList.add(`theme-${next}`);
-      };
     </script>
   </head>
-  <body>
+  <body class="dark theme-dark">
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>

@@ -1,7 +1,8 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../utils/api";
-import { Shield, Mail, Lock, Eye, EyeOff, AlertCircle } from "lucide-react";
+import { Mail, Lock, Eye, EyeOff, AlertCircle, Sparkles, X, Shield } from "lucide-react";
+import CyberShieldScene from "../components/CyberShieldScene";
 import "./AdminAuth.css";
 
 const AdminAuth = () => {
@@ -10,6 +11,7 @@ const AdminAuth = () => {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [showAuthModal, setShowAuthModal] = useState(false);
 
   const navigate = useNavigate();
 
@@ -70,108 +72,170 @@ const AdminAuth = () => {
   };
 
   return (
-    <div className="auth-wrapper">
-      <div className="auth-container">
-        {/* Brand Header */}
-        <div className="auth-brand-header">
-          <div className="auth-logo-box">
-            <Shield size={22} />
+    <div className="cyber-landing-viewport red-industrial-theme">
+      {/* Background Red Ambient Glow & Circuit Grid */}
+      <div className="red-ambient-glow" />
+      <div className="red-diagonal-hazard" />
+
+      {/* Top Header Navigation (No underlines, clean text) */}
+      <header className="cyber-header">
+        <div className="cyber-logo-group" onClick={() => navigate("/")}>
+          <div className="red-badge-icon">
+            <span className="finix-x">X</span>
           </div>
-          <h1>Sign in to Vantix</h1>
-          <p>Security Operations Center & AI Data Firewall</p>
+          <span className="cyber-brand-name">
+            FINIX <span className="brand-badge-num">26</span>
+          </span>
         </div>
 
-        {/* Auth Card */}
-        <div className="auth-card">
-          <form className="auth-form" onSubmit={handleAdminLogin}>
-            {/* Email Field */}
-            <div className="auth-field">
-              <label className="auth-label" htmlFor="admin-email">
-                Administrator Email
-              </label>
-              <div className="auth-input-wrapper">
-                <Mail size={16} className="auth-input-icon" />
-                <input
-                  id="admin-email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="admin@vantix.corp"
-                  required
-                  autoComplete="email"
-                  className="auth-input"
-                />
-              </div>
-            </div>
+        <nav className="cyber-nav-links">
+          <span className="cyber-nav-item">INDUSTRIAL SECURITY</span>
+          <span className="cyber-nav-item">ARCHITECTURE</span>
+          <span className="cyber-nav-item">THREAT INTELLIGENCE</span>
+          <span className="cyber-nav-item">COMPLIANCE</span>
+        </nav>
+      </header>
 
-            {/* Password Field */}
-            <div className="auth-field">
-              <label className="auth-label" htmlFor="admin-password">
-                Password
-              </label>
-              <div className="auth-input-wrapper">
-                <Lock size={16} className="auth-input-icon" />
-                <input
-                  id="admin-password"
-                  type={showPassword ? "text" : "password"}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••••••"
-                  required
-                  autoComplete="current-password"
-                  className="auth-input"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="auth-password-toggle"
-                  title={showPassword ? "Hide password" : "Show password"}
-                  aria-label={showPassword ? "Hide password" : "Show password"}
-                >
-                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                </button>
-              </div>
-            </div>
+      {/* Main Hero Container */}
+      <main className="cyber-hero-grid">
+        {/* Left Column: Hero Title & Controls */}
+        <section className="cyber-hero-left">
+          <div className="cyber-title-wrapper">
+            <h1 className="cyber-hero-headline">
+              <span>INDUSTRIAL</span>
+              <span className="text-crimson-gradient">SECURITY</span>
+            </h1>
+            <p className="cyber-hero-description">
+              Zero-trust perimeter protection with real-time AI payload inspection, 
+              hardware isolation, and active defense against industrial cyber threats.
+            </p>
+          </div>
 
-            {/* Error Message */}
-            {error && (
-              <div className="auth-error-alert" role="alert">
-                <AlertCircle size={15} style={{ flexShrink: 0 }} />
-                <span>{error}</span>
-              </div>
-            )}
-
-            {/* Submit Button */}
+          <div className="cyber-hero-actions">
             <button
-              type="submit"
-              disabled={busy}
-              className="auth-primary-btn"
-              id="admin-login-submit"
-            >
-              <span>{busy ? "Authenticating..." : "Sign In to SOC Console"}</span>
-            </button>
-
-            <div className="auth-divider">
-              <span>or evaluate</span>
-            </div>
-
-            {/* Direct Demo Access Button */}
-            <button
-              type="button"
+              className="cyber-btn-explore red-explore-btn"
               onClick={handleDirectDemoAccess}
-              className="auth-demo-btn"
-              id="admin-login-demo-btn"
+              id="explore-btn"
             >
-              <span>⚡ One-Click Demo Access</span>
+              ACCESS CONSOLE
             </button>
-          </form>
-        </div>
+            <button
+              className="cyber-btn-contact red-contact-btn"
+              onClick={() => setShowAuthModal(true)}
+              id="contact-btn"
+            >
+              ADMIN SIGN IN
+            </button>
+          </div>
+        </section>
 
-        {/* Footer */}
-        <div className="auth-footer">
-          <span>Protected by 256-bit TLS &middot; Enterprise SOC v2.4</span>
+        {/* Right Column: 3D Red Cyber Shield & Concentric HUD Circles */}
+        <section className="cyber-hero-right">
+          <div className="cyber-3d-wrapper">
+            <CyberShieldScene />
+          </div>
+        </section>
+      </main>
+
+      {/* Sleek Admin Sign In Modal */}
+      {showAuthModal && (
+        <div className="cyber-modal-overlay" onClick={() => setShowAuthModal(false)}>
+          <div
+            className="cyber-modal-card red-modal-card"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+          >
+            <button
+              className="cyber-modal-close"
+              onClick={() => setShowAuthModal(false)}
+              aria-label="Close modal"
+            >
+              <X size={18} />
+            </button>
+
+            <div className="cyber-modal-header">
+              <div className="red-badge-glow">
+                <Shield size={20} />
+              </div>
+              <h2>Industrial SOC Authentication</h2>
+              <p>Enter administrator credentials to unlock the command interface</p>
+            </div>
+
+            <form className="cyber-modal-form" onSubmit={handleAdminLogin}>
+              <div className="cyber-form-group">
+                <label htmlFor="modal-email">Administrator Email</label>
+                <div className="cyber-input-wrapper">
+                  <Mail size={16} className="cyber-input-icon" />
+                  <input
+                    id="modal-email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="admin@vantix.corp"
+                    required
+                    autoComplete="email"
+                  />
+                </div>
+              </div>
+
+              <div className="cyber-form-group">
+                <label htmlFor="modal-password">Password</label>
+                <div className="cyber-input-wrapper">
+                  <Lock size={16} className="cyber-input-icon" />
+                  <input
+                    id="modal-password"
+                    type={showPassword ? "text" : "password"}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••••••"
+                    required
+                    autoComplete="current-password"
+                  />
+                  <button
+                    type="button"
+                    className="password-reveal-btn"
+                    onClick={() => setShowPassword(!showPassword)}
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                  >
+                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+              </div>
+
+              {error && (
+                <div className="cyber-error-alert">
+                  <AlertCircle size={16} />
+                  <span>{error}</span>
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={busy}
+                className="cyber-submit-btn red-submit-btn"
+                id="submit-login-modal"
+              >
+                {busy ? "Authorizing..." : "Unlock Industrial SOC"}
+              </button>
+
+              <div className="cyber-modal-divider">
+                <span>OR EVALUATE</span>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleDirectDemoAccess}
+                className="cyber-demo-direct-btn"
+                id="modal-demo-access-btn"
+              >
+                <Sparkles size={16} />
+                <span>One-Click Instant Demo Access</span>
+              </button>
+            </form>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };
