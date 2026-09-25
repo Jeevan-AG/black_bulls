@@ -633,6 +633,13 @@ router.post("/reset", (req, res) => {
 
 
 // ─── GET /api/vantix/audit-logs — Retrieve signed audit records ─────────────
+router.get("/audit-logs", (req, res) => {
+  res.json({
+    success: true,
+    logs: _inMemoryAuditLogs,
+    count: _inMemoryAuditLogs.length,
+  });
+});
 
 // ─── GET /api/vantix/flagged-employees — Dynamic Flagged Directory ──────────
 router.get("/flagged-employees", (req, res) => {
