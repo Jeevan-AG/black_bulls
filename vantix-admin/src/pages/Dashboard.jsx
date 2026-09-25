@@ -276,6 +276,7 @@ export default function Dashboard() {
     setIsSimulating(true);
     try {
       let prompt = simCustomPrompt;
+      if (!prompt) {
         if (simLeakType === "aws_keys") {
           prompt = 'AWS Key leak check: access_key_id = "AKIAIOSFODNN7EXAMPLE" and secret_key = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"';
         } else if (simLeakType === "scada_reg") {
