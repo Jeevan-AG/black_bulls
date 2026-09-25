@@ -1,6 +1,6 @@
 import React from "react";
 import { Link, useLocation } from "react-router-dom";
-import logo from "../../assets/vantix-logo.svg";
+import logo from "../../assets/vantix-icon.png";
 import { IconGrid, IconLogout, IconShield, IconUsers } from "./icons";
 
 function IconReport(props) {
@@ -56,7 +56,7 @@ export default function Sidebar({ onLogout }) {
   return (
     <aside className="sidebar">
       <div className="sidebar__brand">
-        <img src={logo} alt="Vantix" />
+        <img src={logo} alt="Vantix" style={{ width: "100%", height: "100%", objectFit: "contain", filter: "drop-shadow(0 0 6px rgba(255, 30, 56, 0.5))" }} />
       </div>
 
       <nav className="nav" aria-label="Primary">
