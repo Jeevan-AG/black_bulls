@@ -515,6 +515,428 @@ const Employees = () => {
   const totalFlaggedCount = monitoredPersons.filter((p) => p.peakRiskScore >= 45).length;
   const criticalThreatCount = monitoredPersons.filter((p) => p.threatLevel === "CRITICAL").length;
 
+  // ── Render Dedicated Full Investigation Dashboard when a person is selected ──
+  if (selectedPerson) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 15 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.35, ease: "easeOut" }}
+        style={{ display: "flex", flexDirection: "column", gap: 24 }}
+      >
+        {/* Toast Alert */}
+        <AnimatePresence>
+          {toastMessage && (
+            <motion.div
+              initial={{ opacity: 0, y: -20, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -20, scale: 0.95 }}
+              style={{
+                position: "fixed",
+                top: 24,
+                right: 28,
+                zIndex: 9999,
+                background: "rgba(13, 14, 18, 0.95)",
+                backdropFilter: "blur(20px)",
+                border: "1px solid rgba(225, 29, 72, 0.4)",
+                color: "#ffffff",
+                padding: "10px 18px",
+                borderRadius: "9999px",
+                boxShadow: "0 10px 30px rgba(0,0,0,0.7)",
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                fontSize: 12.5,
+                fontWeight: 600,
+              }}
+            >
+              <Sparkles size={14} color="#ff0055" />
+              <span>{toastMessage}</span>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Top Header & Breadcrumb */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 16 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+            <button
+              className="apple-btn"
+              onClick={() => setSelectedPersonId(null)}
+              style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, padding: "8px 16px" }}
+            >
+              <ArrowLeft size={16} />
+              <span>Back to Employee Directory</span>
+            </button>
+            <div>
+              <h1 style={{ fontSize: 24, fontWeight: 800, color: "var(--apple-text-main)", margin: 0, letterSpacing: "-0.02em" }}>
+                Forensic Investigation: {selectedPerson.name}
+              </h1>
+              <p style={{ fontSize: 12.5, color: "var(--apple-text-muted)", margin: "3px 0 0 0" }}>
+                Workstation Node: <strong style={{ color: "#ffffff" }}>{selectedPerson.endpointHost}</strong> ({selectedPerson.endpointIp}) • {selectedPerson.department} • {selectedPerson.email}
+              </p>
+            </div>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <button
+              className={`apple-btn ${selectedPerson.status === "Blocked" ? "primary" : ""}`}
+              onClick={() => handleToggleUserAccess(selectedPerson.userId, selectedPerson.status === "Blocked")}
+              disabled={isUpdatingUser}
+              style={{ fontSize: 12.5 }}
+            >
+              {selectedPerson.status === "Blocked" ? (
+                <>
+                  <UserCheck size={14} />
+                  <span>Re-Enable User Access</span>
+                </>
+              ) : (
+                <>
+                  <UserX size={14} />
+                  <span>Suspend AI Access</span>
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+
+        {/* 4 Scorecards for this Person */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16 }}>
+          <div className="apple-card" style={{ borderTop: "2px solid #ff0055" }}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: "var(--apple-text-muted)", textTransform: "uppercase", marginBottom: 6 }}>
+              Total Leakage Cases
+            </div>
+            <div style={{ fontSize: 30, fontWeight: 800, color: "#ff0055" }}>
+              {selectedPerson.cases.length}
+            </div>
+          </div>
+
+          <div className="apple-card" style={{ borderTop: "2px solid #e11d48" }}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: "var(--apple-text-muted)", textTransform: "uppercase", marginBottom: 6 }}>
+              Hard Blocked
+            </div>
+            <div style={{ fontSize: 30, fontWeight: 800, color: "#e11d48" }}>
+              {selectedPerson.hardBlockedCount}
+            </div>
+          </div>
+
+          <div className="apple-card" style={{ borderTop: "2px solid #f43f5e" }}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: "var(--apple-text-muted)", textTransform: "uppercase", marginBottom: 6 }}>
+              Silent Redacted
+            </div>
+            <div style={{ fontSize: 30, fontWeight: 800, color: "#f43f5e" }}>
+              {selectedPerson.redactedCount}
+            </div>
+          </div>
+
+          <div className="apple-card" style={{ borderTop: "2px solid #ff0055" }}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: "var(--apple-text-muted)", textTransform: "uppercase", marginBottom: 6 }}>
+              Peak Risk Severity
+            </div>
+            <div style={{ fontSize: 30, fontWeight: 800, color: selectedPerson.threatLevel === "CRITICAL" ? "#ff0055" : "#f59e0b" }}>
+              {selectedPerson.peakRiskScore}/100
+            </div>
+          </div>
+        </div>
+
+        {/* 2 Analytics Charts for this Person */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(380px, 1fr))", gap: 18 }}>
+          {/* Person Risk Progression Timeline */}
+          <div className="apple-card">
+            <div style={{ fontSize: 13, fontWeight: 700, color: "var(--apple-text-main)", marginBottom: 12, display: "flex", alignItems: "center", gap: 6 }}>
+              <TrendingUp size={15} color="#ff0055" />
+              <span>Risk Progression Timeline ({selectedPerson.cases.length} Sequential Cases)</span>
+            </div>
+            <div style={{ height: 190, width: "100%" }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={personRiskTimeline} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="empRiskGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#ff0055" stopOpacity={0.4} />
+                      <stop offset="95%" stopColor="#ff0055" stopOpacity={0.0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(225,29,72,0.08)" />
+                  <XAxis dataKey="caseNum" stroke="#71717a" fontSize={10.5} />
+                  <YAxis domain={[0, 100]} stroke="#71717a" fontSize={10.5} />
+                  <Tooltip
+                    contentStyle={{
+                      background: "rgba(13, 14, 18, 0.95)",
+                      border: "1px solid var(--apple-border-strong)",
+                      borderRadius: "10px",
+                      color: "#ffffff",
+                      fontSize: "12px",
+                    }}
+                  />
+                  <Area type="monotone" dataKey="riskScore" stroke="#ff0055" strokeWidth={2.5} fill="url(#empRiskGrad)" />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Person Exfiltration Category Distribution */}
+          <div className="apple-card">
+            <div style={{ fontSize: 13, fontWeight: 700, color: "var(--apple-text-main)", marginBottom: 12, display: "flex", alignItems: "center", gap: 6 }}>
+              <Database size={15} color="#38bdf8" />
+              <span>Exfiltrated Data Vectors</span>
+            </div>
+            <div style={{ height: 190, width: "100%" }}>
+              {personCategoryChartData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
+                    <Pie
+                      data={personCategoryChartData}
+                      dataKey="count"
+                      nameKey="name"
+                      cx="50%"
+                      cy="45%"
+                      outerRadius={65}
+                      stroke="#0d0e12"
+                      strokeWidth={1.5}
+                    >
+                      {personCategoryChartData.map((entry, index) => (
+                        <Cell key={`empcell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      contentStyle={{
+                        background: "rgba(13, 14, 18, 0.95)",
+                        border: "1px solid var(--apple-border-strong)",
+                        borderRadius: "10px",
+                        color: "#ffffff",
+                        fontSize: "12px",
+                      }}
+                    />
+                    <Legend verticalAlign="bottom" iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11, color: "#a1a1aa" }} />
+                  </PieChart>
+                </ResponsiveContainer>
+              ) : (
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "var(--apple-text-muted)", fontSize: 12 }}>
+                  No vectors recorded
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* ── Complete List of ALL Cases That Person Has ── */}
+        <div className="apple-card" style={{ padding: 0, overflow: "hidden" }}>
+          <div style={{ padding: "18px 24px", borderBottom: "1px solid var(--apple-border)", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 14 }}>
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <Fingerprint size={18} color="#ff0055" />
+                <span style={{ fontSize: 16, fontWeight: 700, color: "var(--apple-text-main)" }}>
+                  All Recorded Cases for {selectedPerson.name} ({selectedPerson.cases.length} Total)
+                </span>
+              </div>
+              <p style={{ fontSize: 12, color: "var(--apple-text-muted)", margin: "4px 0 0 0" }}>
+                Deep forensic inspection: Actual User Input → System Sanitization Payload → Real Output from AI.
+              </p>
+            </div>
+
+            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+              {/* Search inside this person's cases */}
+              <div style={{ position: "relative" }}>
+                <Search size={13} color="#71717a" style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)" }} />
+                <input
+                  type="text"
+                  placeholder="Search prompt, surrogate token..."
+                  className="apple-input"
+                  style={{ paddingLeft: 30, width: 220, height: 34, fontSize: 12 }}
+                  value={dossierCaseSearch}
+                  onChange={(e) => setDossierCaseSearch(e.target.value)}
+                />
+              </div>
+
+              {/* Filter by Platform */}
+              <select
+                className="apple-input"
+                style={{ width: 150, height: 34, fontSize: 12 }}
+                value={dossierPlatformFilter}
+                onChange={(e) => setDossierPlatformFilter(e.target.value)}
+              >
+                <option value="ALL">All AI Platforms</option>
+                <option value="cursor">Cursor AI</option>
+                <option value="kiro">Kiro (Amazon Q)</option>
+                <option value="antigravity">Antigravity (Gemini)</option>
+                <option value="windsurf">Windsurf AI</option>
+                <option value="chatgpt">ChatGPT</option>
+                <option value="claude">Claude</option>
+              </select>
+
+              {/* Filter by Action */}
+              <select
+                className="apple-input"
+                style={{ width: 140, height: 34, fontSize: 12 }}
+                value={dossierActionFilter}
+                onChange={(e) => setDossierActionFilter(e.target.value)}
+              >
+                <option value="ALL">All Actions</option>
+                <option value="hard_block">Hard Blocked</option>
+                <option value="silent_redact">Silent Redacted</option>
+              </select>
+
+              {/* Expand/Collapse All */}
+              <button
+                className="apple-btn"
+                style={{ padding: "6px 12px", fontSize: 12 }}
+                onClick={() => {
+                  if (collapsedCaseIds.size === 0) {
+                    setCollapsedCaseIds(new Set(selectedPerson.cases.map((c, i) => c.id || i)));
+                  } else {
+                    setCollapsedCaseIds(new Set());
+                  }
+                }}
+              >
+                {collapsedCaseIds.size === 0 ? "Collapse All" : "Expand All"}
+              </button>
+            </div>
+          </div>
+
+          {/* Chronological List of All Cases */}
+          <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 16 }}>
+            {filteredDossierCases.map((c, cIdx) => {
+              const caseKey = c.id || cIdx;
+              const isCollapsed = collapsedCaseIds.has(caseKey);
+              const isBlocked = c.actionTaken === "hard_block";
+
+              const toggleCase = () => {
+                setCollapsedCaseIds((prev) => {
+                  const next = new Set(prev);
+                  if (next.has(caseKey)) next.delete(caseKey);
+                  else next.add(caseKey);
+                  return next;
+                });
+              };
+
+              return (
+                <div
+                  key={caseKey}
+                  style={{
+                    background: "rgba(255, 255, 255, 0.02)",
+                    border: `1px solid ${isBlocked ? "rgba(255, 0, 85, 0.3)" : "rgba(225, 29, 72, 0.2)"}`,
+                    borderLeft: `4px solid ${isBlocked ? "#ff0055" : "#e11d48"}`,
+                    borderRadius: 12,
+                    overflow: "hidden",
+                  }}
+                >
+                  {/* Case Header Banner */}
+                  <div
+                    style={{
+                      padding: "14px 20px",
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      cursor: "pointer",
+                      background: "rgba(255, 255, 255, 0.015)",
+                    }}
+                    onClick={toggleCase}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                      <span style={{ fontWeight: 800, fontSize: 14, color: "#ffffff" }}>
+                        Case #{selectedPerson.cases.length - cIdx}
+                      </span>
+                      {renderAiPlatformBadge(c.aiPlatform)}
+                      <span className={`apple-pill ${isBlocked ? "red" : "rose"}`}>
+                        {isBlocked ? "Hard Blocked" : "Silent Redacted"}
+                      </span>
+                      <span style={{ fontWeight: 800, fontSize: 13, color: c.riskScore >= 70 ? "#ff0055" : "#f59e0b" }}>
+                        Risk: {c.riskScore}/100
+                      </span>
+                    </div>
+
+                    <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                      <span style={{ fontSize: 12, color: "var(--apple-text-muted)" }}>
+                        {new Date(c.timestamp).toLocaleString()}
+                      </span>
+                      <ChevronRight
+                        size={16}
+                        color="#a1a1aa"
+                        style={{ transform: !isCollapsed ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 0.2s ease" }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Case Forensic Body */}
+                  {!isCollapsed && (
+                    <div style={{ padding: "18px 20px", borderTop: "1px solid var(--apple-border)" }}>
+                      {/* Categories Tag Strip */}
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 14 }}>
+                        {(c.categoriesRedacted || ["SENSITIVE_DATA"]).map((cat, catIdx) => (
+                          <span
+                            key={catIdx}
+                            style={{
+                              fontSize: 11,
+                              fontWeight: 700,
+                              padding: "3px 10px",
+                              borderRadius: 4,
+                              background: "rgba(255, 0, 85, 0.12)",
+                              color: "#ff0055",
+                              border: "1px solid rgba(255, 0, 85, 0.25)",
+                            }}
+                          >
+                            [{cat.replace(/_/g, " ").toUpperCase()}]
+                          </span>
+                        ))}
+                      </div>
+
+                      {/* 3-Pane Forensic Inspection Grid */}
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 14 }}>
+                        {/* 1. Actual Outbound User Input (What user sent) */}
+                        <div style={{ background: "rgba(0,0,0,0.45)", borderRadius: 10, padding: 14, border: "1px solid rgba(255, 0, 85, 0.25)" }}>
+                          <div style={{ fontSize: 11, fontWeight: 800, color: "#ff0055", textTransform: "uppercase", marginBottom: 8, letterSpacing: "0.04em" }}>
+                            1. Actual User Input (What User Sent)
+                          </div>
+                          <pre style={{ fontSize: 12, color: "#fca5a5", margin: 0, whiteSpace: "pre-wrap", fontFamily: "monospace", lineHeight: 1.5, maxHeight: 220, overflowY: "auto" }}>
+                            {c.originalPrompt || "No prompt captured"}
+                          </pre>
+                        </div>
+
+                        {/* 2. System Sanitized Payload (Sent to AI) */}
+                        <div style={{ background: "rgba(0,0,0,0.45)", borderRadius: 10, padding: 14, border: "1px solid rgba(56, 189, 248, 0.25)" }}>
+                          <div style={{ fontSize: 11, fontWeight: 800, color: "#38bdf8", textTransform: "uppercase", marginBottom: 8, letterSpacing: "0.04em" }}>
+                            2. System Sanitized Payload (Sent to AI)
+                          </div>
+                          <pre style={{ fontSize: 12, color: "#7dd3fc", margin: 0, whiteSpace: "pre-wrap", fontFamily: "monospace", lineHeight: 1.5, maxHeight: 220, overflowY: "auto" }}>
+                            {c.sanitizedPrompt || "[SANITIZED]"}
+                          </pre>
+                        </div>
+
+                        {/* 3. Actual Real Output from AI (Restored to User) */}
+                        <div style={{ background: "rgba(0,0,0,0.45)", borderRadius: 10, padding: 14, border: "1px solid rgba(16, 185, 129, 0.25)" }}>
+                          <div style={{ fontSize: 11, fontWeight: 800, color: "#10b981", textTransform: "uppercase", marginBottom: 8, letterSpacing: "0.04em" }}>
+                            3. Actual Real Output from AI (Restored to User)
+                          </div>
+                          <pre style={{ fontSize: 12, color: "#6ee7b7", margin: 0, whiteSpace: "pre-wrap", fontFamily: "monospace", lineHeight: 1.5, maxHeight: 220, overflowY: "auto" }}>
+                            {c.restoredResponse || (isBlocked ? "🚫 Outbound transmission hard-blocked by Vantix Firewall." : "✓ Sanitized response passed seamlessly.")}
+                          </pre>
+                        </div>
+                      </div>
+
+                      {/* Cryptographic Signature */}
+                      {c.cryptoSignature && (
+                        <div style={{ marginTop: 14, paddingTop: 12, borderTop: "1px solid rgba(255,255,255,0.05)", fontSize: 11.5, color: "var(--apple-text-muted)", display: "flex", alignItems: "center", gap: 6 }}>
+                          <Shield size={13} color="#10b981" />
+                          <span>HMAC-SHA256 Audit Signature: <code style={{ color: "#a1a1aa" }}>{c.cryptoSignature}</code></span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+
+            {filteredDossierCases.length === 0 && (
+              <div style={{ textAlign: "center", padding: 40, color: "var(--apple-text-muted)", fontSize: 13 }}>
+                No cases match search or filter criteria. Clear filters to view all {selectedPerson.cases.length} cases.
+              </div>
+            )}
+          </div>
+        </div>
+      </motion.div>
+    );
+  }
+
+  // ── Render Employee Directory Overview ──
   return (
     <motion.div
       initial={{ opacity: 0, y: 15 }}
@@ -674,29 +1096,10 @@ const Employees = () => {
                 return (
                   <tr key={person.id}>
                     <td>
-                      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                        <div
-                          style={{
-                            width: 38,
-                            height: 38,
-                            borderRadius: 10,
-                            background: person.threatLevel === "CRITICAL" ? "linear-gradient(135deg, #ff0055 0%, #e11d48 100%)" : "linear-gradient(135deg, #38bdf8 0%, #0284c7 100%)",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            fontSize: 14,
-                            fontWeight: 700,
-                            color: "#ffffff",
-                            flexShrink: 0,
-                          }}
-                        >
-                          {person.name.slice(0, 2).toUpperCase()}
-                        </div>
-                        <div>
-                          <div style={{ fontWeight: 600, color: "var(--apple-text-main)", fontSize: 13.5 }}>{person.name}</div>
-                          <div style={{ fontSize: 11.5, color: "var(--apple-text-muted)" }}>
-                            {person.email} • {person.department} • {person.endpointHost} ({person.endpointIp})
-                          </div>
+                      <div>
+                        <div style={{ fontWeight: 700, color: "var(--apple-text-main)", fontSize: 14 }}>{person.name}</div>
+                        <div style={{ fontSize: 11.5, color: "var(--apple-text-muted)" }}>
+                          {person.email} • {person.department} • {person.endpointHost} ({person.endpointIp})
                         </div>
                       </div>
                     </td>
@@ -772,456 +1175,6 @@ const Employees = () => {
           </table>
         </div>
       </div>
-
-      {/* ── Comprehensive Person Investigation Dossier Modal / View ─────────── */}
-      <AnimatePresence>
-        {selectedPerson && (
-          <motion.div
-            className="orion-drawer-overlay"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            style={{ display: "flex", alignItems: "center", justifyContent: "center", zIndex: 99999 }}
-            onClick={() => setSelectedPersonId(null)}
-          >
-            <motion.div
-              className="apple-card"
-              initial={{ scale: 0.94, opacity: 0, y: 20 }}
-              animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.94, opacity: 0, y: 20 }}
-              style={{
-                width: 960,
-                maxWidth: "95vw",
-                maxHeight: "92vh",
-                overflowY: "auto",
-                background: "rgba(11, 12, 16, 0.98)",
-                border: "1px solid rgba(225, 29, 72, 0.4)",
-                boxShadow: "0 25px 60px rgba(0,0,0,0.85)",
-                padding: 28,
-              }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              {/* Top Navigation & Close */}
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-                <button
-                  className="apple-btn"
-                  onClick={() => setSelectedPersonId(null)}
-                  style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12 }}
-                >
-                  <ArrowLeft size={14} />
-                  <span>Back to Employee Roster</span>
-                </button>
-
-                <button
-                  onClick={() => setSelectedPersonId(null)}
-                  style={{ background: "transparent", border: "none", color: "#a1a1aa", cursor: "pointer", padding: 4 }}
-                >
-                  <X size={20} />
-                </button>
-              </div>
-
-              {/* Person Profile Header Strip */}
-              <div
-                style={{
-                  background: "rgba(255, 255, 255, 0.03)",
-                  border: "1px solid var(--apple-border)",
-                  borderRadius: 14,
-                  padding: 20,
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  flexWrap: "wrap",
-                  gap: 16,
-                  marginBottom: 24,
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-                  <div
-                    style={{
-                      width: 58,
-                      height: 58,
-                      borderRadius: 16,
-                      background: selectedPerson.threatLevel === "CRITICAL" ? "linear-gradient(135deg, #ff0055 0%, #e11d48 100%)" : "linear-gradient(135deg, #38bdf8 0%, #0284c7 100%)",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      fontSize: 20,
-                      fontWeight: 800,
-                      color: "#ffffff",
-                    }}
-                  >
-                    {selectedPerson.name.slice(0, 2).toUpperCase()}
-                  </div>
-                  <div>
-                    <h2 style={{ fontSize: 22, fontWeight: 800, color: "var(--apple-text-main)", margin: 0 }}>{selectedPerson.name}</h2>
-                    <div style={{ fontSize: 12.5, color: "var(--apple-text-muted)", marginTop: 4 }}>
-                      {selectedPerson.email} • {selectedPerson.department} • Workstation: {selectedPerson.endpointHost} ({selectedPerson.endpointIp})
-                    </div>
-                  </div>
-                </div>
-
-                <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-                  <div style={{ textAlign: "right" }}>
-                    <div style={{ fontSize: 24, fontWeight: 900, color: selectedPerson.threatLevel === "CRITICAL" ? "#ff0055" : "#f59e0b" }}>
-                      {selectedPerson.peakRiskScore}/100
-                    </div>
-                    <div style={{ fontSize: 10, color: "var(--apple-text-muted)", textTransform: "uppercase" }}>Peak Risk</div>
-                  </div>
-
-                  <div style={{ textAlign: "right" }}>
-                    <div style={{ fontSize: 24, fontWeight: 900, color: "#ffffff" }}>
-                      {selectedPerson.cases.length}
-                    </div>
-                    <div style={{ fontSize: 10, color: "var(--apple-text-muted)", textTransform: "uppercase" }}>Leak Cases</div>
-                  </div>
-
-                  <button
-                    className={`apple-btn ${selectedPerson.status === "Blocked" ? "primary" : ""}`}
-                    onClick={() => handleToggleUserAccess(selectedPerson.userId, selectedPerson.status === "Blocked")}
-                    disabled={isUpdatingUser}
-                    style={{ fontSize: 12, padding: "8px 14px" }}
-                  >
-                    {selectedPerson.status === "Blocked" ? (
-                      <>
-                        <UserCheck size={14} />
-                        <span>Re-Enable Access</span>
-                      </>
-                    ) : (
-                      <>
-                        <UserX size={14} />
-                        <span>Suspend Access</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
-
-              {/* 2 Analytics Charts for this Person */}
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(380px, 1fr))", gap: 18, marginBottom: 26 }}>
-                {/* Person Risk Progression Timeline */}
-                <div style={{ background: "rgba(255, 255, 255, 0.02)", border: "1px solid var(--apple-border)", borderRadius: 12, padding: 16 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: "var(--apple-text-main)", marginBottom: 12, display: "flex", alignItems: "center", gap: 6 }}>
-                    <TrendingUp size={15} color="#ff0055" />
-                    <span>Risk Progression Timeline ({selectedPerson.cases.length} Cases)</span>
-                  </div>
-                  <div style={{ height: 180, width: "100%" }}>
-                    <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={personRiskTimeline} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
-                        <defs>
-                          <linearGradient id="empRiskGrad" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#ff0055" stopOpacity={0.4} />
-                            <stop offset="95%" stopColor="#ff0055" stopOpacity={0.0} />
-                          </linearGradient>
-                        </defs>
-                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(225,29,72,0.08)" />
-                        <XAxis dataKey="caseNum" stroke="#71717a" fontSize={10.5} />
-                        <YAxis domain={[0, 100]} stroke="#71717a" fontSize={10.5} />
-                        <Tooltip
-                          contentStyle={{
-                            background: "rgba(13, 14, 18, 0.95)",
-                            border: "1px solid var(--apple-border-strong)",
-                            borderRadius: "10px",
-                            color: "#ffffff",
-                            fontSize: "12px",
-                          }}
-                        />
-                        <Area type="monotone" dataKey="riskScore" stroke="#ff0055" strokeWidth={2.5} fill="url(#empRiskGrad)" />
-                      </AreaChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-
-                {/* Person Exfiltration Category Distribution */}
-                <div style={{ background: "rgba(255, 255, 255, 0.02)", border: "1px solid var(--apple-border)", borderRadius: 12, padding: 16 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: "var(--apple-text-main)", marginBottom: 12, display: "flex", alignItems: "center", gap: 6 }}>
-                    <Database size={15} color="#38bdf8" />
-                    <span>Leaked Data Categories</span>
-                  </div>
-                  <div style={{ height: 180, width: "100%" }}>
-                    {personCategoryChartData.length > 0 ? (
-                      <ResponsiveContainer width="100%" height="100%">
-                        <PieChart margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
-                          <Pie
-                            data={personCategoryChartData}
-                            dataKey="count"
-                            nameKey="name"
-                            cx="50%"
-                            cy="50%"
-                            outerRadius={60}
-                            stroke="#0d0e12"
-                            strokeWidth={1.5}
-                          >
-                            {personCategoryChartData.map((entry, index) => (
-                              <Cell key={`empcell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
-                            ))}
-                          </Pie>
-                          <Tooltip
-                            contentStyle={{
-                              background: "rgba(13, 14, 18, 0.95)",
-                              border: "1px solid var(--apple-border-strong)",
-                              borderRadius: "10px",
-                              color: "#ffffff",
-                              fontSize: "12px",
-                            }}
-                          />
-                          <Legend verticalAlign="bottom" iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 10, color: "#a1a1aa" }} />
-                        </PieChart>
-                      </ResponsiveContainer>
-                    ) : (
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "var(--apple-text-muted)", fontSize: 12 }}>
-                        No categories found
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* ── Complete List of ALL Cases That Person Has ── */}
-              <div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, flexWrap: "wrap", gap: 10 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <Fingerprint size={16} color="#ff0055" />
-                    <span style={{ fontSize: 15, fontWeight: 700, color: "var(--apple-text-main)" }}>
-                      All Recorded Cases for {selectedPerson.name} ({selectedPerson.cases.length} Total)
-                    </span>
-                    <span className="apple-pill rose" style={{ fontSize: 11, fontWeight: 700 }}>
-                      Showing {filteredDossierCases.length} of {selectedPerson.cases.length}
-                    </span>
-                  </div>
-
-                  {/* Case Controls: Expand/Collapse All */}
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <button
-                      className="apple-btn"
-                      style={{ padding: "4px 10px", fontSize: 11 }}
-                      onClick={() => {
-                        if (collapsedCaseIds.size === 0) {
-                          const allIds = new Set(selectedPerson.cases.map((c, i) => c.id || i));
-                          setCollapsedCaseIds(allIds);
-                        } else {
-                          setCollapsedCaseIds(new Set());
-                        }
-                      }}
-                    >
-                      {collapsedCaseIds.size === 0 ? "Collapse All" : "Expand All"}
-                    </button>
-                  </div>
-                </div>
-
-                {/* Dossier Case Filters Bar */}
-                <div
-                  style={{
-                    background: "rgba(255, 255, 255, 0.02)",
-                    border: "1px solid var(--apple-border)",
-                    borderRadius: 10,
-                    padding: "10px 14px",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 10,
-                    flexWrap: "wrap",
-                    marginBottom: 16,
-                  }}
-                >
-                  {/* Search inside this person's cases */}
-                  <div style={{ position: "relative", flex: "1 1 200px" }}>
-                    <Search size={13} color="#71717a" style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)" }} />
-                    <input
-                      type="text"
-                      placeholder="Search within this person's cases (prompt, token, category)..."
-                      className="apple-input"
-                      style={{ paddingLeft: 30, width: "100%", height: 32, fontSize: 11.5 }}
-                      value={dossierCaseSearch}
-                      onChange={(e) => setDossierCaseSearch(e.target.value)}
-                    />
-                  </div>
-
-                  {/* Filter by Platform */}
-                  <select
-                    className="apple-input"
-                    style={{ width: 150, height: 32, fontSize: 11.5 }}
-                    value={dossierPlatformFilter}
-                    onChange={(e) => setDossierPlatformFilter(e.target.value)}
-                  >
-                    <option value="ALL">All AI Platforms</option>
-                    <option value="antigravity">Antigravity (Gemini)</option>
-                    <option value="kiro">Kiro (Amazon Q)</option>
-                    <option value="cursor">Cursor AI</option>
-                    <option value="windsurf">Windsurf AI</option>
-                    <option value="chatgpt">ChatGPT</option>
-                    <option value="claude">Claude</option>
-                  </select>
-
-                  {/* Filter by Action */}
-                  <select
-                    className="apple-input"
-                    style={{ width: 140, height: 32, fontSize: 11.5 }}
-                    value={dossierActionFilter}
-                    onChange={(e) => setDossierActionFilter(e.target.value)}
-                  >
-                    <option value="ALL">All Actions</option>
-                    <option value="hard_block">Hard Blocked</option>
-                    <option value="silent_redact">Silent Redacted</option>
-                  </select>
-
-                  {(dossierCaseSearch || dossierPlatformFilter !== "ALL" || dossierActionFilter !== "ALL") && (
-                    <button
-                      className="apple-btn"
-                      style={{ padding: "4px 8px", fontSize: 11 }}
-                      onClick={() => {
-                        setDossierCaseSearch("");
-                        setDossierPlatformFilter("ALL");
-                        setDossierActionFilter("ALL");
-                      }}
-                    >
-                      Clear Filters
-                    </button>
-                  )}
-                </div>
-
-                {/* Chronological List of All Cases */}
-                <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                  {filteredDossierCases.map((c, cIdx) => {
-                    const caseKey = c.id || cIdx;
-                    const isCollapsed = collapsedCaseIds.has(caseKey);
-                    const isBlocked = c.actionTaken === "hard_block";
-
-                    const toggleCase = () => {
-                      setCollapsedCaseIds((prev) => {
-                        const next = new Set(prev);
-                        if (next.has(caseKey)) next.delete(caseKey);
-                        else next.add(caseKey);
-                        return next;
-                      });
-                    };
-
-                    return (
-                      <div
-                        key={caseKey}
-                        style={{
-                          background: "rgba(255, 255, 255, 0.02)",
-                          border: `1px solid ${isBlocked ? "rgba(255, 0, 85, 0.3)" : "rgba(225, 29, 72, 0.2)"}`,
-                          borderLeft: `4px solid ${isBlocked ? "#ff0055" : "#e11d48"}`,
-                          borderRadius: 10,
-                          overflow: "hidden",
-                        }}
-                      >
-                        {/* Case Header Banner */}
-                        <div
-                          style={{
-                            padding: "12px 18px",
-                            display: "flex",
-                            justifyContent: "space-between",
-                            alignItems: "center",
-                            cursor: "pointer",
-                            background: "rgba(255, 255, 255, 0.015)",
-                          }}
-                          onClick={toggleCase}
-                        >
-                          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-                            <span style={{ fontWeight: 800, fontSize: 13, color: "#ffffff" }}>
-                              Case #{selectedPerson.cases.length - cIdx}
-                            </span>
-                            {renderAiPlatformBadge(c.aiPlatform)}
-                            <span className={`apple-pill ${isBlocked ? "red" : "rose"}`}>
-                              {isBlocked ? "Hard Blocked" : "Silent Redacted"}
-                            </span>
-                            <span style={{ fontWeight: 800, fontSize: 12, color: c.riskScore >= 70 ? "#ff0055" : "#f59e0b" }}>
-                              Risk: {c.riskScore}/100
-                            </span>
-                          </div>
-
-                          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                            <span style={{ fontSize: 11, color: "var(--apple-text-muted)" }}>
-                              {new Date(c.timestamp).toLocaleString()}
-                            </span>
-                            <ChevronRight
-                              size={16}
-                              color="#a1a1aa"
-                              style={{ transform: !isCollapsed ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 0.2s ease" }}
-                            />
-                          </div>
-                        </div>
-
-                        {/* Case Forensic Body */}
-                        {!isCollapsed && (
-                          <div style={{ padding: "14px 18px", borderTop: "1px solid var(--apple-border)" }}>
-                            {/* Categories Tag Strip */}
-                            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
-                              {(c.categoriesRedacted || ["SENSITIVE_DATA"]).map((cat, catIdx) => (
-                                <span
-                                  key={catIdx}
-                                  style={{
-                                    fontSize: 10.5,
-                                    fontWeight: 700,
-                                    padding: "2px 8px",
-                                    borderRadius: 4,
-                                    background: "rgba(255, 0, 85, 0.12)",
-                                    color: "#ff0055",
-                                    border: "1px solid rgba(255, 0, 85, 0.25)",
-                                  }}
-                                >
-                                  [{cat.replace(/_/g, " ").toUpperCase()}]
-                                </span>
-                              ))}
-                            </div>
-
-                            {/* 3-Pane Forensic Inspection Grid */}
-                            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 12 }}>
-                              {/* Original Intercepted Prompt */}
-                              <div style={{ background: "rgba(0,0,0,0.4)", borderRadius: 8, padding: 12, border: "1px solid rgba(255, 0, 85, 0.2)" }}>
-                                <div style={{ fontSize: 10.5, fontWeight: 700, color: "#ff0055", textTransform: "uppercase", marginBottom: 6 }}>
-                                  1. Original Intercepted Prompt (Plaintext Secret Attempt)
-                                </div>
-                                <pre style={{ fontSize: 11.5, color: "#fca5a5", margin: 0, whiteSpace: "pre-wrap", fontFamily: "monospace", lineHeight: 1.45, maxHeight: 180, overflowY: "auto" }}>
-                                  {c.originalPrompt || "No prompt captured"}
-                                </pre>
-                              </div>
-
-                              {/* Sanitized Outbound Prompt */}
-                              <div style={{ background: "rgba(0,0,0,0.4)", borderRadius: 8, padding: 12, border: "1px solid rgba(56, 189, 248, 0.2)" }}>
-                                <div style={{ fontSize: 10.5, fontWeight: 700, color: "#38bdf8", textTransform: "uppercase", marginBottom: 6 }}>
-                                  2. Sanitized Outbound Payload (Sent to AI)
-                                </div>
-                                <pre style={{ fontSize: 11.5, color: "#7dd3fc", margin: 0, whiteSpace: "pre-wrap", fontFamily: "monospace", lineHeight: 1.45, maxHeight: 180, overflowY: "auto" }}>
-                                  {c.sanitizedPrompt || "[SANITIZED]"}
-                                </pre>
-                              </div>
-
-                              {/* Restored AI Response / Block Enforcement */}
-                              <div style={{ background: "rgba(0,0,0,0.4)", borderRadius: 8, padding: 12, border: "1px solid rgba(16, 185, 129, 0.2)" }}>
-                                <div style={{ fontSize: 10.5, fontWeight: 700, color: "#10b981", textTransform: "uppercase", marginBottom: 6 }}>
-                                  3. AI Response / Enforcement Action
-                                </div>
-                                <pre style={{ fontSize: 11.5, color: "#6ee7b7", margin: 0, whiteSpace: "pre-wrap", fontFamily: "monospace", lineHeight: 1.45, maxHeight: 180, overflowY: "auto" }}>
-                                  {c.restoredResponse || (isBlocked ? "🚫 Outbound transmission hard-blocked by Vantix Firewall." : "✓ Sanitized response passed seamlessly.")}
-                                </pre>
-                              </div>
-                            </div>
-
-                            {/* Cryptographic Signature */}
-                            {c.cryptoSignature && (
-                              <div style={{ marginTop: 10, fontSize: 10.5, color: "var(--apple-text-muted)", display: "flex", alignItems: "center", gap: 6 }}>
-                                <Shield size={12} color="#10b981" />
-                                <span>HMAC-SHA256 Audit Signature: <code style={{ color: "#a1a1aa" }}>{c.cryptoSignature}</code></span>
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-
-                  {filteredDossierCases.length === 0 && (
-                    <div style={{ textAlign: "center", padding: 32, background: "rgba(255,255,255,0.02)", borderRadius: 10, border: "1px solid var(--apple-border)", color: "var(--apple-text-muted)", fontSize: 12.5 }}>
-                      No cases match search or filter criteria. Clear filters to view all {selectedPerson.cases.length} cases.
-                    </div>
-                  )}
-                </div>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       {/* Add Employee Modal */}
       <AnimatePresence>

@@ -634,29 +634,10 @@ export default function ThreatTracking() {
         <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
           {/* Top Profile Summary Strip */}
           <div className="apple-card" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 20 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-              <div
-                style={{
-                  width: 52,
-                  height: 52,
-                  borderRadius: 16,
-                  background: selectedEmployee.threatLevel === "CRITICAL" ? "linear-gradient(135deg, #ff0055 0%, #e11d48 100%)" : "linear-gradient(135deg, #f59e0b 0%, #b45309 100%)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontSize: 18,
-                  fontWeight: 800,
-                  color: "#ffffff",
-                }}
-              >
-                {selectedEmployee.name.slice(0, 2).toUpperCase()}
-              </div>
-
-              <div>
-                <h2 style={{ fontSize: 20, fontWeight: 700, color: "var(--apple-text-main)", margin: 0 }}>{selectedEmployee.name}</h2>
-                <div style={{ fontSize: 12, color: "var(--apple-text-muted)", marginTop: 4 }}>
-                  {selectedEmployee.email} • {selectedEmployee.department} • {selectedEmployee.endpointHost} ({selectedEmployee.endpointIp})
-                </div>
+            <div>
+              <h2 style={{ fontSize: 22, fontWeight: 700, color: "var(--apple-text-main)", margin: 0 }}>{selectedEmployee.name}</h2>
+              <div style={{ fontSize: 12.5, color: "var(--apple-text-muted)", marginTop: 4 }}>
+                {selectedEmployee.email} • {selectedEmployee.department} • Workstation: <strong style={{ color: "#ffffff" }}>{selectedEmployee.endpointHost}</strong> ({selectedEmployee.endpointIp})
               </div>
             </div>
 
@@ -940,32 +921,32 @@ export default function ThreatTracking() {
 
                         {/* 3-Pane Forensic Inspection Grid */}
                         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 12 }}>
-                          {/* Original Intercepted Prompt */}
-                          <div style={{ background: "rgba(0,0,0,0.4)", borderRadius: 8, padding: 12, border: "1px solid rgba(255, 0, 85, 0.2)" }}>
-                            <div style={{ fontSize: 10.5, fontWeight: 700, color: "#ff0055", textTransform: "uppercase", marginBottom: 6 }}>
-                              1. Original Intercepted Prompt (Plaintext Secret Attempt)
+                          {/* 1. Actual Outbound User Input (What user sent) */}
+                          <div style={{ background: "rgba(0,0,0,0.45)", borderRadius: 10, padding: 14, border: "1px solid rgba(255, 0, 85, 0.25)" }}>
+                            <div style={{ fontSize: 11, fontWeight: 800, color: "#ff0055", textTransform: "uppercase", marginBottom: 8, letterSpacing: "0.04em" }}>
+                              1. Actual User Input (What User Sent)
                             </div>
-                            <pre style={{ fontSize: 11.5, color: "#fca5a5", margin: 0, whiteSpace: "pre-wrap", fontFamily: "monospace", lineHeight: 1.45, maxHeight: 180, overflowY: "auto" }}>
+                            <pre style={{ fontSize: 12, color: "#fca5a5", margin: 0, whiteSpace: "pre-wrap", fontFamily: "monospace", lineHeight: 1.5, maxHeight: 200, overflowY: "auto" }}>
                               {inc.originalPrompt || "No prompt captured"}
                             </pre>
                           </div>
 
-                          {/* Sanitized Outbound Prompt */}
-                          <div style={{ background: "rgba(0,0,0,0.4)", borderRadius: 8, padding: 12, border: "1px solid rgba(56, 189, 248, 0.2)" }}>
-                            <div style={{ fontSize: 10.5, fontWeight: 700, color: "#38bdf8", textTransform: "uppercase", marginBottom: 6 }}>
-                              2. Sanitized Outbound Payload (Sent to AI)
+                          {/* 2. System Sanitized Payload (Sent to AI) */}
+                          <div style={{ background: "rgba(0,0,0,0.45)", borderRadius: 10, padding: 14, border: "1px solid rgba(56, 189, 248, 0.25)" }}>
+                            <div style={{ fontSize: 11, fontWeight: 800, color: "#38bdf8", textTransform: "uppercase", marginBottom: 8, letterSpacing: "0.04em" }}>
+                              2. System Sanitized Payload (Sent to AI)
                             </div>
-                            <pre style={{ fontSize: 11.5, color: "#7dd3fc", margin: 0, whiteSpace: "pre-wrap", fontFamily: "monospace", lineHeight: 1.45, maxHeight: 180, overflowY: "auto" }}>
+                            <pre style={{ fontSize: 12, color: "#7dd3fc", margin: 0, whiteSpace: "pre-wrap", fontFamily: "monospace", lineHeight: 1.5, maxHeight: 200, overflowY: "auto" }}>
                               {inc.sanitizedPrompt || "[SANITIZED]"}
                             </pre>
                           </div>
 
-                          {/* Restored AI Response / Block Enforcement */}
-                          <div style={{ background: "rgba(0,0,0,0.4)", borderRadius: 8, padding: 12, border: "1px solid rgba(16, 185, 129, 0.2)" }}>
-                            <div style={{ fontSize: 10.5, fontWeight: 700, color: "#10b981", textTransform: "uppercase", marginBottom: 6 }}>
-                              3. AI Response / Enforcement Action
+                          {/* 3. Actual Real Output from AI (Restored to User) */}
+                          <div style={{ background: "rgba(0,0,0,0.45)", borderRadius: 10, padding: 14, border: "1px solid rgba(16, 185, 129, 0.25)" }}>
+                            <div style={{ fontSize: 11, fontWeight: 800, color: "#10b981", textTransform: "uppercase", marginBottom: 8, letterSpacing: "0.04em" }}>
+                              3. Actual Real Output from AI (Restored to User)
                             </div>
-                            <pre style={{ fontSize: 11.5, color: "#6ee7b7", margin: 0, whiteSpace: "pre-wrap", fontFamily: "monospace", lineHeight: 1.45, maxHeight: 180, overflowY: "auto" }}>
+                            <pre style={{ fontSize: 12, color: "#6ee7b7", margin: 0, whiteSpace: "pre-wrap", fontFamily: "monospace", lineHeight: 1.5, maxHeight: 200, overflowY: "auto" }}>
                               {inc.restoredResponse || (isBlocked ? "🚫 Outbound transmission hard-blocked by Vantix Firewall." : "✓ Sanitized response passed seamlessly.")}
                             </pre>
                           </div>
