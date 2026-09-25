@@ -95,6 +95,7 @@ function broadcast(event) {
 function broadcastDetection(data) {
   broadcast({
     type: "detection",
+    id: data.id || `ws-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
     timestamp: data.timestamp || new Date().toISOString(),
     promptSnippet: data.originalPrompt
       ? data.originalPrompt.slice(0, 120) + (data.originalPrompt.length > 120 ? "..." : "")
@@ -104,23 +105,30 @@ function broadcastDetection(data) {
     originalPrompt: data.originalPrompt || "",
     sanitizedPrompt: data.sanitizedPrompt || "",
     restoredResponse: data.restoredResponse || "",
-    riskScore: data.riskScore,
+    riskScore: data.riskScore !== undefined ? data.riskScore : 0,
     detections: (data.detections || []).map((d) => ({
       category: d.category,
       label: d.label,
       isolationRisk: d.isolationRisk,
       value: d.value,
     })),
+    categoriesRedacted: data.categoriesRedacted || (data.detections ? Array.from(new Set(data.detections.map((d) => d.category))) : []),
     combinations: data.combinations || [],
-    contextScore: data.contextScore,
-    actionTaken: data.actionTaken,
+    contextScore: data.contextScore || 0,
+    actionTaken: data.actionTaken || "pass",
     sessionCoverage: data.sessionCoverage || {},
     sessionRiskScore: data.sessionRiskScore || 0,
     promptCount: data.promptCount || 0,
     anomalyTriggered: data.anomalyTriggered || false,
-    user: data.user || (process.env.USERNAME || process.env.USER || "employee"),
+    anomalyReport: data.anomalyReport || "",
+    user: data.user || (process.env.SUDO_USER || process.env.USERNAME || process.env.USER || "employee"),
+    userName: data.userName || data.user || "Employee",
+    userEmail: data.userEmail || `${data.user || "employee"}@acme.corp`,
+    department: data.department || "Core Systems",
     host: data.host || (require("os").hostname() || "workstation"),
     endpointIp: data.endpointIp || "127.0.0.1",
+    aiPlatform: data.aiPlatform || "chatgpt.com",
+    interceptSource: data.interceptSource || "proxy",
     signature: data.signature || "HMAC-SHA256-VERIFIED",
   });
 }

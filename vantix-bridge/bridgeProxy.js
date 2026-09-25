@@ -13,6 +13,7 @@ const stream = require("stream");
 const url = require("url");
 const os = require("os");
 const path = require("path");
+const zlib = require("zlib");
 
 const { getCertForHost, getOrCreateRootCa } = require("./certManager");
 
@@ -21,6 +22,10 @@ const { analyzePrompt } = require("../vantix-backend/engines/industrialDetector"
 const tee = require("../vantix-backend/engines/teeEnclave");
 const ws = require("../vantix-backend/engines/wsServer");
 const sessionGraph = require("../vantix-backend/engines/sessionGraph");
+let proxyRoute = null;
+try {
+  proxyRoute = require("../vantix-backend/routes/proxy");
+} catch (e) {}
 
 // Target AI API domains to intercept (all other web traffic passes through untouched)
 const AI_DOMAINS = [
@@ -28,13 +33,9 @@ const AI_DOMAINS = [
   "api.openai.com",
   // Anthropic
   "api.anthropic.com",
-  // Google Gemini / Vertex / Cloud Code / Antigravity IDE
+  // Google Gemini / Vertex (IDE developer endpoints excluded)
   "generativelanguage.googleapis.com",
-  "daily-cloudcode-pa.googleapis.com",
-  "cloudcode-pa.googleapis.com",
-  "businessaicode.googleapis.com",
   "aiplatform.googleapis.com",
-  "cloudaicompanion.googleapis.com",
   // Groq
   "api.groq.com",
   // Together AI
@@ -126,6 +127,38 @@ process.on("unhandledRejection", (err) => {
   console.error("[Vantix-Bridge] Handled rejection:", err?.message || err);
 });
 
+function getPlatformDisplayName(hostname) {
+  const h = (hostname || "").toLowerCase();
+  if (h.includes("amazonaws.com") || h.includes("kiro")) {
+    return "Kiro (Amazon Q Developer)";
+  }
+  if (h.includes("cursor")) {
+    return "Cursor AI";
+  }
+  if (h.includes("codeium") || h.includes("windsurf")) {
+    return "Windsurf AI";
+  }
+  if (h.includes("githubcopilot") || h.includes("copilot")) {
+    return "GitHub Copilot";
+  }
+  if (h.includes("openai.com")) {
+    return h.includes("api.") ? "OpenAI API" : "ChatGPT";
+  }
+  if (h.includes("claude") || h.includes("anthropic")) {
+    return h.includes("api.") ? "Anthropic API" : "Claude";
+  }
+  if (h.includes("gemini") || h.includes("generativelanguage")) {
+    return "Gemini API";
+  }
+  if (h.includes("deepseek")) {
+    return "DeepSeek";
+  }
+  if (h.includes("groq")) {
+    return "Groq API";
+  }
+  return hostname;
+}
+
 /**
  * Checks if a hostname matches any monitored AI platform.
  */
@@ -133,6 +166,17 @@ function isAiDomain(host) {
   if (!host) return false;
   const cleanHost = host.split(":")[0].toLowerCase();
   
+  // NEVER intercept Antigravity IDE / CloudCode developer assistant endpoints
+  if (
+    cleanHost.includes("cloudcode") ||
+    cleanHost.includes("businessaicode") ||
+    cleanHost.includes("cloudaicompanion") ||
+    cleanHost === "daily-cloudcode-pa.googleapis.com" ||
+    cleanHost === "cloudcode-pa.googleapis.com"
+  ) {
+    return false;
+  }
+
   // NEVER intercept non-AI internal services: authentication, telemetry, crash reporting, updates
   if (
     cleanHost.includes("auth.") ||
@@ -166,14 +210,11 @@ function isAiDomain(host) {
     }
   }
 
-  // Google AI / Cloud Code / Antigravity IDE endpoints
+  // Google AI API endpoints (explicitly excluding IDE developer tools)
   if (cleanHost.endsWith(".googleapis.com")) {
     if (
-      cleanHost.includes("cloudcode") ||
-      cleanHost.includes("businessaicode") ||
       cleanHost.includes("generativelanguage") ||
-      cleanHost.includes("aiplatform") ||
-      cleanHost.includes("cloudaicompanion")
+      cleanHost.includes("aiplatform")
     ) {
       return true;
     }
@@ -220,10 +261,21 @@ function isWebAiDomain(host) {
  * Resolves local OS/kernel user identity automatically.
  */
 function getSystemIdentity() {
-  let username = process.env.USER || process.env.USERNAME || "employee";
+  let username = process.env.SUDO_USER || process.env.USER || process.env.USERNAME || "mohammed";
   try {
-    username = os.userInfo().username || username;
+    if (process.env.SUDO_USER) {
+      username = process.env.SUDO_USER;
+    } else {
+      const osUser = os.userInfo().username;
+      if (osUser && osUser !== "root") {
+        username = osUser;
+      }
+    }
   } catch (e) {}
+
+  if (username === "root" && process.env.SUDO_USER) {
+    username = process.env.SUDO_USER;
+  }
 
   return {
     user: username,
@@ -231,6 +283,159 @@ function getSystemIdentity() {
     platform: os.platform(),
     email: `${username}@${os.hostname().toLowerCase().replace(/[^a-z0-9]/g, "")}.corp`,
   };
+}
+
+function cleanPromptText(text) {
+  if (!text || typeof text !== "string") return "";
+  let clean = text;
+  const tags = ["<EnvironmentContext>", "<CurrentFile>", "<WorkspaceContext>", "<EditorContext>", "<ProjectContext>"];
+  for (const tag of tags) {
+    const idx = clean.indexOf(tag);
+    if (idx !== -1) {
+      clean = clean.slice(0, idx);
+    }
+  }
+  return clean.trim() || text.trim();
+}
+
+function cleanAiResponseText(raw) {
+  if (!raw || typeof raw !== "string") return "";
+  let extracted = "";
+
+  let idx = 0;
+  while (idx < raw.length) {
+    const startContent = raw.indexOf('{"content"', idx);
+    const startText = raw.indexOf('{"text"', idx);
+    let start = -1;
+    if (startContent !== -1 && startText !== -1) start = Math.min(startContent, startText);
+    else if (startContent !== -1) start = startContent;
+    else if (startText !== -1) start = startText;
+
+    if (start === -1) break;
+    idx = start;
+
+    let depth = 0;
+    let end = -1;
+    for (let i = idx; i < raw.length; i++) {
+      if (raw[i] === "{") depth++;
+      else if (raw[i] === "}") {
+        depth--;
+        if (depth === 0) {
+          end = i;
+          break;
+        }
+      }
+    }
+
+    if (end !== -1) {
+      const jsonStr = raw.slice(idx, end + 1);
+      try {
+        const parsed = JSON.parse(jsonStr);
+        if (parsed.content) extracted += parsed.content;
+        else if (parsed.text) extracted += parsed.text;
+      } catch (e) {
+        const m = jsonStr.match(/"content":\s*"((?:[^"\\]|\\.)*)"/);
+        if (m) {
+          try { extracted += JSON.parse(`"${m[1]}"`); } catch(e2) { extracted += m[1]; }
+        }
+      }
+      idx = end + 1;
+    } else {
+      idx += 10;
+    }
+  }
+
+  if (extracted.trim().length > 0) return extracted.trim();
+
+  let clean = raw.replace(/[\x00-\x1F\x7F-\x9F]/g, " ")
+                 .replace(/:event-type\s*\w+/gi, "")
+                 .replace(/:content-type\s*[\w\/]+/gi, "")
+                 .replace(/:message-type\s*\w+/gi, "")
+                 .replace(/assistantResponseEvent/gi, "")
+                 .replace(/\{"modelId":[^}]+\}/g, "")
+                 .replace(/\s+/g, " ")
+                 .trim();
+  return clean || raw;
+}
+
+/**
+ * Centrally records and broadcasts proxy incidents so both proxy & extension
+ * appear in the admin dashboard live feed, flagged employees, and audit logs.
+ */
+function recordProxyIncident({
+  identity,
+  hostname,
+  promptText,
+  sanitizedPrompt,
+  restoredResponse,
+  action,
+  detection,
+  signature,
+}) {
+  const cleanPrompt = cleanPromptText(promptText);
+  const cleanSanitized = cleanPromptText(sanitizedPrompt || promptText);
+  const cleanResponse = cleanAiResponseText(restoredResponse || "");
+  const aiPlatform = getPlatformDisplayName(hostname);
+  const interceptedAt = new Date().toISOString();
+  const sig = signature || tee.signAuditEntry({
+    timestamp: interceptedAt,
+    userId: identity.user,
+    orgId: "acme-corp",
+    riskScore: detection?.overallRisk || 0,
+    actionTaken: action,
+    aiPlatform,
+  });
+
+  if (proxyRoute && typeof proxyRoute.recordAndBroadcast === "function") {
+    try {
+      proxyRoute.recordAndBroadcast({
+        resolvedUser: identity.user,
+        userEmail: identity.email,
+        resolvedHost: identity.host,
+        prompt: cleanPrompt,
+        sanitizedPrompt: cleanSanitized,
+        restoredResponse: cleanResponse,
+        action,
+        detection: detection || { overallRisk: 0, detections: [], combinations: [], contextScore: 0 },
+        signature: sig,
+        interceptedAt,
+        aiPlatform,
+      });
+      return;
+    } catch (e) {
+      console.error("[Vantix-Bridge] recordAndBroadcast error:", e.message);
+    }
+  }
+
+  try {
+    const sessionResult = sessionGraph.updateSessionGraph(identity.user, identity.email, detection || { overallRisk: 0, detections: [] });
+    ws.broadcastDetection({
+      id: `bridge-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      originalPrompt: cleanPrompt,
+      sanitizedPrompt: cleanSanitized,
+      restoredResponse: cleanResponse,
+      riskScore: detection?.overallRisk || 0,
+      detections: detection?.detections || [],
+      combinations: detection?.combinations || [],
+      contextScore: detection?.contextScore || 0,
+      actionTaken: action,
+      sessionCoverage: sessionResult.coverageMap || {},
+      sessionRiskScore: sessionResult.riskScore || 0,
+      promptCount: sessionResult.promptCount || 1,
+      anomalyTriggered: sessionResult.anomalyTriggered || false,
+      anomalyReport: sessionResult.anomalyReport || "",
+      user: identity.user,
+      userName: `${identity.user} (${identity.host})`,
+      userEmail: identity.email,
+      department: "Engineering & Cloud",
+      host: identity.host,
+      endpointIp: "127.0.0.1",
+      aiPlatform,
+      interceptSource: "network-layer-bridge",
+      signature: sig,
+      timestamp: interceptedAt,
+    });
+  } catch (e) {}
 }
 
 /**
@@ -329,9 +534,27 @@ function extractPromptFromJson(json) {
     }
   }
 
-  // 2. Kiro / Amazon Q Developer format: conversationState.currentMessage.userInputMessage.content
+  // 2. Kiro / Amazon Q Developer format:
   if (json.conversationState?.currentMessage?.userInputMessage?.content) {
     const uim = json.conversationState.currentMessage.userInputMessage;
+    if (typeof uim.content === "string") {
+      return {
+        text: uim.content,
+        replace: (sanitized) => { uim.content = sanitized; }
+      };
+    }
+  }
+  if (json.currentMessage?.userInputMessage?.content) {
+    const uim = json.currentMessage.userInputMessage;
+    if (typeof uim.content === "string") {
+      return {
+        text: uim.content,
+        replace: (sanitized) => { uim.content = sanitized; }
+      };
+    }
+  }
+  if (json.userInputMessage?.content) {
+    const uim = json.userInputMessage;
     if (typeof uim.content === "string") {
       return {
         text: uim.content,
@@ -446,6 +669,134 @@ function decodeChunkedBody(buf) {
   } catch (e) {
     return buf;
   }
+}
+
+// Universal IEEE 802.3 CRC32 lookup table (zero dependencies, works across all Node/V8 versions)
+const CRC32_TABLE = new Int32Array(256);
+for (let i = 0; i < 256; i++) {
+  let c = i;
+  for (let j = 0; j < 8; j++) {
+    c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+  }
+  CRC32_TABLE[i] = c;
+}
+
+function calculateCrc32(buf) {
+  if (!buf || buf.length === 0) return 0;
+  let crc = -1;
+  for (let i = 0; i < buf.length; i++) {
+    crc = (crc >>> 8) ^ CRC32_TABLE[(crc ^ buf[i]) & 0xFF];
+  }
+  return (crc ^ (-1)) >>> 0;
+}
+
+/**
+ * Unredacts placeholders in streaming AI responses.
+ * Detects and preserves binary AWS EventStream frames (used by Amazon Q Developer / Kiro)
+ * with precise frame length and CRC32 recalculation, while supporting standard text/SSE.
+ */
+function unredactChunkOrStream(accumBuf, tokenTable) {
+  if (!accumBuf || accumBuf.length === 0) {
+    return { processed: Buffer.alloc(0), remaining: Buffer.alloc(0), isEventStream: false };
+  }
+
+  // Check if buffer contains AWS EventStream binary frames
+  if (accumBuf.length >= 16) {
+    let offset = 0;
+    const frames = [];
+    let isEventStream = false;
+
+    while (offset + 16 <= accumBuf.length) {
+      const totalLength = accumBuf.readUInt32BE(offset);
+      const headersLength = accumBuf.readUInt32BE(offset + 4);
+      const preludeCrc = accumBuf.readUInt32BE(offset + 8);
+
+      const calcPreludeCrc = calculateCrc32(accumBuf.slice(offset, offset + 8));
+      if (totalLength < 16 || totalLength > 16 * 1024 * 1024 || preludeCrc !== calcPreludeCrc) {
+        break; // Not a valid EventStream frame at offset
+      }
+
+      isEventStream = true;
+      if (offset + totalLength > accumBuf.length) {
+        // Frame truncated across chunks; wait for next network packet
+        break;
+      }
+
+      const frameBuf = accumBuf.slice(offset, offset + totalLength);
+      const headersStart = 12;
+      const headersEnd = 12 + headersLength;
+      const payloadStart = headersEnd;
+      const payloadEnd = totalLength - 4;
+
+      const headersBuf = frameBuf.slice(headersStart, headersEnd);
+      let payloadBuf = frameBuf.slice(payloadStart, payloadEnd);
+
+      let payloadStr = payloadBuf.toString("utf8");
+      let modified = false;
+
+      if (tokenTable && tokenTable.size > 0) {
+        for (const [realVal, placeholder] of tokenTable.entries()) {
+          if (payloadStr.includes(placeholder)) {
+            payloadStr = payloadStr.split(placeholder).join(realVal);
+            modified = true;
+          }
+        }
+      }
+
+      if (modified) {
+        payloadBuf = Buffer.from(payloadStr, "utf8");
+        const newTotalLength = 16 + headersLength + payloadBuf.length;
+        const newPrelude = Buffer.alloc(8);
+        newPrelude.writeUInt32BE(newTotalLength, 0);
+        newPrelude.writeUInt32BE(headersLength, 4);
+        const newPreludeCrc = calculateCrc32(newPrelude);
+
+        const newMsgWithoutCrc = Buffer.concat([
+          newPrelude,
+          Buffer.alloc(4),
+          headersBuf,
+          payloadBuf,
+        ]);
+        newMsgWithoutCrc.writeUInt32BE(newPreludeCrc, 8);
+        const newMsgCrc = calculateCrc32(newMsgWithoutCrc);
+
+        const newFrame = Buffer.concat([
+          newMsgWithoutCrc,
+          Buffer.alloc(4),
+        ]);
+        newFrame.writeUInt32BE(newMsgCrc, newMsgWithoutCrc.length);
+        frames.push(newFrame);
+      } else {
+        frames.push(frameBuf);
+      }
+
+      offset += totalLength;
+    }
+
+    if (isEventStream && (frames.length > 0 || offset < accumBuf.length)) {
+      return {
+        processed: frames.length > 0 ? Buffer.concat(frames) : Buffer.alloc(0),
+        remaining: accumBuf.slice(offset),
+        isEventStream: true,
+      };
+    }
+  }
+
+  // Non-EventStream text/JSON/SSE fallback
+  let chunkStr = accumBuf.toString("utf8");
+  if (tokenTable && tokenTable.size > 0) {
+    for (const [realVal, placeholder] of tokenTable.entries()) {
+      if (chunkStr.includes(placeholder)) {
+        chunkStr = chunkStr.split(placeholder).join(realVal);
+      }
+    }
+  }
+
+  return {
+    processed: Buffer.from(chunkStr, "utf8"),
+    remaining: Buffer.alloc(0),
+    isEventStream: false,
+  };
 }
 
 /**
@@ -655,48 +1006,22 @@ function processInterceptedAiRequest(rawBuffer, hostname, port, clientTlsSocket,
 
       // Broadcast alert to admin dashboard in real-time
       try {
-        ws.broadcastDetection({
-          originalPrompt: `[UNMANAGED ACCESS BLOCKED] User attempted to open ${hostname} without Vantix Browser Guard`,
+        recordProxyIncident({
+          identity,
+          hostname,
+          promptText: `[UNMANAGED ACCESS BLOCKED] User attempted to open ${hostname} without Vantix Browser Guard`,
           sanitizedPrompt: "[POLICY_VIOLATION_BLOCKED]",
-          restoredResponse: "",
-          riskScore: 90,
-          detections: [{ category: "UNMANAGED_AI_ACCESS", value: hostname, severity: "CRITICAL" }],
-          combinations: [],
-          contextScore: 90,
-          actionTaken: "hard_block",
-          sessionCoverage: {},
-          sessionRiskScore: 90,
-          promptCount: 1,
-          anomalyTriggered: true,
-          anomalyReport: `Direct browser navigation to ${hostname} was blocked at Layer 1. The employee has not activated the Vantix Browser Guard extension.`,
-          user: identity.user,
-          host: identity.host,
-          interceptSource: "network-layer-unmanaged-block",
-          timestamp: new Date().toISOString(),
+          restoredResponse: "🚫 UNMANAGED ACCESS BLOCKED — Please enable Vantix Browser Guard",
+          action: "hard_block",
+          detection: {
+            overallRisk: 90,
+            detections: [{ category: "UNMANAGED_AI_ACCESS", value: hostname, label: "Unmanaged Web AI Access", isolationRisk: 90, severity: "CRITICAL" }],
+            combinations: [],
+            contextScore: 90,
+            categoriesFound: ["UNMANAGED_AI_ACCESS"],
+          },
         });
       } catch (e) {}
-
-      // Asynchronous cloud sync in background (non-blocking)
-      setImmediate(() => {
-        try {
-          fetch("https://vantix-backend-7gcw.onrender.com/api/vantix/chat", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "X-Vantix-User": identity.user,
-              "X-Vantix-Host": identity.host,
-              "X-Vantix-Source": "network-unmanaged-block",
-            },
-            body: JSON.stringify({
-              prompt: `[UNMANAGED WEB AI ACCESS BLOCKED] Attempted connection to ${hostname} without Vantix Browser Guard.`,
-              userId: identity.user,
-              user: identity.user,
-              host: identity.host,
-              sessionId: `unmanaged-${Date.now()}`,
-            }),
-          }).catch(() => {});
-        } catch (e) {}
-      });
 
       if (typeof onFinished === "function") onFinished();
       return;
@@ -764,25 +1089,14 @@ function processInterceptedAiRequest(rawBuffer, hostname, port, clientTlsSocket,
 
     setImmediate(() => {
       try {
-        const sessionResult = sessionGraph.updateSessionGraph(identity.user, identity.email, detection);
-        ws.broadcastDetection({
-          originalPrompt: promptText.slice(0, 500),
-          sanitizedPrompt: promptText.slice(0, 500),
+        recordProxyIncident({
+          identity,
+          hostname,
+          promptText,
+          sanitizedPrompt: promptText,
           restoredResponse: "",
-          riskScore: 0,
-          detections: [],
-          combinations: [],
-          contextScore: 0,
-          actionTaken: "pass",
-          sessionCoverage: sessionResult.coverageMap || {},
-          sessionRiskScore: sessionResult.riskScore || 0,
-          promptCount: sessionResult.promptCount || 1,
-          anomalyTriggered: false,
-          anomalyReport: "",
-          user: identity.user,
-          host: identity.host,
-          interceptSource: "network-layer-bridge",
-          timestamp: new Date().toISOString(),
+          action: "pass",
+          detection,
         });
       } catch (e) {}
     });
@@ -791,7 +1105,10 @@ function processInterceptedAiRequest(rawBuffer, hostname, port, clientTlsSocket,
     return;
   }
 
-  const credentialCount = detection.detections.filter((d) => d.category === "CREDENTIAL").length;
+  const credentialDetections = detection.detections.filter(
+    (d) => d.category === "CREDENTIAL" || d.category === "PRIVATE_KEY" || d.category === "SECRET"
+  );
+  const credentialCount = credentialDetections.length;
   const isMassiveCredentialDump = credentialCount > 3;
   const isSevereInjection = detection.detections.some(
     (d) => d.category === "PROMPT_INJECTION" && d.isolationRisk >= 95
@@ -799,54 +1116,24 @@ function processInterceptedAiRequest(rawBuffer, hostname, port, clientTlsSocket,
 
   const shouldHardBlock = isMassiveCredentialDump || isSevereInjection;
 
-  // ── RULE 1: HARD BLOCK ONLY ON MASSIVE CREDENTIAL LEAKS (>3) OR SEVERE INJECTIONS ──
+  // ── RULE 1: HARD BLOCK ON SENSITIVE CREDENTIAL DUMPS (>3 API KEYS/SECRETS) OR SEVERE INJECTIONS ──
   if (shouldHardBlock) {
-    console.log(`[Vantix-Bridge] ⛔ MASSIVE CREDENTIAL EXPOSURE HARD-BLOCKED (${credentialCount} credentials detected)`);
+    console.log(`[Vantix-Bridge] ⛔ SENSITIVE CREDENTIAL DUMP HARD-BLOCKED (${credentialCount} secrets detected)`);
 
-    let sessionResult = { coverageMap: {}, riskScore: detection.overallRisk, promptCount: 1, anomalyTriggered: true, anomalyReport: "" };
-    try {
-      sessionResult = sessionGraph.updateSessionGraph(identity.user, identity.email, detection);
-    } catch (e) {}
-
-    const blockMsg = `[VANTIX AI FIREWALL] Request blocked: Massive credential exposure detected (${credentialCount} secrets). Outbound transmission halted by enterprise DLP policy.`;
+    const blockMsg = isSevereInjection
+      ? `[VANTIX AI FIREWALL] Request blocked: High-severity prompt injection exploit detected. Outbound transmission halted by enterprise security policy.`
+      : `[VANTIX AI FIREWALL] Request blocked: Sensitive credential dump detected (${credentialCount} API keys/secrets > 3). Outbound transmission halted by enterprise DLP policy.`;
 
     try {
-      ws.broadcastDetection({
-        originalPrompt: promptText.slice(0, 500),
+      recordProxyIncident({
+        identity,
+        hostname,
+        promptText,
         sanitizedPrompt: "[HARD_BLOCKED_BY_FIREWALL]",
-        restoredResponse: "",
-        riskScore: detection.overallRisk,
-        detections: detection.detections,
-        combinations: detection.combinations,
-        contextScore: detection.contextScore,
-        actionTaken: "hard_block",
-        sessionCoverage: sessionResult.coverageMap || {},
-        sessionRiskScore: sessionResult.riskScore || detection.overallRisk,
-        promptCount: sessionResult.promptCount || 1,
-        anomalyTriggered: true,
-        anomalyReport: `CRITICAL SECURITY BLOCK: Employee attempted to send ${credentialCount} exposed credentials to ${hostname}. Connection terminated by Layer 1 Firewall.`,
-        user: identity.user,
-        host: identity.host,
-        interceptSource: "network-layer-bridge",
-        timestamp: new Date().toISOString(),
+        restoredResponse: `🚫 HARD BLOCKED — ${blockMsg}`,
+        action: "hard_block",
+        detection,
       });
-
-      fetch("https://vantix-backend-7gcw.onrender.com/api/vantix/chat", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Vantix-User": identity.user,
-          "X-Vantix-Host": identity.host,
-          "X-Vantix-Source": "network-layer-bridge",
-        },
-        body: JSON.stringify({
-          prompt: promptText.slice(0, 500),
-          userId: identity.user,
-          user: identity.user,
-          host: identity.host,
-          sessionId: `bridge-block-${Date.now()}`,
-        }),
-      }).catch(() => {});
     } catch (e) {}
 
     const errorJson = JSON.stringify({
@@ -880,22 +1167,23 @@ function processInterceptedAiRequest(rawBuffer, hostname, port, clientTlsSocket,
 
   // ── RULE 2: TEE SILENT REDACTION FOR CREDENTIALS (<=3), PII & CONFIDENTIAL DATA ──
   const tokenTable = tee.createTokenTable(sessionId, detection.detections, bodyPart);
-  let sanitizedBody = bodyPart;
-  if (tokenTable && tokenTable.size > 0) {
-    for (const [placeholder, realVal] of tokenTable.entries()) {
-      sanitizedBody = sanitizedBody.split(realVal).join(placeholder);
-    }
+  let sanitizedBody = tee.sanitizePrompt(bodyPart, tokenTable);
+  let sanitizedPromptSnippet = tee.sanitizePrompt(promptText, tokenTable);
+
+  if (parsedJson) {
+    try {
+      const extracted = extractPromptFromJson(parsedJson);
+      if (extracted && extracted.text && typeof extracted.replace === "function") {
+        const sanitizedExtracted = tee.sanitizePrompt(extracted.text, tokenTable);
+        extracted.replace(sanitizedExtracted);
+        sanitizedBody = JSON.stringify(parsedJson);
+      }
+    } catch (e) {}
   }
 
   console.log(`[Vantix-Bridge] 🛡 TEE Sanitized (${detection.detections.length} sensitive tokens redacted seamlessly)`);
+  console.log(`[Vantix-Bridge] 📤 Outbound Prompt sent to ${hostname}: "${sanitizedPromptSnippet.slice(0, 120)}..."`);
   stats.redactedTokens += detection.detections.length;
-
-  let sanitizedPromptSnippet = promptText;
-  if (tokenTable && tokenTable.size > 0) {
-    for (const [placeholder, realVal] of tokenTable.entries()) {
-      sanitizedPromptSnippet = sanitizedPromptSnippet.split(realVal).join(placeholder);
-    }
-  }
 
   // Build clean outgoing headers for upstream
   const outgoingHeaders = parseHeaders(headerPart);
@@ -946,35 +1234,32 @@ function processInterceptedAiRequest(rawBuffer, hostname, port, clientTlsSocket,
         }
       } catch (e) {}
 
-      let totalResponseText = "";
+      let streamBuffer = Buffer.alloc(0);
+      const MAX_CAPTURE = 50000;
+      const responseChunks = [];
+      let totalCaptured = 0;
 
       upstreamRes.on("data", (chunk) => {
-        // Reset timeout on every chunk received
         upstreamReq.setTimeout(120000);
 
         let chunkToSend = chunk;
+
         if (tokenTable && tokenTable.size > 0) {
-          try {
-            // Restore placeholders in chunk
-            let chunkStr = chunk.toString("latin1");
-            let modified = false;
-            for (const [placeholder, realVal] of tokenTable.entries()) {
-              if (chunkStr.includes(placeholder)) {
-                chunkStr = chunkStr.split(placeholder).join(realVal);
-                modified = true;
-              }
-            }
-            if (modified) {
-              chunkToSend = Buffer.from(chunkStr, "latin1");
-            }
-          } catch (e) {}
+          streamBuffer = Buffer.concat([streamBuffer, chunk]);
+          const result = unredactChunkOrStream(streamBuffer, tokenTable);
+          streamBuffer = result.remaining;
+          chunkToSend = result.processed;
+          if (chunkToSend.length === 0) return;
         }
 
-        if (totalResponseText.length < 500) {
-          totalResponseText += chunk.toString("utf8").slice(0, 500 - totalResponseText.length);
+        // Capture response text for dashboard (up to MAX_CAPTURE bytes)
+        if (totalCaptured < MAX_CAPTURE) {
+          const slice = chunkToSend.toString("utf8").slice(0, MAX_CAPTURE - totalCaptured);
+          responseChunks.push(slice);
+          totalCaptured += slice.length;
         }
 
-        // Stream chunk in HTTP chunked transfer format
+        // Forward chunk to client
         try {
           if (!clientTlsSocket.destroyed && clientTlsSocket.writable) {
             const hexLen = chunkToSend.length.toString(16);
@@ -986,53 +1271,46 @@ function processInterceptedAiRequest(rawBuffer, hostname, port, clientTlsSocket,
       });
 
       upstreamRes.on("end", () => {
+        if (streamBuffer.length > 0) {
+          let leftover = streamBuffer;
+          if (tokenTable && tokenTable.size > 0) {
+            let leftoverStr = leftover.toString("utf8");
+            for (const [realVal, placeholder] of tokenTable.entries()) {
+              if (leftoverStr.includes(placeholder)) {
+                leftoverStr = leftoverStr.split(placeholder).join(realVal);
+              }
+            }
+            leftover = Buffer.from(leftoverStr, "utf8");
+          }
+          try {
+            if (!clientTlsSocket.destroyed && clientTlsSocket.writable) {
+              const hexLen = leftover.length.toString(16);
+              clientTlsSocket.write(`${hexLen}\r\n`);
+              clientTlsSocket.write(leftover);
+              clientTlsSocket.write("\r\n");
+            }
+          } catch (e) {}
+        }
+
         try {
           if (!clientTlsSocket.destroyed && clientTlsSocket.writable) {
             clientTlsSocket.write("0\r\n\r\n");
           }
         } catch (e) {}
 
-        // Broadcast to Admin Dashboard via WebSocket (non-blocking)
+        // Broadcast full response to Admin Dashboard via WebSocket (non-blocking)
         setImmediate(() => {
           try {
-            const sessionResult = sessionGraph.updateSessionGraph(identity.user, identity.email, detection);
-
-            ws.broadcastDetection({
-              originalPrompt: promptText.slice(0, 500),
-              sanitizedPrompt: sanitizedPromptSnippet.slice(0, 500),
-              restoredResponse: totalResponseText,
-              riskScore: detection.overallRisk,
-              detections: detection.detections,
-              combinations: detection.combinations,
-              contextScore: detection.contextScore,
-              actionTaken: detection.overallRisk >= 30 ? "silent_redact" : "pass",
-              sessionCoverage: sessionResult.coverageMap,
-              sessionRiskScore: sessionResult.riskScore,
-              promptCount: sessionResult.promptCount,
-              anomalyTriggered: sessionResult.anomalyTriggered,
-              anomalyReport: sessionResult.anomalyReport,
-              user: identity.user,
-              host: identity.host,
-              interceptSource: "network-layer-bridge",
-              timestamp: new Date().toISOString(),
+            const fullResponseText = responseChunks.join("");
+            recordProxyIncident({
+              identity,
+              hostname,
+              promptText,
+              sanitizedPrompt: sanitizedPromptSnippet,
+              restoredResponse: fullResponseText,
+              action: detection.overallRisk >= 30 ? "silent_redact" : "pass",
+              detection,
             });
-
-            fetch("https://vantix-backend-7gcw.onrender.com/api/vantix/chat", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                "X-Vantix-User": identity.user,
-                "X-Vantix-Host": identity.host,
-                "X-Vantix-Source": "network-layer-bridge",
-              },
-              body: JSON.stringify({
-                prompt: promptText.slice(0, 500),
-                userId: identity.user,
-                user: identity.user,
-                host: identity.host,
-                sessionId,
-              }),
-            }).catch(() => {});
           } catch (wsErr) {}
         });
 

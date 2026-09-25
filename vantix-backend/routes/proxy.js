@@ -99,18 +99,26 @@ function recordAndBroadcast({
   req,
 }) {
   const os = require("os");
-  const SERVER_IDENTITIES = ["render", "root", "nobody", "www-data", "node", "ubuntu", "ec2-user"];
+  const SERVER_IDENTITIES = ["render", "nobody", "www-data", "node", "ubuntu", "ec2-user"];
 
-  let fallbackUser = "employee";
+  let fallbackUser = process.env.SUDO_USER || "employee";
   let fallbackHost = os.hostname() || "workstation";
   try {
-    const osUser = process.env.USERNAME || process.env.USER || (os.userInfo && os.userInfo().username) || "";
-    if (osUser && !SERVER_IDENTITIES.includes(osUser.toLowerCase())) fallbackUser = osUser;
+    const osUser = process.env.SUDO_USER || process.env.USERNAME || process.env.USER || (os.userInfo && os.userInfo().username) || "";
+    if (osUser && !SERVER_IDENTITIES.includes(osUser.toLowerCase()) && osUser.toLowerCase() !== "root") {
+      fallbackUser = osUser;
+    } else if (process.env.SUDO_USER) {
+      fallbackUser = process.env.SUDO_USER;
+    }
     const osHost = os.hostname() || "";
     if (osHost && !osHost.startsWith("srv-")) fallbackHost = osHost;
   } catch (e) {}
 
-  const rawUser = (resolvedUser && resolvedUser !== "employee" && !SERVER_IDENTITIES.includes(resolvedUser.toLowerCase()) ? resolvedUser : fallbackUser).trim();
+  let rawUser = resolvedUser;
+  if (!rawUser || rawUser === "employee" || SERVER_IDENTITIES.includes(rawUser.toLowerCase()) || rawUser.toLowerCase() === "root") {
+    rawUser = fallbackUser;
+  }
+  rawUser = rawUser.trim();
   const rawHost = (resolvedHost && resolvedHost !== "browser-endpoint" && !resolvedHost.startsWith("srv-") ? resolvedHost : fallbackHost).trim();
   const userNameFormatted = `${rawUser} (${rawHost})`;
   const actualIp = (typeof endpointIp === "string" && endpointIp && endpointIp !== "127.0.0.1" ? endpointIp.split(",")[0].trim() : null) || extractClientIp(req);
@@ -206,22 +214,26 @@ function decideAction(overallRisk, detections) {
     return "pass";
   }
 
-  // Count distinct credentials
-  const credentialCount = detections.filter((d) => d.category === "CREDENTIAL").length;
+  // Count distinct high-severity credentials / API keys / secrets
+  const credentialDetections = detections.filter(
+    (d) => d.category === "CREDENTIAL" || d.category === "PRIVATE_KEY" || d.category === "SECRET"
+  );
+  const credentialCount = credentialDetections.length;
+
   const isSevereInjection = detections.some(
     (d) => d.category === "PROMPT_INJECTION" && d.isolationRisk >= 95
   );
 
-  // Policy: Hard block ONLY if massive leaked credentials (>3) or severe prompt injection attack
+  // Policy: Hard block ONLY if massive sensitive info dump (>3 credentials / API keys) or severe prompt injection exploit
   if (credentialCount > 3 || isSevereInjection) {
     return "hard_block";
   }
 
-  // Otherwise, silently redact credentials (<=3), PII, financial, ICS registers, network addresses
+  // Otherwise, silently redact credentials (<=3) and normal PII (email, phone, name, IP, etc.)
   if (
-    overallRisk >= 30 ||
+    overallRisk >= 15 ||
     detections.some((d) =>
-      ["CREDENTIAL", "PII", "CRITICAL_PII", "REGISTER_ADDR", "FINANCIAL", "NETWORK_ADDR"].includes(d.category)
+      ["CREDENTIAL", "PII", "CRITICAL_PII", "REGISTER_ADDR", "FINANCIAL", "NETWORK_ADDR", "UNMANAGED_AI_ACCESS"].includes(d.category)
     )
   ) {
     return "silent_redact";
@@ -245,12 +257,16 @@ router.get("/health", (req, res) => {
 
 router.get("/system-identity", (req, res) => {
   const os = require("os");
-  const SERVER_IDENTITIES = ["render", "root", "nobody", "www-data", "node", "ubuntu", "ec2-user"];
-  let user = "employee";
+  const SERVER_IDENTITIES = ["render", "nobody", "www-data", "node", "ubuntu", "ec2-user"];
+  let user = process.env.SUDO_USER || "employee";
   let host = os.hostname() || "workstation";
   try {
-    const osUser = process.env.USERNAME || process.env.USER || (os.userInfo && os.userInfo().username) || "";
-    if (osUser && !SERVER_IDENTITIES.includes(osUser.toLowerCase())) user = osUser;
+    const osUser = process.env.SUDO_USER || process.env.USERNAME || process.env.USER || (os.userInfo && os.userInfo().username) || "";
+    if (osUser && !SERVER_IDENTITIES.includes(osUser.toLowerCase()) && osUser.toLowerCase() !== "root") {
+      user = osUser;
+    } else if (process.env.SUDO_USER) {
+      user = process.env.SUDO_USER;
+    }
     const osHost = os.hostname() || "";
     if (osHost && !osHost.startsWith("srv-")) host = osHost;
   } catch (e) {}
@@ -926,15 +942,14 @@ router.get("/audit-logs", (req, res) => {
 router.get("/flagged-employees", (req, res) => {
   const userMap = new Map();
 
-  const SERVER_IDENTITIES = ["render", "root", "nobody", "www-data", "node", "ubuntu", "ec2-user"];
+  const SERVER_IDENTITIES = ["render", "nobody", "www-data", "node", "ubuntu", "ec2-user"];
   for (const log of _inMemoryAuditLogs) {
     if (SERVER_IDENTITIES.includes((log.userId || "").toLowerCase()) || (log.endpointHost || "").startsWith("srv-")) {
       continue;
     }
 
     // Only track and flag employees with genuine data exfiltration attempts!
-    // Clean, normal, or sanitized prompts (riskScore < 35 and actionTaken !== 'hard_block') MUST NOT flag employees!
-    const isActualLeak = (log.riskScore >= 35) || (log.actionTaken === "hard_block");
+    const isActualLeak = (log.riskScore >= 30) || (log.actionTaken === "hard_block") || (log.actionTaken === "silent_redact") || (Array.isArray(log.detections) && log.detections.length > 0);
     if (!isActualLeak) {
       continue;
     }
@@ -1243,4 +1258,7 @@ router.post("/employee/:userId/action", (req, res) => {
 
 
 module.exports = router;
+module.exports.recordAndBroadcast = recordAndBroadcast;
+module.exports._inMemoryAuditLogs = _inMemoryAuditLogs;
+module.exports.persistAuditLogs = persistAuditLogs;
 

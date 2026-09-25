@@ -329,8 +329,9 @@ const LOCAL_SENSITIVE_PATTERNS = [
   { regex: /\bAIza[A-Za-z0-9_\-]{35}\b/g, type: "GOOGLE_API_KEY", isSecret: true },
 
   // 3. Phone Numbers
+  { regex: /(?:(?:my|the|our|user)\s+)?phone\s*(?:number|no|#)?\s*(?:is|[:=]|\s+)\s*['"]?(\+?\d[\d\s\-().]{6,15}\d)['"]?/gi, type: "PHONE_NUMBER" },
+  { regex: /(?<!\d)(?:\+91[\s-]?)?[2-9]\d{9}(?!\d)/g, type: "PHONE_NUMBER" },
   { regex: /(?:\+?\d{1,3}[\s-]?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}\b/g, type: "PHONE_NUMBER" },
-  { regex: /(?<!\d)(?:\+91[\s-]?)?[6-9]\d{9}(?!\d)/g, type: "PHONE_NUMBER" },
 
   // 4. Email Addresses
   { regex: /\b[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}\b/gi, type: "EMAIL_ADDRESS" },
@@ -441,7 +442,7 @@ async function handlePromptSubmission(e) {
           console.warn("[Vantix Guard] Engine not directly reachable, engaging local Zero-Leak sanitizer...");
           const local = sanitizeLocally(rawPrompt);
           if (local.secretsCount > 3) {
-            blockInput(inputEl, "Outbound transmission blocked due to massive credential exposure.", 95, local.categories);
+            blockInput(inputEl, `Outbound transmission halted: Sensitive credential dump detected (${local.secretsCount} API keys/secrets > 3).`, 95, local.categories);
             return;
           }
           if (local.redactedCount > 0) {
@@ -484,7 +485,7 @@ async function handlePromptSubmission(e) {
           }
         }
 
-        // ── Case 2: Silent Redaction (<=3 credentials / PII) ───────────────
+        // ── Case 2: Silent Redaction (Credentials <=3, PII, Emails, Phone Numbers) ─────
         if (isRedacted && res.sanitizedPrompt && res.sanitizedPrompt !== rawPrompt) {
           console.log("[Vantix Guard] ⚡ SILENT REDACTION applied:", res.sanitizedPrompt);
           unblockInput(inputEl);
@@ -507,7 +508,7 @@ async function handlePromptSubmission(e) {
     console.error("[Vantix Guard] Error during prompt interception, falling back to local sanitizer:", err);
     const local = sanitizeLocally(rawPrompt);
     if (local.secretsCount > 3) {
-      blockInput(inputEl, "Outbound transmission blocked due to massive credential exposure.", 95, local.categories);
+      blockInput(inputEl, `Outbound transmission halted: Sensitive credential dump detected (${local.secretsCount} API keys/secrets > 3).`, 95, local.categories);
       return;
     }
     if (local.redactedCount > 0) {
@@ -625,6 +626,58 @@ function setupListeners() {
       handlePromptSubmission(e);
     },
     true
+  );
+
+  // 4. Intercept Paste events for Instant Visible Redaction into Placeholders
+  document.addEventListener(
+    "paste",
+    (e) => {
+      const inputEl = findPromptInput();
+      if (!inputEl) return;
+      const isTargetInput = e.target === inputEl || inputEl.contains(e.target) || document.activeElement === inputEl;
+      if (!isTargetInput) return;
+
+      const clipboardText = e.clipboardData ? e.clipboardData.getData("text") : "";
+      if (!clipboardText || clipboardText.trim().length < 3) return;
+
+      const local = sanitizeLocally(clipboardText);
+
+      // Hard block on massive credential dump (>3 secrets)
+      if (local.secretsCount > 3) {
+        e.preventDefault();
+        e.stopPropagation();
+        blockInput(
+          inputEl,
+          `Pasted content blocked: Sensitive credential dump detected (${local.secretsCount} API keys/secrets > 3).`,
+          95,
+          local.categories
+        );
+        return;
+      }
+
+      // If sensitive PII / credentials found, visibly transform pasted text into placeholders!
+      if (local.redactedCount > 0) {
+        e.preventDefault();
+        e.stopPropagation();
+        console.log("[Vantix Guard] ⚡ Instant Paste Redaction applied:", local.sanitized);
+
+        registerTokenMappings(local.tokenMapping);
+        unblockInput(inputEl);
+
+        // Visibly insert sanitized text into input box so user sees placeholders
+        try {
+          const success = document.execCommand("insertText", false, local.sanitized);
+          if (!success) {
+            setInputText(inputEl, local.sanitized);
+          }
+        } catch (err) {
+          setInputText(inputEl, local.sanitized);
+        }
+
+        showRedactPill(local.redactedCount);
+      }
+    },
+    true // Capture phase: execute BEFORE web app's default paste handler
   );
 
   injectStatusBadge();

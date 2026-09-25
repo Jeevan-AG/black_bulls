@@ -76,11 +76,27 @@ const renderAiPlatformBadge = (platform, count = null) => {
   let displayName = platform || "External AI";
   let domainName = platform || "unknown";
 
-  if (p.includes("chatgpt")) {
+  if (p.includes("kiro") || p.includes("amazonaws.com") || p.includes("amazon q") || p.includes("codewhisperer")) {
+    badgeClass = "kiro";
+    displayName = "Kiro (Amazon Q)";
+    domainName = "q.us-east-1.amazonaws.com";
+  } else if (p.includes("cursor")) {
+    badgeClass = "cursor";
+    displayName = "Cursor AI";
+    domainName = "cursor.com";
+  } else if (p.includes("windsurf") || p.includes("codeium")) {
+    badgeClass = "windsurf";
+    displayName = "Windsurf AI";
+    domainName = "codeium.com";
+  } else if (p.includes("github") || p.includes("copilot")) {
+    badgeClass = "copilot";
+    displayName = "GitHub Copilot";
+    domainName = "githubcopilot.com";
+  } else if (p.includes("chatgpt")) {
     badgeClass = "chatgpt";
     displayName = "ChatGPT";
     domainName = "chatgpt.com";
-  } else if (p.includes("claude")) {
+  } else if (p.includes("claude") || p.includes("anthropic")) {
     badgeClass = "claude";
     displayName = "Claude";
     domainName = "claude.ai";
@@ -88,12 +104,12 @@ const renderAiPlatformBadge = (platform, count = null) => {
     badgeClass = "gemini";
     displayName = "Gemini";
     domainName = "gemini.google.com";
-  } else if (p.includes("api.openai")) {
+  } else if (p.includes("api.openai") || p.includes("openai api") || p.includes("groq")) {
     badgeClass = "api";
-    displayName = "OpenAI API";
+    displayName = "AI API Gateway";
     domainName = "api.openai.com";
   } else if (p.includes("deepseek")) {
-    badgeClass = "chatgpt";
+    badgeClass = "deepseek";
     displayName = "DeepSeek";
     domainName = "deepseek.com";
   }
@@ -131,6 +147,98 @@ const formatIncidentTimestamp = (ts) => {
   }
 
   return { full, relative };
+};
+
+const cleanPromptText = (text) => {
+  if (!text || typeof text !== "string") return "";
+  let clean = text;
+  const tags = ["<EnvironmentContext>", "<CurrentFile>", "<WorkspaceContext>", "<EditorContext>", "<ProjectContext>"];
+  for (const tag of tags) {
+    const idx = clean.indexOf(tag);
+    if (idx !== -1) {
+      clean = clean.slice(0, idx);
+    }
+  }
+  return clean.trim() || text.trim();
+};
+
+const cleanAiResponseText = (raw) => {
+  if (!raw || typeof raw !== "string") return "";
+
+  // Try 1: SSE "data: {...}" lines (OpenAI / Groq streaming format)
+  const sseChunks = [];
+  const sseRegex = /^data:\s*(\{.+\})\s*$/gm;
+  let sseMatch;
+  while ((sseMatch = sseRegex.exec(raw)) !== null) {
+    try {
+      const obj = JSON.parse(sseMatch[1]);
+      const delta = obj.choices?.[0]?.delta?.content || obj.choices?.[0]?.message?.content || "";
+      if (delta) sseChunks.push(delta);
+    } catch (e) {}
+  }
+  if (sseChunks.length > 0) return sseChunks.join("").trim();
+
+  // Try 2: Inline JSON objects with content/text fields (EventStream, Kiro, etc.)
+  let extracted = "";
+  let idx = 0;
+  while (idx < raw.length) {
+    const startContent = raw.indexOf('{"content"', idx);
+    const startText = raw.indexOf('{"text"', idx);
+    let start = -1;
+    if (startContent !== -1 && startText !== -1) start = Math.min(startContent, startText);
+    else if (startContent !== -1) start = startContent;
+    else if (startText !== -1) start = startText;
+
+    if (start === -1) break;
+    idx = start;
+
+    let depth = 0;
+    let end = -1;
+    for (let i = idx; i < raw.length; i++) {
+      if (raw[i] === "{") depth++;
+      else if (raw[i] === "}") {
+        depth--;
+        if (depth === 0) { end = i; break; }
+      }
+    }
+
+    if (end !== -1) {
+      const jsonStr = raw.slice(idx, end + 1);
+      try {
+        const parsed = JSON.parse(jsonStr);
+        if (parsed.content) extracted += parsed.content;
+        else if (parsed.text) extracted += parsed.text;
+      } catch (e) {
+        const m = jsonStr.match(/"content":\s*"((?:[^"\\]|\\.)*)"/);
+        if (m) {
+          try { extracted += JSON.parse(`"${m[1]}"`); } catch(e2) { extracted += m[1]; }
+        }
+      }
+      idx = end + 1;
+    } else {
+      idx += 10;
+    }
+  }
+  if (extracted.trim().length > 0) return extracted.trim();
+
+  // Try 3: Standard completion JSON wrapper
+  try {
+    const obj = JSON.parse(raw);
+    const msg = obj.choices?.[0]?.message?.content || obj.response || obj.text || obj.content || "";
+    if (msg) return msg.trim();
+  } catch (e) {}
+
+  // Try 4: Strip binary EventStream protocol artifacts
+  let clean = raw
+    .replace(/[\x00-\x1F\x7F-\x9F]/g, " ")
+    .replace(/:event-type\s*\w+/gi, "")
+    .replace(/:content-type\s*[\w\/]+/gi, "")
+    .replace(/:message-type\s*\w+/gi, "")
+    .replace(/assistantResponseEvent/gi, "")
+    .replace(/\{"modelId":[^}]+\}/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  return clean || raw;
 };
 
 export default function Dashboard() {
@@ -189,7 +297,7 @@ export default function Dashboard() {
                   endpointHost: log.endpointHost || log.host || `${log.userId}-workstation`,
                   endpointIp: log.endpointIp || "127.0.0.1",
                   aiPlatform: log.aiPlatform || "chatgpt.com",
-                  actionTaken: log.actionTaken || (log.riskScore >= 70 ? "hard_block" : log.riskScore >= 30 ? "silent_redact" : "pass"),
+                  actionTaken: log.actionTaken || (log.riskScore >= 90 ? "hard_block" : log.riskScore >= 20 ? "silent_redact" : "pass"),
                   riskScore: log.riskScore !== undefined ? log.riskScore : 0,
                   categoriesRedacted: log.categoriesRedacted || ["CONFIDENTIAL_DATA"],
                   detections: log.detections || [],
@@ -240,7 +348,7 @@ export default function Dashboard() {
                 endpointHost: packet.host || "workstation",
                 endpointIp: packet.endpointIp || "127.0.0.1",
                 aiPlatform: packet.aiPlatform || "chatgpt.com",
-                actionTaken: packet.actionTaken || (packet.riskScore >= 70 ? "hard_block" : packet.riskScore >= 30 ? "silent_redact" : "pass"),
+                actionTaken: packet.actionTaken || (packet.riskScore >= 90 ? "hard_block" : packet.riskScore >= 20 ? "silent_redact" : "pass"),
                 riskScore: packet.riskScore !== undefined ? packet.riskScore : 0,
                 categoriesRedacted: packet.detections ? Array.from(new Set(packet.detections.map((d) => d.category))) : (packet.categoriesRedacted || ["CONFIDENTIAL_DATA"]),
                 detections: packet.detections || [],
@@ -253,12 +361,17 @@ export default function Dashboard() {
 
               setIncidents((prev) => [incomingIncident, ...prev]);
 
-              // Show exfiltration alert banner if sensitive confidential data (credentials, PII, industrial) was detected
-              const isSensitive = incomingIncident.riskScore >= 30 || incomingIncident.actionTaken === "hard_block" || incomingIncident.actionTaken === "silent_redact" || (incomingIncident.detections && incomingIncident.detections.length > 0);
+              // Show clear toast notification for security events
+              const isSensitive = incomingIncident.riskScore >= 20 || incomingIncident.actionTaken === "hard_block" || incomingIncident.actionTaken === "silent_redact" || (incomingIncident.detections && incomingIncident.detections.length > 0);
               if (isSensitive) {
-                showToast(`🚨 Sensitive Data Intercepted from ${incomingIncident.userName} (${incomingIncident.actionTaken === "hard_block" ? "Hard Blocked" : "Redacted"})`);
+                if (incomingIncident.actionTaken === "hard_block") {
+                  showToast(`🚫 CRITICAL BLOCK: Outbound transmission halted from ${incomingIncident.userName} (${incomingIncident.aiPlatform || "AI"})`);
+                } else {
+                  const tokenCount = incomingIncident.detections?.length || 1;
+                  showToast(`🛡 SILENT REDACTION: ${tokenCount} sensitive secret${tokenCount > 1 ? "s" : ""} redacted seamlessly for ${incomingIncident.userName} (${incomingIncident.aiPlatform || "AI"})`);
+                }
               } else {
-                showToast(`✅ Prompt from ${incomingIncident.userName} passed inspection safely (Clean/Sanitized)`);
+                showToast(`✅ Clean prompt from ${incomingIncident.userName} passed inspection`);
               }
             } else if (packet.type === "reset") {
               setIncidents([]);
@@ -299,7 +412,7 @@ export default function Dashboard() {
 
     incidents.forEach((inc) => {
       // Track and flag if the employee attempted to leak sensitive data (credentials, PII, industrial)
-      const isActualLeak = (inc.riskScore >= 30) || (inc.actionTaken === "hard_block") || (inc.actionTaken === "silent_redact") || (Array.isArray(inc.detections) && inc.detections.length > 0);
+      const isActualLeak = (inc.riskScore >= 20) || (inc.actionTaken === "hard_block") || (inc.actionTaken === "silent_redact") || (Array.isArray(inc.detections) && inc.detections.length > 0);
       if (!isActualLeak) {
         return; // Harmless clean prompt: skip
       }
@@ -1291,10 +1404,14 @@ export default function Dashboard() {
                       }}
                     >
                       <option value="ALL">All Destinations</option>
+                      <option value="kiro">Kiro / Amazon Q (q.us-east-1.amazonaws.com)</option>
+                      <option value="cursor">Cursor AI (cursor.com)</option>
                       <option value="chatgpt">ChatGPT (chatgpt.com)</option>
                       <option value="claude">Claude (claude.ai)</option>
-                      <option value="openai">OpenAI API (api.openai.com)</option>
                       <option value="gemini">Gemini (gemini.google.com)</option>
+                      <option value="copilot">GitHub Copilot</option>
+                      <option value="openai">OpenAI API (api.openai.com)</option>
+                      <option value="deepseek">DeepSeek (deepseek.com)</option>
                     </select>
                   </div>
                 </div>
@@ -1382,8 +1499,8 @@ export default function Dashboard() {
                                 <span>1. Pre-Firewall Outbound Prompt (What Employee Tried to Send)</span>
                                 <span style={{ color: "#fca5a5" }}>PRE-FLIGHT INTERCEPTION</span>
                               </div>
-                              <div className="diff-content-box">
-                                {incident.originalPrompt}
+                              <div className="diff-content-box" style={{ whiteSpace: "pre-wrap", lineHeight: 1.6 }}>
+                                {cleanPromptText(incident.originalPrompt)}
                               </div>
                             </div>
 
@@ -1395,8 +1512,8 @@ export default function Dashboard() {
                                   {isBlocked ? "HALTED BEFORE REACHING AI" : "SANITIZED PAYLOAD DELIVERED"}
                                 </span>
                               </div>
-                              <div className="diff-content-box" style={{ color: isBlocked ? "#fca5a5" : "#93c5fd" }}>
-                                {incident.sanitizedPrompt}
+                              <div className="diff-content-box" style={{ color: isBlocked ? "#fca5a5" : "#93c5fd", whiteSpace: "pre-wrap", lineHeight: 1.6 }}>
+                                {cleanPromptText(incident.sanitizedPrompt)}
                               </div>
                             </div>
                           </div>
@@ -1407,8 +1524,8 @@ export default function Dashboard() {
                               <div style={{ fontSize: 11, fontWeight: 700, color: "#34d399", textTransform: "uppercase", marginBottom: 6 }}>
                                 3. AI Completion Delivered to Employee
                               </div>
-                              <div style={{ fontSize: 13, color: "#e5e7eb", lineHeight: 1.5, fontFamily: "monospace" }}>
-                                {incident.restoredResponse}
+                              <div style={{ fontSize: 13, color: "#e5e7eb", lineHeight: 1.6, whiteSpace: "pre-wrap", fontFamily: "inherit" }}>
+                                {cleanAiResponseText(incident.restoredResponse)}
                               </div>
                             </div>
                           )}

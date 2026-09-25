@@ -223,8 +223,9 @@ const INDUSTRIAL_PATTERNS = {
   },
   PHONE: {
     patterns: [
+      /(?:(?:my|the|our|user)\s+)?phone\s*(?:number|no|#)?\s*(?:is|[:=]|\s+)\s*['"]?(\+?\d[\d\s\-().]{6,15}\d)['"]?/gi,
+      /(?<!\d)(?:\+91[\s-]?)?[2-9]\d{9}(?!\d)/g,
       /(?:\+?\d{1,3}[\s-]?)?\(?\d{3}\)?[\s.-]\d{3}[\s.-]\d{4}\b/g,
-      /(?<!\d)(?:\+91[\s-]?)?[6-9]\d{9}(?!\d)/g,
       /(?:\+\d{1,3}[\s-]?)?\d{2,4}[\s.-]\d{3,4}[\s.-]\d{3,4}\b/g,
     ],
     category: "PII",
@@ -427,9 +428,9 @@ function analyzePrompt(text) {
         let valStart = match.index;
         let valEnd = match.index + matchedStr.length;
 
-        // If pattern is a credential assignment with capture group, extract the actual secret token
-        if (config.category === "CREDENTIAL" && match[1] && match[1].length >= 4) {
-          const captured = match[1];
+        // If pattern has a capture group (e.g. credential, phone, name), extract the actual secret/PII value
+        if (match[1] && match[1].trim().length >= 3) {
+          const captured = match[1].trim();
           const offsetInMatch = match[0].indexOf(captured);
           if (offsetInMatch !== -1) {
             value = captured;
