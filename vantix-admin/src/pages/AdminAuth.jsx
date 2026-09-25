@@ -3,9 +3,13 @@ import { useNavigate } from "react-router-dom";
 import api from "../utils/api";
 import { Shield, Mail, Lock, Eye, EyeOff, AlertCircle, Sparkles, ArrowRight, Activity, Terminal } from "lucide-react";
 import CyberShieldScene from "../components/CyberShieldScene";
+import CyberLoadingScreen from "../components/common/CyberLoadingScreen";
+import vantixIcon from "../assets/vantix-icon.png";
+import vantixLogo from "../assets/vantix-logo.png";
 import "./AdminAuth.css";
 
 const AdminAuth = () => {
+  const [loading, setLoading] = useState(true);
   const [email, setEmail] = useState("admin@vantix.corp");
   const [password, setPassword] = useState("Admin@123456");
   const [error, setError] = useState("");
@@ -70,6 +74,10 @@ const AdminAuth = () => {
     navigate("/");
   };
 
+  if (loading) {
+    return <CyberLoadingScreen onComplete={() => setLoading(false)} duration={2000} />;
+  }
+
   return (
     <div className="cyber-auth-viewport">
       {/* Dynamic Cyber Grid & Radial Ambient Core Glow */}
@@ -80,7 +88,7 @@ const AdminAuth = () => {
       <header className="cyber-auth-header">
         <div className="cyber-auth-logo" onClick={() => navigate("/")}>
           <div className="cyber-auth-logo-icon">
-            <Shield size={20} />
+            <img src={vantixIcon} alt="Vantix" className="cyber-auth-logo-img" />
           </div>
           <div className="brand-text-col">
             <span className="cyber-auth-brand-name">VANTIX</span>

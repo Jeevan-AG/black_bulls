@@ -73,23 +73,36 @@
 }
 
 .cyber-auth-logo-icon {
-  width: 42px;
-  height: 42px;
-  border-radius: 10px;
-  background: linear-gradient(135deg, rgba(255, 30, 56, 0.25) 0%, rgba(255, 30, 56, 0.05) 100%);
-  border: 1px solid rgba(255, 30, 56, 0.4);
-  color: #ff1e38;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: rgba(255, 30, 56, 0.08);
+  border: 1px solid rgba(255, 30, 56, 0.35);
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 0 20px rgba(255, 30, 56, 0.35);
+  box-shadow: 0 0 20px rgba(255, 30, 56, 0.25);
   transition: all 0.25s ease;
+  padding: 4px;
+  overflow: hidden;
+}
+
+.cyber-auth-logo-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 0 6px rgba(255, 30, 56, 0.6));
+  transition: transform 0.25s ease;
 }
 
 .cyber-auth-logo:hover .cyber-auth-logo-icon {
   border-color: #ff1e38;
   box-shadow: 0 0 28px rgba(255, 30, 56, 0.6);
-  transform: scale(1.04);
+  transform: scale(1.05);
+}
+
+.cyber-auth-logo:hover .cyber-auth-logo-img {
+  transform: scale(1.08);
 }
 
 .brand-text-col {

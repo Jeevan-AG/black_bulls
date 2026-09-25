@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowRight, Shield, Zap, Lock, Terminal, Sparkles, Cpu, Globe } from 'lucide-react';
+import vantixIcon from '../../assets/vantix-icon.png';
 
 const LaunchScreen = ({ onComplete }) => {
   // 'intro' | 'buffering' | 'done'
@@ -238,18 +239,21 @@ const LaunchScreen = ({ onComplete }) => {
                     width: 90,
                     height: 90,
                     borderRadius: 24,
-                    background: "linear-gradient(135deg, #ff0055 0%, #e11d48 100%)",
+                    background: "rgba(13, 14, 18, 0.9)",
+                    border: "1px solid rgba(225, 29, 72, 0.4)",
                     color: "#ffffff",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    fontSize: 42,
-                    fontWeight: 800,
-                    letterSpacing: "-0.03em",
+                    padding: 12,
                     boxShadow: "0 16px 45px rgba(225, 29, 72, 0.55)",
                   }}
                 >
-                  V
+                  <img
+                    src={vantixIcon}
+                    alt="Vantix"
+                    style={{ width: "100%", height: "100%", objectFit: "contain", filter: "drop-shadow(0 0 10px rgba(255, 30, 56, 0.8))" }}
+                  />
                 </motion.div>
               </div>
 

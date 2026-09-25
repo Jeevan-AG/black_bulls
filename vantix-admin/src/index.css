@@ -118,17 +118,25 @@ body {
 }
 
 .orion-brand-icon {
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
-  background: linear-gradient(135deg, #ff0055 0%, #e11d48 100%);
-  color: white;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  background: rgba(225, 29, 72, 0.12);
+  border: 1px solid rgba(225, 29, 72, 0.3);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-weight: 800;
-  font-size: 13px;
-  box-shadow: 0 4px 14px rgba(225, 29, 72, 0.45);
+  padding: 3px;
+  box-shadow: 0 4px 14px rgba(225, 29, 72, 0.35);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.orion-brand-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 0 5px rgba(225, 29, 72, 0.6));
 }
 
 .orion-actions {
@@ -429,4 +437,182 @@ body {
   background: #e11d48;
   box-shadow: 0 0 10px #ff0055;
   animation: pulseGlow 1.8s infinite ease-in-out;
+}
+
+/* ==========================================================================
+   Drawer Footer Tactical Actions
+   ========================================================================== */
+.orion-drawer-footer {
+  padding: 18px 20px;
+  border-top: 1px solid var(--apple-border);
+  background: rgba(8, 9, 12, 0.7);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: auto;
+}
+
+.orion-drawer-footer-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--apple-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+.orion-drawer-footer-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.drawer-btn {
+  width: 100%;
+  justify-content: center;
+  padding: 10px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 10px;
+}
+
+/* ==========================================================================
+   Square KPI Metric Cards & Info Tooltip
+   ========================================================================== */
+.kpi-square-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 18px;
+}
+
+@media (max-width: 1024px) {
+  .kpi-square-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 540px) {
+  .kpi-square-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.kpi-square-card {
+  aspect-ratio: 1 / 1;
+  min-height: 190px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 22px;
+  position: relative;
+  overflow: visible;
+  border-radius: 20px;
+  user-select: none;
+}
+
+.kpi-square-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  position: relative;
+  z-index: 5;
+}
+
+.kpi-square-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--apple-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.kpi-info-trigger {
+  position: relative;
+  color: var(--apple-text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  transition: all 0.2s ease;
+}
+
+.kpi-info-trigger:hover {
+  color: #ffffff;
+  background: rgba(255, 0, 85, 0.22);
+  border-color: rgba(255, 0, 85, 0.45);
+  box-shadow: 0 0 12px rgba(255, 0, 85, 0.35);
+  transform: scale(1.06);
+}
+
+.kpi-square-tooltip {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: -6px;
+  width: 220px;
+  padding: 12px 14px;
+  background: rgba(13, 14, 18, 0.97);
+  backdrop-filter: blur(28px);
+  -webkit-backdrop-filter: blur(28px);
+  border: 1px solid var(--apple-border-strong);
+  border-radius: 12px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.85);
+  z-index: 999;
+  pointer-events: none;
+  text-align: left;
+}
+
+.kpi-tooltip-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: #ffffff;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 4px;
+}
+
+.kpi-tooltip-desc {
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--apple-text-sub);
+}
+
+.kpi-square-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+}
+
+.kpi-square-icon-box {
+  width: 52px;
+  height: 52px;
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s ease;
+}
+
+.kpi-square-card:hover .kpi-square-icon-box {
+  transform: scale(1.1);
+}
+
+.kpi-square-bottom {
+  text-align: center;
+}
+
+.kpi-square-value {
+  font-size: 38px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  color: #ffffff;
+  font-feature-settings: "tnum";
 }

@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Menu, X, Shield, ShieldAlert, Sliders, Users, Settings, LogOut } from 'lucide-react';
+import { Menu, X, Shield, ShieldAlert, Sliders, Users, Settings, LogOut, Play, Download } from 'lucide-react';
+import vantixIcon from '../../assets/vantix-icon.png';
 
 const AppShell = ({ children, onLogout }) => {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -27,12 +28,19 @@ const AppShell = ({ children, onLogout }) => {
             </button>
 
             <div className="orion-brand">
-              <div className="orion-brand-icon">V</div>
+              <div className="orion-brand-icon">
+                <img src={vantixIcon} alt="Vantix" />
+              </div>
               <span>VANTIX</span>
             </div>
           </div>
 
-          <div className="orion-actions">
+          <div className="orion-actions" style={{ display: "flex", alignItems: "center", gap: 14 }}>
+            <span
+              className="live-pulse-dot"
+              style={{ background: "#10b981", boxShadow: "0 0 10px #10b981" }}
+              title="System Connected"
+            />
             <button className="apple-btn" onClick={onLogout} style={{ padding: "6px 14px" }}>
               <LogOut size={13} color="#f43f5e" />
               <span style={{ fontSize: 12, fontWeight: 600 }}>Sign Out</span>
@@ -61,7 +69,9 @@ const AppShell = ({ children, onLogout }) => {
               >
                 <div className="orion-drawer-header">
                   <div className="orion-brand">
-                    <div className="orion-brand-icon">V</div>
+                    <div className="orion-brand-icon">
+                      <img src={vantixIcon} alt="Vantix" />
+                    </div>
                     <span>VANTIX</span>
                   </div>
                   <button className="orion-drawer-close" onClick={() => setMenuOpen(false)}>
@@ -116,6 +126,33 @@ const AppShell = ({ children, onLogout }) => {
                     <span>Settings</span>
                   </NavLink>
                 </nav>
+
+                {/* Bottom of Hamburger Menu: Tactical Actions */}
+                <div className="orion-drawer-footer">
+                  <div className="orion-drawer-footer-label">TACTICAL OPERATIONS</div>
+                  <div className="orion-drawer-footer-actions">
+                    <button
+                      className="apple-btn drawer-btn"
+                      onClick={() => {
+                        setMenuOpen(false);
+                        window.dispatchEvent(new CustomEvent('vantix:open-simulate'));
+                      }}
+                    >
+                      <Play size={13} color="#ff0055" />
+                      <span>Simulate Test</span>
+                    </button>
+                    <button
+                      className="apple-btn primary drawer-btn"
+                      onClick={() => {
+                        setMenuOpen(false);
+                        window.dispatchEvent(new CustomEvent('vantix:export-audit'));
+                      }}
+                    >
+                      <Download size={13} />
+                      <span>Export Audit</span>
+                    </button>
+                  </div>
+                </div>
               </motion.aside>
             </>
           )}

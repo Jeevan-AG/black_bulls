@@ -14,6 +14,7 @@ import {
   Pie,
   Cell,
   Tooltip,
+  Legend,
   AreaChart,
   Area,
   XAxis,
@@ -38,7 +39,18 @@ const getWsUrl = () => {
   return CLOUD_WS_URL;
 };
 
-const PIE_COLORS = ["#ff0055", "#e11d48", "#f43f5e", "#9f1239", "#f59e0b", "#fb7185"];
+const PIE_COLORS = [
+  "#3b82f6", // Blue
+  "#10b981", // Emerald
+  "#f59e0b", // Amber
+  "#8b5cf6", // Purple
+  "#06b6d4", // Cyan
+  "#ec4899", // Pink
+  "#f97316", // Orange
+  "#6366f1", // Indigo
+  "#14b8a6", // Teal
+  "#e11d48", // Rose Red
+];
 
 export default function ThreatTracking() {
   const [incidents, setIncidents] = useState([]);
@@ -423,7 +435,7 @@ export default function ThreatTracking() {
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(380px, 1fr))", gap: 20 }}>
             <div className="apple-card">
               <div style={{ fontSize: 14, fontWeight: 600, color: "#ffffff", marginBottom: 16 }}>Risk Progression Timeline</div>
-              <div style={{ height: 180, width: "100%" }}>
+              <div style={{ height: 210, width: "100%" }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={riskTimelineData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                     <defs>
@@ -444,17 +456,51 @@ export default function ThreatTracking() {
 
             <div className="apple-card">
               <div style={{ fontSize: 14, fontWeight: 600, color: "#ffffff", marginBottom: 16 }}>Targeted Confidential Categories</div>
-              <div style={{ height: 180, width: "100%" }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie data={categoryChartData} dataKey="count" nameKey="name" cx="50%" cy="50%" innerRadius={45} outerRadius={75} paddingAngle={4}>
-                      {categoryChartData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip className="apple-tooltip" />
-                  </PieChart>
-                </ResponsiveContainer>
+              <div style={{ height: 210, width: "100%" }}>
+                {categoryChartData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
+                      <Pie
+                        data={categoryChartData}
+                        dataKey="count"
+                        nameKey="name"
+                        cx="50%"
+                        cy="45%"
+                        outerRadius={65}
+                        stroke="#0d0e12"
+                        strokeWidth={1.5}
+                        label={({ percent }) => (percent > 0.05 ? `${(percent * 100).toFixed(0)}%` : "")}
+                        labelLine={false}
+                      >
+                        {categoryChartData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        contentStyle={{
+                          background: "rgba(13, 14, 18, 0.95)",
+                          border: "1px solid var(--apple-border-strong)",
+                          borderRadius: "10px",
+                          color: "#ffffff",
+                          fontSize: "12px",
+                          boxShadow: "0 10px 30px rgba(0,0,0,0.7)",
+                        }}
+                        formatter={(value, name) => [`${value} detections`, name]}
+                      />
+                      <Legend
+                        verticalAlign="bottom"
+                        align="center"
+                        iconType="circle"
+                        iconSize={8}
+                        wrapperStyle={{ fontSize: 11, color: "#a1a1aa", paddingTop: 4 }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "var(--apple-text-muted)", fontSize: 12 }}>
+                    No confidential categories targeted
+                  </div>
+                )}
               </div>
             </div>
           </div>

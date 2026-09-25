@@ -11,6 +11,7 @@ import {
   Database,
   Terminal,
   Zap,
+  Info,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -18,6 +19,7 @@ import {
   Pie,
   Cell,
   Tooltip,
+  Legend,
   BarChart,
   Bar,
   XAxis,
@@ -42,7 +44,85 @@ const getWsUrl = () => {
   return CLOUD_WS_URL;
 };
 
-const PIE_COLORS = ["#ff0055", "#e11d48", "#f43f5e", "#9f1239", "#f59e0b", "#fb7185"];
+const PIE_COLORS = [
+  "#3b82f6", // Blue
+  "#10b981", // Emerald
+  "#f59e0b", // Amber
+  "#8b5cf6", // Purple
+  "#06b6d4", // Cyan
+  "#ec4899", // Pink
+  "#f97316", // Orange
+  "#6366f1", // Indigo
+  "#14b8a6", // Teal
+  "#e11d48", // Rose Red
+];
+
+function KpiSquareStatCard({ label, value, icon, color, tooltip, borderTopColor, bgGradient }) {
+  const [showTooltip, setShowTooltip] = useState(false);
+  return (
+    <motion.div
+      className="apple-card kpi-square-card"
+      whileHover={{ y: -4, borderColor: color }}
+      style={{
+        background: bgGradient,
+        borderTop: `2px solid ${borderTopColor}`,
+      }}
+    >
+      <div className="kpi-square-top">
+        <span className="kpi-square-label">{label}</span>
+        <div
+          className="kpi-info-trigger"
+          onMouseEnter={() => setShowTooltip(true)}
+          onMouseLeave={() => setShowTooltip(false)}
+          onClick={() => setShowTooltip(!showTooltip)}
+          tabIndex={0}
+          aria-label={`${label} Information`}
+        >
+          <Info size={13} />
+          <AnimatePresence>
+            {showTooltip && (
+              <motion.div
+                className="kpi-square-tooltip"
+                initial={{ opacity: 0, y: 6, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 6, scale: 0.95 }}
+                transition={{ duration: 0.15 }}
+              >
+                <div className="kpi-tooltip-title">{label}</div>
+                <div className="kpi-tooltip-desc">{tooltip}</div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      </div>
+
+      <div className="kpi-square-center">
+        <div
+          className="kpi-square-icon-box"
+          style={{
+            borderColor: `${color}45`,
+            background: `${color}18`,
+            color: color,
+            boxShadow: `0 8px 24px ${color}25`,
+          }}
+        >
+          {icon}
+        </div>
+      </div>
+
+      <div className="kpi-square-bottom">
+        <div
+          className="kpi-square-value"
+          style={{
+            color: color === "#10b981" ? "#10b981" : color === "#ff0055" || color === "#e11d48" || color === "#f43f5e" ? color : "#ffffff"
+          }}
+        >
+          {value}
+        </div>
+      </div>
+    </motion.div>
+  );
+}
 
 export default function Dashboard() {
   const [incidents, setIncidents] = useState([]);
@@ -148,11 +228,20 @@ export default function Dashboard() {
 
     connect();
     const interval = setInterval(fetchLiveData, 10000);
+
+    const handleOpenSim = () => setShowSimModal(true);
+    const handleExport = () => handleExportAudit();
+
+    window.addEventListener('vantix:open-simulate', handleOpenSim);
+    window.addEventListener('vantix:export-audit', handleExport);
+
     return () => {
       clearInterval(interval);
       if (wsRef.current) wsRef.current.close();
+      window.removeEventListener('vantix:open-simulate', handleOpenSim);
+      window.removeEventListener('vantix:export-audit', handleExport);
     };
-  }, []);
+  }, [incidents]);
 
   const totalIntercepts = incidents.length;
   const totalBlocked = incidents.filter((i) => i.actionTaken === "hard_block").length;
@@ -264,146 +353,53 @@ export default function Dashboard() {
       </AnimatePresence>
 
       {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 16 }}>
-        <div>
-          <h1 style={{ fontSize: 28, fontWeight: 700, color: "#ffffff", margin: 0, letterSpacing: "-0.02em" }}>
-            Operation Centre
-          </h1>
-        </div>
-
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <button className="apple-btn" onClick={() => setShowSimModal(true)}>
-            <Play size={13} color="#ff0055" />
-            <span>Simulate Test</span>
-          </button>
-          <button className="apple-btn primary" onClick={handleExportAudit}>
-            <Download size={13} />
-            <span>Export Audit</span>
-          </button>
-        </div>
+      <div>
+        <h1 style={{ fontSize: 28, fontWeight: 700, color: "#ffffff", margin: 0, letterSpacing: "-0.02em" }}>
+          Operation Centre
+        </h1>
       </div>
 
-      {/* 4 Rich Cyberpunk KPI Scorecards */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16 }}>
-        {/* Card 1: Total Intercepts */}
-        <motion.div
-          className="apple-card"
-          whileHover={{ y: -3, borderColor: "rgba(255, 0, 85, 0.4)" }}
-          style={{
-            background: "linear-gradient(135deg, rgba(255, 0, 85, 0.07) 0%, rgba(13, 14, 18, 0.8) 100%)",
-            borderTop: "2px solid #ff0055",
-            display: "flex",
-            flexDirection: "column",
-            justifyContent: "space-between",
-          }}
-        >
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontSize: 11, fontWeight: 700, color: "var(--apple-text-muted)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
-              Total Intercepts
-            </span>
-            <div style={{ width: 34, height: 34, borderRadius: 10, background: "rgba(255, 0, 85, 0.12)", border: "1px solid rgba(255, 0, 85, 0.25)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <Activity size={16} color="#ff0055" />
-            </div>
-          </div>
-          <div style={{ marginTop: 14 }}>
-            <div style={{ fontSize: 32, fontWeight: 800, color: "#ffffff", letterSpacing: "-0.03em", lineHeight: 1 }}>
-              {totalIntercepts}
-            </div>
-            <div style={{ fontSize: 11, color: "var(--apple-text-muted)", marginTop: 8 }}>
-              Real-time OS proxy stream
-            </div>
-          </div>
-        </motion.div>
+      {/* 4 Square Cyberpunk KPI Scorecards */}
+      <div className="kpi-square-grid">
+        <KpiSquareStatCard
+          label="Total Intercepts"
+          value={totalIntercepts}
+          icon={<Activity size={26} color="#ff0055" />}
+          color="#ff0055"
+          borderTopColor="#ff0055"
+          bgGradient="linear-gradient(145deg, rgba(255, 0, 85, 0.08) 0%, rgba(13, 14, 18, 0.85) 100%)"
+          tooltip="Real-time OS proxy stream monitoring outbound AI requests, prompt payloads & neural tokens."
+        />
 
-        {/* Card 2: Hard Blocked */}
-        <motion.div
-          className="apple-card"
-          whileHover={{ y: -3, borderColor: "rgba(225, 29, 72, 0.4)" }}
-          style={{
-            background: "linear-gradient(135deg, rgba(225, 29, 72, 0.07) 0%, rgba(13, 14, 18, 0.8) 100%)",
-            borderTop: "2px solid #e11d48",
-            display: "flex",
-            flexDirection: "column",
-            justifyContent: "space-between",
-          }}
-        >
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontSize: 11, fontWeight: 700, color: "var(--apple-text-muted)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
-              Hard Blocked
-            </span>
-            <div style={{ width: 34, height: 34, borderRadius: 10, background: "rgba(225, 29, 72, 0.12)", border: "1px solid rgba(225, 29, 72, 0.25)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <ShieldAlert size={16} color="#e11d48" />
-            </div>
-          </div>
-          <div style={{ marginTop: 14 }}>
-            <div style={{ fontSize: 32, fontWeight: 800, color: "#ff0055", letterSpacing: "-0.03em", lineHeight: 1 }}>
-              {totalBlocked}
-            </div>
-            <div style={{ fontSize: 11, color: "var(--apple-text-muted)", marginTop: 8 }}>
-              Halted before AI transmission
-            </div>
-          </div>
-        </motion.div>
+        <KpiSquareStatCard
+          label="Hard Blocked"
+          value={totalBlocked}
+          icon={<ShieldAlert size={26} color="#e11d48" />}
+          color="#e11d48"
+          borderTopColor="#e11d48"
+          bgGradient="linear-gradient(145deg, rgba(225, 29, 72, 0.08) 0%, rgba(13, 14, 18, 0.85) 100%)"
+          tooltip="Outbound prompts immediately blocked and halted before AI transmission due to critical credentials, keys, or high risk scores."
+        />
 
-        {/* Card 3: Silent Redacted */}
-        <motion.div
-          className="apple-card"
-          whileHover={{ y: -3, borderColor: "rgba(244, 63, 94, 0.4)" }}
-          style={{
-            background: "linear-gradient(135deg, rgba(244, 63, 94, 0.07) 0%, rgba(13, 14, 18, 0.8) 100%)",
-            borderTop: "2px solid #f43f5e",
-            display: "flex",
-            flexDirection: "column",
-            justifyContent: "space-between",
-          }}
-        >
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontSize: 11, fontWeight: 700, color: "var(--apple-text-muted)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
-              Silent Redacted
-            </span>
-            <div style={{ width: 34, height: 34, borderRadius: 10, background: "rgba(244, 63, 94, 0.12)", border: "1px solid rgba(244, 63, 94, 0.25)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <Lock size={16} color="#f43f5e" />
-            </div>
-          </div>
-          <div style={{ marginTop: 14 }}>
-            <div style={{ fontSize: 32, fontWeight: 800, color: "#f43f5e", letterSpacing: "-0.03em", lineHeight: 1 }}>
-              {totalRedacted}
-            </div>
-            <div style={{ fontSize: 11, color: "var(--apple-text-muted)", marginTop: 8 }}>
-              Tokens scrubbed & sanitized
-            </div>
-          </div>
-        </motion.div>
+        <KpiSquareStatCard
+          label="Silent Redacted"
+          value={totalRedacted}
+          icon={<Lock size={26} color="#f43f5e" />}
+          color="#f43f5e"
+          borderTopColor="#f43f5e"
+          bgGradient="linear-gradient(145deg, rgba(244, 63, 94, 0.08) 0%, rgba(13, 14, 18, 0.85) 100%)"
+          tooltip="Outbound prompts sanitized in-flight with sensitive tokens scrubbed & masked, allowing benign workflow to continue."
+        />
 
-        {/* Card 4: Block Rate */}
-        <motion.div
-          className="apple-card"
-          whileHover={{ y: -3, borderColor: "rgba(16, 185, 129, 0.4)" }}
-          style={{
-            background: "linear-gradient(135deg, rgba(16, 185, 129, 0.07) 0%, rgba(13, 14, 18, 0.8) 100%)",
-            borderTop: "2px solid #10b981",
-            display: "flex",
-            flexDirection: "column",
-            justifyContent: "space-between",
-          }}
-        >
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontSize: 11, fontWeight: 700, color: "var(--apple-text-muted)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
-              Block Rate
-            </span>
-            <div style={{ width: 34, height: 34, borderRadius: 10, background: "rgba(16, 185, 129, 0.12)", border: "1px solid rgba(16, 185, 129, 0.25)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <Zap size={16} color="#10b981" />
-            </div>
-          </div>
-          <div style={{ marginTop: 14 }}>
-            <div style={{ fontSize: 32, fontWeight: 800, color: "#10b981", letterSpacing: "-0.03em", lineHeight: 1 }}>
-              {totalIntercepts > 0 ? Math.round((totalBlocked / totalIntercepts) * 100) : 0}%
-            </div>
-            <div style={{ fontSize: 11, color: "var(--apple-text-muted)", marginTop: 8 }}>
-              Enforcement protection ratio
-            </div>
-          </div>
-        </motion.div>
+        <KpiSquareStatCard
+          label="Block Rate"
+          value={`${totalIntercepts > 0 ? Math.round((totalBlocked / totalIntercepts) * 100) : 0}%`}
+          icon={<Zap size={26} color="#10b981" />}
+          color="#10b981"
+          borderTopColor="#10b981"
+          bgGradient="linear-gradient(145deg, rgba(16, 185, 129, 0.08) 0%, rgba(13, 14, 18, 0.85) 100%)"
+          tooltip="Enforcement protection ratio calculated as total hard-blocked violations divided by total inspected events."
+        />
       </div>
 
       {/* 2 Clean Recharts Visualizations */}
@@ -415,28 +411,46 @@ export default function Dashboard() {
               <Database size={16} color="#ff0055" />
               <span style={{ fontSize: 14, fontWeight: 600, color: "#ffffff" }}>Exfiltration Vectors</span>
             </div>
-            <span className="apple-pill red">{globalCategoryChartData.length} Classes</span>
           </div>
 
-          <div style={{ height: 210, width: "100%" }}>
+          <div style={{ height: 230, width: "100%" }}>
             {globalCategoryChartData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
+                <PieChart margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
                   <Pie
                     data={globalCategoryChartData}
                     dataKey="count"
                     nameKey="name"
                     cx="50%"
-                    cy="50%"
-                    innerRadius={55}
-                    outerRadius={85}
-                    paddingAngle={3}
+                    cy="45%"
+                    outerRadius={68}
+                    stroke="#0d0e12"
+                    strokeWidth={1.5}
+                    label={({ percent }) => (percent > 0.05 ? `${(percent * 100).toFixed(0)}%` : "")}
+                    labelLine={false}
                   >
                     {globalCategoryChartData.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
                     ))}
                   </Pie>
-                  <Tooltip className="apple-tooltip" />
+                  <Tooltip
+                    contentStyle={{
+                      background: "rgba(13, 14, 18, 0.95)",
+                      border: "1px solid var(--apple-border-strong)",
+                      borderRadius: "10px",
+                      color: "#ffffff",
+                      fontSize: "12px",
+                      boxShadow: "0 10px 30px rgba(0,0,0,0.7)",
+                    }}
+                    formatter={(value, name) => [`${value} incidents`, name]}
+                  />
+                  <Legend
+                    verticalAlign="bottom"
+                    align="center"
+                    iconType="circle"
+                    iconSize={8}
+                    wrapperStyle={{ fontSize: 11, color: "#a1a1aa", paddingTop: 4 }}
+                  />
                 </PieChart>
               </ResponsiveContainer>
             ) : (
@@ -454,10 +468,9 @@ export default function Dashboard() {
               <Shield size={16} color="#e11d48" />
               <span style={{ fontSize: 14, fontWeight: 600, color: "#ffffff" }}>Enforcement Actions</span>
             </div>
-            <span className="apple-pill red">{totalIntercepts} Inspected</span>
           </div>
 
-          <div style={{ height: 210, width: "100%" }}>
+          <div style={{ height: 230, width: "100%" }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={globalEnforcementData} layout="vertical" margin={{ top: 10, right: 20, left: 10, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(225,29,72,0.06)" horizontal={false} />
